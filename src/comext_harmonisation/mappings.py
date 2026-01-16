@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from .groups import ConcordanceGroups
+from .weights import WEIGHT_COLUMNS
 
 
 def _validate_direction(direction: str) -> str:
@@ -86,4 +87,4 @@ def build_deterministic_mappings(groups: ConcordanceGroups, direction: str) -> p
         subset=["period", "from_vintage_year", "to_vintage_year", "from_code", "to_code", "group_id"]
     ).reset_index(drop=True)
     mappings["weight"] = 1.0
-    return mappings
+    return mappings[WEIGHT_COLUMNS]
