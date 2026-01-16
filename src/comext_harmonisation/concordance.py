@@ -15,8 +15,8 @@ _CODE_LEN = 8
 @dataclass(frozen=True)
 class ConcordancePeriod:
     period: str
-    origin_year: str
-    dest_year: str
+    vintage_a_year: str
+    vintage_b_year: str
 
 
 def _normalize_period(value: object) -> ConcordancePeriod:
@@ -27,9 +27,9 @@ def _normalize_period(value: object) -> ConcordancePeriod:
         period = period[:-2]
     if len(period) != _PERIOD_LEN or not period.isdigit():
         raise ValueError(f"Invalid period '{value}'; expected 8-digit YYYYYYYY")
-    origin_year = period[:4]
-    dest_year = period[4:]
-    return ConcordancePeriod(period=period, origin_year=origin_year, dest_year=dest_year)
+    vintage_a_year = period[:4]
+    vintage_b_year = period[4:]
+    return ConcordancePeriod(period=period, vintage_a_year=vintage_a_year, vintage_b_year=vintage_b_year)
 
 
 def _normalize_code(value: object) -> str:
@@ -56,7 +56,8 @@ def parse_concordance_df(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize a concordance dataframe to canonical columns.
 
     Expected input columns: 'Period', 'Origin code', 'Destination code'.
-    Returns a dataframe with: period, origin_year, dest_year, origin_code, dest_code.
+    Returns a dataframe with: period, vintage_a_year, vintage_b_year, vintage_a_code, vintage_b_code.
+    Vintage A aligns with the file's Origin code (Period[:4]) and vintage B with Destination code (Period[4:]).
     """
     required = {"Period", "Origin code", "Destination code"}
     missing = required.difference(df.columns)
@@ -69,15 +70,15 @@ def parse_concordance_df(df: pd.DataFrame) -> pd.DataFrame:
     ):
         period_raw, origin_raw, dest_raw = row
         period = _normalize_period(period_raw)
-        origin_code = _normalize_code(origin_raw)
-        dest_code = _normalize_code(dest_raw)
+        vintage_a_code = _normalize_code(origin_raw)
+        vintage_b_code = _normalize_code(dest_raw)
         normalized_rows.append(
             {
                 "period": period.period,
-                "origin_year": period.origin_year,
-                "dest_year": period.dest_year,
-                "origin_code": origin_code,
-                "dest_code": dest_code,
+                "vintage_a_year": period.vintage_a_year,
+                "vintage_b_year": period.vintage_b_year,
+                "vintage_a_code": vintage_a_code,
+                "vintage_b_code": vintage_b_code,
             }
         )
 
@@ -86,7 +87,7 @@ def parse_concordance_df(df: pd.DataFrame) -> pd.DataFrame:
         return normalized
 
     normalized = normalized.drop_duplicates(
-        subset=["period", "origin_code", "dest_code"], keep="first"
+        subset=["period", "vintage_a_code", "vintage_b_code"], keep="first"
     ).reset_index(drop=True)
     return normalized
 
