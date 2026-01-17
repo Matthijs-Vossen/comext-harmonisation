@@ -16,6 +16,13 @@ from .estimation_shares import (
     AGGREGATE_CODES,
 )
 from .estimation_matrices import build_group_matrices, GroupMatrices
+from .estimation_solver import estimate_weights, SolverDiagnostics
+from .estimation_runner import (
+    RunnerOutputs,
+    load_concordance_groups,
+    run_weight_estimation_for_period,
+    DEFAULT_CONCORDANCE_PATH,
+)
 
 __all__ = [
     "read_concordance_xls",
@@ -36,4 +43,10 @@ __all__ = [
     "AGGREGATE_CODES",
     "build_group_matrices",
     "GroupMatrices",
+    "estimate_weights",
+    "SolverDiagnostics",
+    "RunnerOutputs",
+    "load_concordance_groups",
+    "run_weight_estimation_for_period",
+    "DEFAULT_CONCORDANCE_PATH",
 ]

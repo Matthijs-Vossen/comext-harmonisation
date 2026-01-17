@@ -42,7 +42,7 @@ def _normalize_code(value: object) -> str:
             raise ValueError(f"Non-integer code '{value}'")
         code = str(int(value))
     else:
-        code = str(value).strip()
+        code = str(value).strip().replace(" ", "")
         if code.endswith(".0") and re.fullmatch(r"\d+\.0", code):
             code = code[:-2]
     if not code.isdigit():

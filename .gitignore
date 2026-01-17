@@ -3,7 +3,7 @@
 *.DS_Store
 data/extracted_annual_no_confidential/products_like/comext_2000_first20.csv
 data/extracted_no_confidential/products_like/comext_201001_first20.csv
-
+outputs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
