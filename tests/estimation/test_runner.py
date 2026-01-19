@@ -3,7 +3,10 @@ import pytest
 from scipy import sparse
 
 from comext_harmonisation.estimation.matrices import GroupMatrices
-from comext_harmonisation.estimation.runner import run_weight_estimation_for_period
+from comext_harmonisation.estimation.runner import (
+    run_weight_estimation_for_period,
+    run_weight_estimation_for_period_multi,
+)
 from comext_harmonisation.estimation.shares import EstimationShares
 from comext_harmonisation.groups import build_concordance_groups
 from comext_harmonisation.weights import WEIGHT_COLUMNS
@@ -65,6 +68,7 @@ def _make_estimation(period: str, group_id: str) -> EstimationShares:
     return EstimationShares(
         period=period,
         direction="a_to_b",
+        measure="VALUE_EUR",
         vintage_a_year=period[:4],
         vintage_b_year=period[4:],
         shares_a=empty_shares.copy(),
@@ -122,6 +126,7 @@ def test_run_weight_estimation_for_period_writes_outputs(tmp_path, monkeypatch):
             {
                 "group_id": group_id,
                 "period": period,
+                "measure": "VALUE_EUR",
                 "status": "solved",
                 "objective": -0.1,
                 "n_vars": 1,
@@ -157,14 +162,15 @@ def test_run_weight_estimation_for_period_writes_outputs(tmp_path, monkeypatch):
     outputs = run_weight_estimation_for_period(
         period=period,
         direction="a_to_b",
+        measure="VALUE_EUR",
         output_dir=tmp_path,
     )
 
     assert outputs.weights_path.exists()
     assert outputs.deterministic_path.exists()
     assert outputs.diagnostics_path.exists()
+    assert outputs.summary_csv_path is not None
     assert outputs.summary_csv_path.exists()
-    assert outputs.summary_txt_path.exists()
 
     summary = pd.read_csv(outputs.summary_csv_path)
     assert summary.loc[0, "n_groups_total"] == 1
@@ -193,6 +199,7 @@ def test_run_weight_estimation_for_period_fail_fast(tmp_path, monkeypatch):
             {
                 "group_id": group_id,
                 "period": period,
+                "measure": "VALUE_EUR",
                 "status": "primal infeasible",
                 "objective": 0.0,
                 "n_vars": 1,
@@ -216,5 +223,60 @@ def test_run_weight_estimation_for_period_fail_fast(tmp_path, monkeypatch):
         run_weight_estimation_for_period(
             period=period,
             direction="a_to_b",
+            measure="VALUE_EUR",
             output_dir=tmp_path,
         )
+
+
+def test_run_weight_estimation_for_period_multi_writes_combined_summary(tmp_path, monkeypatch):
+    period = "20092010"
+    direction = "a_to_b"
+
+    def _fake_run(*, measure: str, **kwargs):
+        summary = pd.DataFrame(
+            [
+                {
+                    "period": period,
+                    "direction": direction,
+                    "measure": measure,
+                    "n_groups_total": 1,
+                    "n_groups_with_data": 1,
+                    "n_groups_solved": 1,
+                    "n_groups_failed": 0,
+                    "n_groups_skipped": 0,
+                    "n_weight_rows_ambiguous": 1,
+                    "n_weight_rows_deterministic": 1,
+                    "total_pairs": 2,
+                    "total_obs": 2,
+                    "max_row_sum_dev_min": 0.0,
+                    "max_row_sum_dev_max": 0.0,
+                    "max_row_sum_dev_mean": 0.0,
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                    "ended_at": "2026-01-01T00:00:01+00:00",
+                    "elapsed_seconds": 1.0,
+                }
+            ]
+        )
+        return type("Out", (), {"summary": summary, "summary_csv_path": None})()
+
+    import comext_harmonisation.estimation.runner as runner
+
+    monkeypatch.setattr(runner, "run_weight_estimation_for_period", _fake_run)
+
+    results = run_weight_estimation_for_period_multi(
+        period=period,
+        direction=direction,
+        measures=["VALUE_EUR", "QUANTITY_KG"],
+        output_dir=tmp_path,
+    )
+
+    assert len(results) == 2
+    assert all(result.summary_csv_path is None for result in results)
+    assert not (tmp_path / "summaries" / f"run_summary_{period}_{direction}_value_eur.csv").exists()
+    assert not (tmp_path / "summaries" / f"run_summary_{period}_{direction}_quantity_kg.csv").exists()
+    summary_path = tmp_path / "summaries" / f"run_summary_{period}_{direction}.csv"
+    assert summary_path.exists()
+    summary_txt_path = tmp_path / "summaries" / f"run_summary_{period}_{direction}.txt"
+    assert summary_txt_path.exists()
+    combined = pd.read_csv(summary_path)
+    assert set(combined["measure"]) == {"VALUE_EUR", "QUANTITY_KG"}

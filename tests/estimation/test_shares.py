@@ -377,6 +377,47 @@ def test_prepare_estimation_shares_flow_filtering():
     assert totals["total_value_eur_a"] == 10.0
 
 
+def test_prepare_estimation_shares_quantity_kg_measure():
+    groups = _build_groups()
+    data_a = pd.DataFrame(
+        [
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000001",
+                "FLOW": "1",
+                "QUANTITY_KG": 12.0,
+            },
+        ]
+    )
+    data_b = pd.DataFrame(
+        [
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000011",
+                "FLOW": "1",
+                "QUANTITY_KG": 7.0,
+            },
+        ]
+    )
+
+    result = prepare_estimation_shares_from_frames(
+        period="20002001",
+        groups=groups,
+        direction="a_to_b",
+        data_a=data_a,
+        data_b=data_b,
+        measure="QUANTITY_KG",
+    )
+
+    totals = result.group_totals.iloc[0]
+    assert totals["total_quantity_kg_a"] == 12.0
+    assert totals["total_quantity_kg_b"] == 7.0
+
+
 def test_prepare_estimation_shares_share_sums_to_one():
     groups = _build_groups()
     data_a = pd.DataFrame(
