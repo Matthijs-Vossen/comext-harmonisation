@@ -8,20 +8,22 @@ from .mappings import (
     build_deterministic_mappings,
 )
 from .weights import empty_weight_table, validate_weight_table, WEIGHT_COLUMNS, DEFAULT_WEIGHTS_DIR
-from .estimation_shares import (
+from .estimation import (
     EstimationShares,
     prepare_estimation_shares_for_period,
     prepare_estimation_shares_from_frames,
     EXCLUDE_CODES_DEFAULT,
     AGGREGATE_CODES,
-)
-from .estimation_matrices import build_group_matrices, GroupMatrices
-from .estimation_solver import estimate_weights, SolverDiagnostics
-from .estimation_runner import (
+    build_group_matrices,
+    GroupMatrices,
+    estimate_weights,
+    SolverDiagnostics,
     RunnerOutputs,
     load_concordance_groups,
     run_weight_estimation_for_period,
     DEFAULT_CONCORDANCE_PATH,
+    DEFAULT_DIAGNOSTICS_DIR,
+    DEFAULT_SUMMARIES_DIR,
 )
 
 __all__ = [
@@ -49,4 +51,6 @@ __all__ = [
     "load_concordance_groups",
     "run_weight_estimation_for_period",
     "DEFAULT_CONCORDANCE_PATH",
+    "DEFAULT_DIAGNOSTICS_DIR",
+    "DEFAULT_SUMMARIES_DIR",
 ]

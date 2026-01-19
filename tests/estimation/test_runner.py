@@ -2,9 +2,9 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-from comext_harmonisation.estimation_matrices import GroupMatrices
-from comext_harmonisation.estimation_runner import run_weight_estimation_for_period
-from comext_harmonisation.estimation_shares import EstimationShares
+from comext_harmonisation.estimation.matrices import GroupMatrices
+from comext_harmonisation.estimation.runner import run_weight_estimation_for_period
+from comext_harmonisation.estimation.shares import EstimationShares
 from comext_harmonisation.groups import build_concordance_groups
 from comext_harmonisation.weights import WEIGHT_COLUMNS
 
@@ -146,7 +146,7 @@ def test_run_weight_estimation_for_period_writes_outputs(tmp_path, monkeypatch):
         ]
     )[WEIGHT_COLUMNS]
 
-    import comext_harmonisation.estimation_runner as runner
+    import comext_harmonisation.estimation.runner as runner
 
     monkeypatch.setattr(runner, "load_concordance_groups", lambda **kwargs: groups)
     monkeypatch.setattr(runner, "prepare_estimation_shares_for_period", lambda **kwargs: estimation)
@@ -163,9 +163,10 @@ def test_run_weight_estimation_for_period_writes_outputs(tmp_path, monkeypatch):
     assert outputs.weights_path.exists()
     assert outputs.deterministic_path.exists()
     assert outputs.diagnostics_path.exists()
-    assert outputs.summary_path.exists()
+    assert outputs.summary_csv_path.exists()
+    assert outputs.summary_txt_path.exists()
 
-    summary = pd.read_csv(outputs.summary_path)
+    summary = pd.read_csv(outputs.summary_csv_path)
     assert summary.loc[0, "n_groups_total"] == 1
     assert summary.loc[0, "n_groups_with_data"] == 1
     assert summary.loc[0, "n_groups_solved"] == 1
@@ -203,7 +204,7 @@ def test_run_weight_estimation_for_period_fail_fast(tmp_path, monkeypatch):
         ]
     )
 
-    import comext_harmonisation.estimation_runner as runner
+    import comext_harmonisation.estimation.runner as runner
 
     monkeypatch.setattr(runner, "load_concordance_groups", lambda **kwargs: groups)
     monkeypatch.setattr(runner, "prepare_estimation_shares_for_period", lambda **kwargs: estimation)

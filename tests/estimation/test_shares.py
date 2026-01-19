@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from comext_harmonisation.estimation_shares import (
+from comext_harmonisation.estimation.shares import (
     prepare_estimation_shares_for_period,
     prepare_estimation_shares_from_frames,
 )

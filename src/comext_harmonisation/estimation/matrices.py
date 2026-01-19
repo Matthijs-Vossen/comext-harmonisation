@@ -8,8 +8,8 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 from scipy import sparse
 
-from .estimation_shares import EstimationShares
-from .groups import ConcordanceGroups
+from .shares import EstimationShares
+from ..groups import ConcordanceGroups
 
 
 @dataclass(frozen=True)

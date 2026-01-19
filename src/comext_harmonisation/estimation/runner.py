@@ -9,16 +9,18 @@ from typing import Iterable, Optional
 
 import pandas as pd
 
-from .concordance import read_concordance_xls
-from .estimation_matrices import GroupMatrices, build_group_matrices
-from .estimation_shares import ANNUAL_DATA_DIR, EstimationShares, prepare_estimation_shares_for_period
-from .estimation_solver import estimate_weights
-from .groups import ConcordanceGroups, build_concordance_groups
-from .mappings import build_deterministic_mappings, get_ambiguous_group_summary
-from .weights import DEFAULT_WEIGHTS_DIR, empty_weight_table
+from ..concordance import read_concordance_xls
+from .matrices import GroupMatrices, build_group_matrices
+from .shares import ANNUAL_DATA_DIR, EstimationShares, prepare_estimation_shares_for_period
+from .solver import estimate_weights
+from ..groups import ConcordanceGroups, build_concordance_groups
+from ..mappings import build_deterministic_mappings, get_ambiguous_group_summary
+from ..weights import DEFAULT_WEIGHTS_DIR, empty_weight_table
 
 
 DEFAULT_CONCORDANCE_PATH = Path("data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls")
+DEFAULT_DIAGNOSTICS_DIR = Path("outputs/diagnostics")
+DEFAULT_SUMMARIES_DIR = Path("outputs/summaries")
 
 
 @dataclass(frozen=True)
@@ -32,7 +34,8 @@ class RunnerOutputs:
     weights_path: Path
     deterministic_path: Path
     diagnostics_path: Path
-    summary_path: Path
+    summary_csv_path: Path
+    summary_txt_path: Path
 
 
 def load_concordance_groups(
@@ -48,6 +51,16 @@ def load_concordance_groups(
 def _write_csv(df: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, index=False)
+
+
+def _write_summary_text(summary: pd.DataFrame, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if summary.empty:
+        path.write_text("", encoding="utf-8")
+        return
+    row = summary.iloc[0].to_dict()
+    lines = [f"{key}: {value}" for key, value in row.items()]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _sort_weights(df: pd.DataFrame) -> pd.DataFrame:
@@ -167,8 +180,11 @@ def run_weight_estimation_for_period(
     annual_base_dir: Path = ANNUAL_DATA_DIR,
     flow: str = "1",
     exclude_codes: Optional[Iterable[str]] = None,
-    exclude_aggregate_codes: bool = False,
-    output_dir: Path = DEFAULT_WEIGHTS_DIR,
+    exclude_aggregate_codes: bool = True,
+    output_weights_dir: Path = DEFAULT_WEIGHTS_DIR,
+    output_diagnostics_dir: Path = DEFAULT_DIAGNOSTICS_DIR,
+    output_summaries_dir: Path = DEFAULT_SUMMARIES_DIR,
+    output_dir: Optional[Path] = None,
     fail_on_status: bool = True,
 ) -> RunnerOutputs:
     """Run the full estimation pipeline for one concordance period."""
@@ -229,15 +245,22 @@ def run_weight_estimation_for_period(
         ended_at=ended_at,
     )
 
-    weights_path = output_dir / f"weights_ambiguous_{period}_{direction}.csv"
-    deterministic_path = output_dir / f"weights_deterministic_{period}_{direction}.csv"
-    diagnostics_path = output_dir / f"diagnostics_{period}_{direction}.csv"
-    summary_path = output_dir / f"run_summary_{period}_{direction}.csv"
+    if output_dir is not None:
+        output_weights_dir = output_dir / "weights"
+        output_diagnostics_dir = output_dir / "diagnostics"
+        output_summaries_dir = output_dir / "summaries"
+
+    weights_path = output_weights_dir / f"weights_ambiguous_{period}_{direction}.csv"
+    deterministic_path = output_weights_dir / f"weights_deterministic_{period}_{direction}.csv"
+    diagnostics_path = output_diagnostics_dir / f"diagnostics_{period}_{direction}.csv"
+    summary_csv_path = output_summaries_dir / f"run_summary_{period}_{direction}.csv"
+    summary_txt_path = output_summaries_dir / f"run_summary_{period}_{direction}.txt"
 
     _write_csv(weights_ambiguous, weights_path)
     _write_csv(weights_deterministic, deterministic_path)
     _write_csv(diagnostics, diagnostics_path)
-    _write_csv(summary, summary_path)
+    _write_csv(summary, summary_csv_path)
+    _write_summary_text(summary, summary_txt_path)
 
     return RunnerOutputs(
         period=period,
@@ -249,5 +272,6 @@ def run_weight_estimation_for_period(
         weights_path=weights_path,
         deterministic_path=deterministic_path,
         diagnostics_path=diagnostics_path,
-        summary_path=summary_path,
+        summary_csv_path=summary_csv_path,
+        summary_txt_path=summary_txt_path,
     )

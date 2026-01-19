@@ -10,10 +10,10 @@ import pandas as pd
 import osqp
 from scipy import sparse
 
-from .estimation_matrices import GroupMatrices
-from .estimation_shares import EstimationShares
-from .groups import ConcordanceGroups
-from .weights import WEIGHT_COLUMNS
+from .matrices import GroupMatrices
+from .shares import EstimationShares
+from ..groups import ConcordanceGroups
+from ..weights import WEIGHT_COLUMNS
 
 @dataclass(frozen=True)
 class SolverDiagnostics:

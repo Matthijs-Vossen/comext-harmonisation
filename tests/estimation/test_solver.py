@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from comext_harmonisation.estimation_matrices import build_group_matrices
-from comext_harmonisation.estimation_shares import prepare_estimation_shares_from_frames
-from comext_harmonisation.estimation_solver import estimate_weights
+from comext_harmonisation.estimation.matrices import build_group_matrices
+from comext_harmonisation.estimation.shares import prepare_estimation_shares_from_frames
+from comext_harmonisation.estimation.solver import estimate_weights
 from comext_harmonisation.groups import build_concordance_groups
 
 
