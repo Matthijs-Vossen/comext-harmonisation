@@ -8,6 +8,12 @@ from .mappings import (
     build_deterministic_mappings,
 )
 from .weights import empty_weight_table, validate_weight_table, WEIGHT_COLUMNS, DEFAULT_WEIGHTS_DIR
+from .application import (
+    apply_weights_to_annual_period,
+    ApplyDiagnostics,
+    finalize_weights_table,
+    WEIGHT_STRATEGIES,
+)
 from .estimation import (
     EstimationShares,
     prepare_estimation_shares_for_period,
@@ -39,6 +45,10 @@ __all__ = [
     "validate_weight_table",
     "WEIGHT_COLUMNS",
     "DEFAULT_WEIGHTS_DIR",
+    "apply_weights_to_annual_period",
+    "ApplyDiagnostics",
+    "finalize_weights_table",
+    "WEIGHT_STRATEGIES",
     "EstimationShares",
     "prepare_estimation_shares_for_period",
     "prepare_estimation_shares_from_frames",

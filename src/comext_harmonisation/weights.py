@@ -39,16 +39,21 @@ def empty_weight_table() -> pd.DataFrame:
 def validate_weight_table(
     df: pd.DataFrame,
     *,
+    schema: str = "full",
     check_bounds: bool = True,
     check_row_sums: bool = False,
     row_sum_tol: float = 1e-6,
 ) -> None:
     """Validate the weight table schema and optional constraints."""
-    missing = [col for col in WEIGHT_COLUMNS if col not in df.columns]
+    if schema not in {"full", "minimal"}:
+        raise ValueError("schema must be 'full' or 'minimal'")
+
+    required_cols = WEIGHT_COLUMNS if schema == "full" else ["from_code", "to_code", "weight"]
+    missing = [col for col in required_cols if col not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
-    required = df[WEIGHT_COLUMNS]
+    required = df[required_cols]
     if required.isna().any().any():
         raise ValueError("Weight table contains nulls in required columns")
 
@@ -57,7 +62,10 @@ def validate_weight_table(
             raise ValueError("Weights must be within [0, 1]")
 
     if check_row_sums:
-        key_cols = ["period", "from_vintage_year", "to_vintage_year", "from_code"]
+        if schema == "full":
+            key_cols = ["period", "from_vintage_year", "to_vintage_year", "from_code"]
+        else:
+            key_cols = ["from_code"]
         row_sums = required.groupby(key_cols, dropna=False)["weight"].sum()
         if ((row_sums - 1.0).abs() > row_sum_tol).any():
             raise ValueError("Weight rows must sum to 1 within tolerance")

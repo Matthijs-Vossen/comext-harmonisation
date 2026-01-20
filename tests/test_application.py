@@ -1,0 +1,340 @@
+import pandas as pd
+import pytest
+
+from comext_harmonisation.application import apply_weights_to_annual_period, finalize_weights_table
+from comext_harmonisation.weights import WEIGHT_COLUMNS
+
+
+def _write_weights(tmp_path, *, period, direction, measure_tag, rows):
+    weights_dir = tmp_path / "weights"
+    weights_dir.mkdir(parents=True, exist_ok=True)
+    amb_path = weights_dir / f"weights_ambiguous_{period}_{direction}_{measure_tag}.csv"
+    det_path = weights_dir / f"weights_deterministic_{period}_{direction}_{measure_tag}.csv"
+    df = pd.DataFrame(rows)[WEIGHT_COLUMNS]
+    df.to_csv(amb_path, index=False)
+    pd.DataFrame(columns=WEIGHT_COLUMNS).to_csv(det_path, index=False)
+    return weights_dir
+
+
+def _write_annual(tmp_path, year, rows):
+    annual_dir = tmp_path / "annual"
+    annual_dir.mkdir(parents=True, exist_ok=True)
+    df = pd.DataFrame(rows)
+    df.to_parquet(annual_dir / f"comext_{year}.parquet", index=False)
+    return annual_dir
+
+
+def test_apply_weights_annual_value_strategy(tmp_path):
+    period = "20092010"
+    direction = "a_to_b"
+    annual_dir = _write_annual(
+        tmp_path,
+        "2009",
+        [
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000001",
+                "FLOW": "1",
+                "PERIOD": 2009,
+                "VALUE_EUR": 100.0,
+                "QUANTITY_KG": 10.0,
+            },
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000002",
+                "FLOW": "1",
+                "PERIOD": 2009,
+                "VALUE_EUR": 50.0,
+                "QUANTITY_KG": 5.0,
+            },
+        ],
+    )
+    weights_dir = _write_weights(
+        tmp_path,
+        period=period,
+        direction=direction,
+        measure_tag="value_eur",
+        rows=[
+            {
+                "period": period,
+                "from_vintage_year": "2009",
+                "to_vintage_year": "2010",
+                "from_code": "00000001",
+                "to_code": "00000011",
+                "group_id": "g1",
+                "weight": 1.0,
+            },
+            {
+                "period": period,
+                "from_vintage_year": "2009",
+                "to_vintage_year": "2010",
+                "from_code": "00000002",
+                "to_code": "00000021",
+                "group_id": "g2",
+                "weight": 0.6,
+            },
+            {
+                "period": period,
+                "from_vintage_year": "2009",
+                "to_vintage_year": "2010",
+                "from_code": "00000002",
+                "to_code": "00000022",
+                "group_id": "g2",
+                "weight": 0.4,
+            },
+        ],
+    )
+
+    diagnostics = apply_weights_to_annual_period(
+        period=period,
+        direction=direction,
+        strategy="weights_value",
+        annual_base_dir=annual_dir,
+        weights_dir=weights_dir,
+        output_base_dir=tmp_path / "out",
+        finalize_weights=True,
+        assume_identity_for_missing=False,
+    )
+
+    output_path = tmp_path / "out" / "CN2010" / "comext_2009_weights_value.parquet"
+    result = pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
+
+    assert diagnostics.n_rows_input == 2
+    assert diagnostics.n_rows_output == 3
+    assert result.loc[0, "PRODUCT_NC"] == "00000011"
+    assert result.loc[0, "VALUE_EUR"] == 100.0
+    assert result.loc[0, "QUANTITY_KG"] == 10.0
+    assert result.loc[1, "VALUE_EUR"] == 30.0
+    assert result.loc[1, "QUANTITY_KG"] == 3.0
+    assert result.loc[2, "VALUE_EUR"] == 20.0
+    assert result.loc[2, "QUANTITY_KG"] == 2.0
+
+
+def test_apply_weights_annual_split_strategy(tmp_path):
+    period = "20092010"
+    direction = "a_to_b"
+    annual_dir = _write_annual(
+        tmp_path,
+        "2009",
+        [
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000002",
+                "FLOW": "1",
+                "PERIOD": 2009,
+                "VALUE_EUR": 50.0,
+                "QUANTITY_KG": 5.0,
+            },
+        ],
+    )
+    _write_weights(
+        tmp_path,
+        period=period,
+        direction=direction,
+        measure_tag="value_eur",
+        rows=[
+            {
+                "period": period,
+                "from_vintage_year": "2009",
+                "to_vintage_year": "2010",
+                "from_code": "00000002",
+                "to_code": "00000021",
+                "group_id": "g2",
+                "weight": 0.6,
+            },
+            {
+                "period": period,
+                "from_vintage_year": "2009",
+                "to_vintage_year": "2010",
+                "from_code": "00000002",
+                "to_code": "00000022",
+                "group_id": "g2",
+                "weight": 0.4,
+            },
+        ],
+    )
+    weights_dir = _write_weights(
+        tmp_path,
+        period=period,
+        direction=direction,
+        measure_tag="quantity_kg",
+        rows=[
+            {
+                "period": period,
+                "from_vintage_year": "2009",
+                "to_vintage_year": "2010",
+                "from_code": "00000002",
+                "to_code": "00000021",
+                "group_id": "g2",
+                "weight": 0.2,
+            },
+            {
+                "period": period,
+                "from_vintage_year": "2009",
+                "to_vintage_year": "2010",
+                "from_code": "00000002",
+                "to_code": "00000022",
+                "group_id": "g2",
+                "weight": 0.8,
+            },
+        ],
+    )
+
+    apply_weights_to_annual_period(
+        period=period,
+        direction=direction,
+        strategy="weights_split",
+        annual_base_dir=annual_dir,
+        weights_dir=weights_dir,
+        output_base_dir=tmp_path / "out",
+        finalize_weights=True,
+        assume_identity_for_missing=False,
+    )
+
+    output_path = tmp_path / "out" / "CN2010" / "comext_2009_weights_split.parquet"
+    result = pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
+    assert result.loc[0, "VALUE_EUR"] == 30.0
+    assert result.loc[1, "VALUE_EUR"] == 20.0
+    assert result.loc[0, "QUANTITY_KG"] == 1.0
+    assert result.loc[1, "QUANTITY_KG"] == 4.0
+
+
+def test_apply_weights_annual_missing_weights_raises(tmp_path):
+    period = "20092010"
+    direction = "a_to_b"
+    annual_dir = _write_annual(
+        tmp_path,
+        "2009",
+        [
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000001",
+                "FLOW": "1",
+                "PERIOD": 2009,
+                "VALUE_EUR": 100.0,
+                "QUANTITY_KG": 10.0,
+            },
+        ],
+    )
+    weights_dir = _write_weights(
+        tmp_path,
+        period=period,
+        direction=direction,
+        measure_tag="value_eur",
+        rows=[
+            {
+                "period": period,
+                "from_vintage_year": "2009",
+                "to_vintage_year": "2010",
+                "from_code": "00000002",
+                "to_code": "00000021",
+                "group_id": "g2",
+                "weight": 1.0,
+            },
+        ],
+    )
+
+    with pytest.raises(ValueError):
+        apply_weights_to_annual_period(
+            period=period,
+            direction=direction,
+            strategy="weights_value",
+            annual_base_dir=annual_dir,
+            weights_dir=weights_dir,
+            output_base_dir=tmp_path / "out",
+            finalize_weights=True,
+            assume_identity_for_missing=False,
+        )
+
+
+def test_apply_weights_annual_missing_weights_identity_default(tmp_path):
+    period = "20092010"
+    direction = "a_to_b"
+    annual_dir = _write_annual(
+        tmp_path,
+        "2009",
+        [
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000001",
+                "FLOW": "1",
+                "PERIOD": 2009,
+                "VALUE_EUR": 100.0,
+                "QUANTITY_KG": 10.0,
+            },
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000002",
+                "FLOW": "1",
+                "PERIOD": 2009,
+                "VALUE_EUR": 50.0,
+                "QUANTITY_KG": 5.0,
+            },
+        ],
+    )
+    weights_dir = _write_weights(
+        tmp_path,
+        period=period,
+        direction=direction,
+        measure_tag="value_eur",
+        rows=[
+            {
+                "period": period,
+                "from_vintage_year": "2009",
+                "to_vintage_year": "2010",
+                "from_code": "00000001",
+                "to_code": "00000011",
+                "group_id": "g1",
+                "weight": 1.0,
+            },
+        ],
+    )
+
+    apply_weights_to_annual_period(
+        period=period,
+        direction=direction,
+        strategy="weights_value",
+        annual_base_dir=annual_dir,
+        weights_dir=weights_dir,
+        output_base_dir=tmp_path / "out",
+        assume_identity_for_missing=True,
+    )
+
+    output_path = tmp_path / "out" / "CN2010" / "comext_2009_weights_value.parquet"
+    result = pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
+    assert result.loc[0, "PRODUCT_NC"] == "00000002"
+    assert result.loc[1, "PRODUCT_NC"] == "00000011"
+    assert result.loc[0, "VALUE_EUR"] == 50.0
+    assert result.loc[0, "QUANTITY_KG"] == 5.0
+
+
+def test_finalize_weights_table_clamps_and_renormalizes():
+    weights = pd.DataFrame(
+        [
+            {"from_code": "00000001", "to_code": "00000011", "weight": 0.999},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 0.0005},
+            {"from_code": "00000002", "to_code": "00000021", "weight": 0.5},
+            {"from_code": "00000002", "to_code": "00000022", "weight": 0.5},
+            {"from_code": "00000002", "to_code": "00000023", "weight": -0.0002},
+        ]
+    )
+
+    finalized = finalize_weights_table(weights, threshold_abs=1e-3, row_sum_tol=1e-9)
+    sums = finalized.groupby("from_code")["weight"].sum()
+    assert pytest.approx(sums.loc["00000001"], abs=1e-12) == 1.0
+    assert pytest.approx(sums.loc["00000002"], abs=1e-12) == 1.0
+    assert (finalized["weight"] > 0).all()
+    assert ("00000012" not in finalized["to_code"].tolist())
+    assert ("00000023" not in finalized["to_code"].tolist())
