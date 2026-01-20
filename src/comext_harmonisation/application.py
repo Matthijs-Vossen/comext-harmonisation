@@ -113,6 +113,10 @@ def _load_weights(
         raise FileNotFoundError(f"Missing weights file: {deterministic_path}")
     ambiguous = pd.read_csv(ambiguous_path)
     deterministic = pd.read_csv(deterministic_path)
+    if not deterministic.empty and not ambiguous.empty:
+        deterministic = deterministic.loc[
+            ~deterministic["from_code"].isin(ambiguous["from_code"])
+        ]
     if deterministic.empty:
         weights = ambiguous.copy()
     else:

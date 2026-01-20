@@ -31,6 +31,11 @@ from .estimation import (
     DEFAULT_CONCORDANCE_PATH,
     DEFAULT_DIAGNOSTICS_DIR,
     DEFAULT_SUMMARIES_DIR,
+    ChainedWeightsOutput,
+    chain_weights_for_year,
+    build_chained_weights_for_range,
+    DEFAULT_CHAINED_WEIGHTS_DIR,
+    DEFAULT_CHAINED_DIAGNOSTICS_DIR,
 )
 
 __all__ = [
@@ -65,4 +70,9 @@ __all__ = [
     "DEFAULT_CONCORDANCE_PATH",
     "DEFAULT_DIAGNOSTICS_DIR",
     "DEFAULT_SUMMARIES_DIR",
+    "ChainedWeightsOutput",
+    "chain_weights_for_year",
+    "build_chained_weights_for_range",
+    "DEFAULT_CHAINED_WEIGHTS_DIR",
+    "DEFAULT_CHAINED_DIAGNOSTICS_DIR",
 ]

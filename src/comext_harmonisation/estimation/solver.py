@@ -157,7 +157,15 @@ def _solve_group(
         polishing=True,
     )
     solver.setup(**setup_kwargs)
-    result = solver.solve(raise_error=True)
+    try:
+        result = solver.solve(raise_error=True)
+    except Exception:
+        solver = osqp.OSQP()
+        relaxed_kwargs = dict(setup_kwargs)
+        relaxed_kwargs["eps_abs"] = 1e-6
+        relaxed_kwargs["eps_rel"] = 1e-6
+        solver.setup(**relaxed_kwargs)
+        result = solver.solve(raise_error=True)
 
     weights = result.x
     status = result.info.status

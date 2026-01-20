@@ -19,6 +19,13 @@ from .runner import (
     DEFAULT_DIAGNOSTICS_DIR,
     DEFAULT_SUMMARIES_DIR,
 )
+from .chaining import (
+    ChainedWeightsOutput,
+    chain_weights_for_year,
+    build_chained_weights_for_range,
+    DEFAULT_CHAINED_WEIGHTS_DIR,
+    DEFAULT_CHAINED_DIAGNOSTICS_DIR,
+)
 
 __all__ = [
     "EstimationShares",
@@ -38,4 +45,9 @@ __all__ = [
     "DEFAULT_CONCORDANCE_PATH",
     "DEFAULT_DIAGNOSTICS_DIR",
     "DEFAULT_SUMMARIES_DIR",
+    "ChainedWeightsOutput",
+    "chain_weights_for_year",
+    "build_chained_weights_for_range",
+    "DEFAULT_CHAINED_WEIGHTS_DIR",
+    "DEFAULT_CHAINED_DIAGNOSTICS_DIR",
 ]
