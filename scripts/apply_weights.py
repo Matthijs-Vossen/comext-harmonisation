@@ -54,12 +54,12 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--weights-dir",
-        default="outputs/weights",
+        default="outputs/estimate/weights",
         help="Directory containing estimated weights.",
     )
     parser.add_argument(
         "--output-dir",
-        default="outputs/harmonised/annual",
+        default="outputs/apply",
         help="Base directory for harmonised outputs.",
     )
     return parser.parse_args()

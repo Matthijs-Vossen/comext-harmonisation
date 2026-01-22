@@ -9,10 +9,16 @@ from typing import Iterable, Mapping, Sequence
 import pandas as pd
 
 from .estimation.shares import ANNUAL_DATA_DIR
+from .estimation.chaining import (
+    build_chained_weights_for_range,
+    DEFAULT_CHAINED_DIAGNOSTICS_DIR,
+    DEFAULT_CHAINED_WEIGHTS_DIR,
+)
 from .weights import DEFAULT_WEIGHTS_DIR, validate_weight_table
 
 
 MEASURE_COLUMNS = ("VALUE_EUR", "QUANTITY_KG")
+MONTHLY_DATA_DIR = Path("data/extracted_no_confidential/products_like")
 
 WEIGHT_STRATEGIES: Mapping[str, Mapping[str, str]] = {
     "weights_value": {"VALUE_EUR": "VALUE_EUR", "QUANTITY_KG": "VALUE_EUR"},
@@ -33,6 +39,17 @@ class ApplyDiagnostics:
     n_codes_input: int
     n_codes_weighted: int
     n_codes_missing: int
+
+
+@dataclass(frozen=True)
+class ChainedApplySummary:
+    origin_year: str
+    target_year: str
+    n_rows_input: int
+    n_rows_output: int
+    n_codes_input: int
+    n_missing_value: int
+    n_missing_quantity: int
 
 
 def finalize_weights_table(
@@ -105,8 +122,9 @@ def _load_weights(
     validate: bool = True,
 ) -> pd.DataFrame:
     measure_tag = measure.lower()
-    ambiguous_path = weights_dir / f"weights_ambiguous_{period}_{direction}_{measure_tag}.csv"
-    deterministic_path = weights_dir / f"weights_deterministic_{period}_{direction}_{measure_tag}.csv"
+    weights_path = weights_dir / period / direction / measure_tag
+    ambiguous_path = weights_path / "weights_ambiguous.csv"
+    deterministic_path = weights_path / "weights_deterministic.csv"
     if not ambiguous_path.exists():
         raise FileNotFoundError(f"Missing weights file: {ambiguous_path}")
     if not deterministic_path.exists():
@@ -117,18 +135,407 @@ def _load_weights(
         deterministic = deterministic.loc[
             ~deterministic["from_code"].isin(ambiguous["from_code"])
         ]
-    if deterministic.empty:
-        weights = ambiguous.copy()
-    else:
-        weights = pd.concat([ambiguous, deterministic], ignore_index=True)
-    if weights.empty:
+    frames = []
+    for frame in (ambiguous, deterministic):
+        if frame.empty:
+            continue
+        if frame.isna().all().all():
+            continue
+        frames.append(frame)
+    if not frames:
         raise ValueError(f"No weights found for period {period} ({measure}).")
+    weights = frames[0].copy() if len(frames) == 1 else pd.concat(frames, ignore_index=True)
     if validate:
         validate_weight_table(weights, check_bounds=True, check_row_sums=True)
     weights = weights[["from_code", "to_code", "weight"]].copy()
     weights["from_code"] = _normalize_codes(weights["from_code"])
     weights["to_code"] = _normalize_codes(weights["to_code"])
     return weights
+
+
+def _prepare_weights(
+    *,
+    weights: pd.DataFrame,
+    data_codes: set[str],
+    assume_identity_for_missing: bool,
+    fail_on_missing: bool,
+) -> tuple[pd.DataFrame, int]:
+    weights = weights[["from_code", "to_code", "weight"]].copy()
+    weights["from_code"] = _normalize_codes(weights["from_code"])
+    weights["to_code"] = _normalize_codes(weights["to_code"])
+    missing_codes = data_codes - set(weights["from_code"])
+    missing_count = len(missing_codes)
+    if missing_codes and assume_identity_for_missing:
+        identity = pd.DataFrame(
+            {
+                "from_code": list(missing_codes),
+                "to_code": list(missing_codes),
+                "weight": 1.0,
+            }
+        )
+        weights = pd.concat([weights, identity], ignore_index=True)
+        missing_codes = set()
+    if missing_codes and fail_on_missing:
+        sample = sorted(list(missing_codes))[:10]
+        raise ValueError(f"Missing weights for {len(missing_codes)} codes; sample: {sample}")
+    return weights, missing_count
+
+
+def _apply_weights_wide(
+    *,
+    data: pd.DataFrame,
+    weights_value: pd.DataFrame | None,
+    weights_quantity: pd.DataFrame | None,
+    assume_identity_for_missing: bool,
+    fail_on_missing: bool,
+) -> tuple[pd.DataFrame, int, int]:
+    base = data.copy()
+    base["PRODUCT_NC"] = _normalize_codes(base["PRODUCT_NC"])
+    data_codes = set(base["PRODUCT_NC"].unique())
+    id_cols = [col for col in base.columns if col not in MEASURE_COLUMNS]
+
+    missing_value = 0
+    missing_quantity = 0
+
+    frames = []
+    if weights_value is not None:
+        prepared, missing_value = _prepare_weights(
+            weights=weights_value,
+            data_codes=data_codes,
+            assume_identity_for_missing=assume_identity_for_missing,
+            fail_on_missing=fail_on_missing,
+        )
+        converted = _apply_weights_to_frame(
+            base,
+            weights=prepared,
+            measure_columns=["VALUE_EUR", "QUANTITY_KG"],
+            fail_on_missing=False,
+            id_columns=id_cols,
+        )
+        converted = converted.rename(
+            columns={
+                "VALUE_EUR": "VALUE_EUR_w_value",
+                "QUANTITY_KG": "QUANTITY_KG_w_value",
+            }
+        )
+        frames.append(converted)
+
+    if weights_quantity is not None:
+        prepared, missing_quantity = _prepare_weights(
+            weights=weights_quantity,
+            data_codes=data_codes,
+            assume_identity_for_missing=assume_identity_for_missing,
+            fail_on_missing=fail_on_missing,
+        )
+        converted = _apply_weights_to_frame(
+            base,
+            weights=prepared,
+            measure_columns=["VALUE_EUR", "QUANTITY_KG"],
+            fail_on_missing=False,
+            id_columns=id_cols,
+        )
+        converted = converted.rename(
+            columns={
+                "VALUE_EUR": "VALUE_EUR_w_quantity",
+                "QUANTITY_KG": "QUANTITY_KG_w_quantity",
+            }
+        )
+        frames.append(converted)
+
+    if not frames:
+        raise ValueError("No weights provided for wide conversion output.")
+
+    merged = frames[0]
+    for frame in frames[1:]:
+        merged = merged.merge(frame, on=id_cols, how="outer")
+
+    for col in merged.columns:
+        if col.endswith("_w_value") or col.endswith("_w_quantity"):
+            merged[col] = merged[col].fillna(0.0)
+
+    return merged, missing_value, missing_quantity
+
+
+def apply_chained_weights_wide_for_range(
+    *,
+    start_year: int,
+    end_year: int,
+    target_year: int,
+    measures: Sequence[str] = ("VALUE_EUR", "QUANTITY_KG"),
+    annual_base_dir: Path = ANNUAL_DATA_DIR,
+    weights_dir: Path = DEFAULT_WEIGHTS_DIR,
+    output_chained_weights_dir: Path = DEFAULT_CHAINED_WEIGHTS_DIR,
+    output_chained_diagnostics_dir: Path = DEFAULT_CHAINED_DIAGNOSTICS_DIR,
+    output_base_dir: Path = Path("outputs/apply"),
+    output_summary_path: Path | None = None,
+    finalize_weights: bool = False,
+    threshold_abs: float = 1e-3,
+    row_sum_tol: float = 1e-6,
+    assume_identity_for_missing: bool = True,
+    fail_on_missing: bool = True,
+    skip_existing: bool = True,
+) -> pd.DataFrame:
+    measures = [str(measure).strip().upper() for measure in measures]
+    chained_outputs = build_chained_weights_for_range(
+        start_year=start_year,
+        end_year=end_year,
+        target_year=target_year,
+        measures=measures,
+        weights_dir=weights_dir,
+        output_weights_dir=output_chained_weights_dir,
+        output_diagnostics_dir=output_chained_diagnostics_dir,
+        finalize_weights=finalize_weights,
+        threshold_abs=threshold_abs,
+        row_sum_tol=row_sum_tol,
+        fail_on_missing=fail_on_missing,
+    )
+
+    weights_by_year: dict[str, dict[str, pd.DataFrame]] = {}
+    for output in chained_outputs:
+        weights_by_year.setdefault(output.origin_year, {})[output.measure] = output.weights
+
+    existing_summary = pd.DataFrame()
+    if output_summary_path is None:
+        output_summary_path = output_base_dir / f"CN{target_year}" / "summary.csv"
+    if skip_existing and output_summary_path.exists():
+        existing_summary = pd.read_csv(output_summary_path)
+        if "origin_year" in existing_summary.columns:
+            existing_summary["origin_year"] = existing_summary["origin_year"].astype(str)
+    existing_years = set(existing_summary.get("origin_year", []))
+    summary_rows: list[dict[str, object]] = (
+        existing_summary.to_dict("records") if not existing_summary.empty else []
+    )
+
+    for year in range(int(start_year), int(end_year) + 1):
+        origin = str(year)
+        data_path = annual_base_dir / f"comext_{origin}.parquet"
+        if not data_path.exists():
+            raise FileNotFoundError(f"Missing annual data file: {data_path}")
+        output_dir = output_base_dir / f"CN{target_year}" / "annual"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"comext_{origin}_wide.parquet"
+        if skip_existing and output_path.exists() and origin in existing_years:
+            continue
+        data = pd.read_parquet(data_path)
+        n_rows_input = len(data)
+        n_codes_input = data["PRODUCT_NC"].astype(str).nunique()
+
+        weights_value = None
+        weights_quantity = None
+        if origin != str(target_year):
+            weights_for_year = weights_by_year.get(origin, {})
+            weights_value = weights_for_year.get("VALUE_EUR")
+            weights_quantity = weights_for_year.get("QUANTITY_KG")
+            if "VALUE_EUR" in measures and weights_value is None:
+                raise ValueError(f"Missing chained VALUE_EUR weights for {origin}->{target_year}")
+            if "QUANTITY_KG" in measures and weights_quantity is None:
+                raise ValueError(f"Missing chained QUANTITY_KG weights for {origin}->{target_year}")
+        else:
+            weights_value = None if "VALUE_EUR" not in measures else pd.DataFrame(
+                columns=["from_code", "to_code", "weight"]
+            )
+            weights_quantity = None if "QUANTITY_KG" not in measures else pd.DataFrame(
+                columns=["from_code", "to_code", "weight"]
+            )
+
+        if origin == str(target_year):
+            output = data.copy()
+            output["PRODUCT_NC"] = _normalize_codes(output["PRODUCT_NC"])
+            if "VALUE_EUR" in measures:
+                output["VALUE_EUR_w_value"] = output["VALUE_EUR"]
+                output["QUANTITY_KG_w_value"] = output["QUANTITY_KG"]
+            if "QUANTITY_KG" in measures:
+                output["VALUE_EUR_w_quantity"] = output["VALUE_EUR"]
+                output["QUANTITY_KG_w_quantity"] = output["QUANTITY_KG"]
+            drop_cols = ["VALUE_EUR", "QUANTITY_KG"]
+            output = output.drop(columns=[col for col in drop_cols if col in output.columns])
+            missing_value = 0
+            missing_quantity = 0
+        else:
+            output, missing_value, missing_quantity = _apply_weights_wide(
+                data=data,
+                weights_value=weights_value if "VALUE_EUR" in measures else None,
+                weights_quantity=weights_quantity if "QUANTITY_KG" in measures else None,
+                assume_identity_for_missing=assume_identity_for_missing,
+                fail_on_missing=fail_on_missing,
+            )
+
+        output.to_parquet(output_path, index=False)
+
+        summary_rows.append(
+            {
+                "origin_year": origin,
+                "target_year": str(target_year),
+                "n_rows_input": n_rows_input,
+                "n_rows_output": len(output),
+                "n_codes_input": n_codes_input,
+                "n_missing_value": missing_value,
+                "n_missing_quantity": missing_quantity,
+                "sum_value_eur_input": float(data["VALUE_EUR"].sum()),
+                "sum_quantity_kg_input": float(data["QUANTITY_KG"].sum()),
+                "sum_value_eur_w_value": float(output.get("VALUE_EUR_w_value", 0.0).sum()),
+                "sum_quantity_kg_w_value": float(output.get("QUANTITY_KG_w_value", 0.0).sum()),
+                "sum_value_eur_w_quantity": float(
+                    output.get("VALUE_EUR_w_quantity", 0.0).sum()
+                ),
+                "sum_quantity_kg_w_quantity": float(
+                    output.get("QUANTITY_KG_w_quantity", 0.0).sum()
+                ),
+            }
+        )
+
+    summary = pd.DataFrame(summary_rows)
+    if "origin_year" in summary.columns:
+        summary["origin_year"] = summary["origin_year"].astype(str)
+        summary = summary.drop_duplicates(subset=["origin_year"], keep="last")
+    output_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary.to_csv(output_summary_path, index=False)
+    return summary
+
+
+def apply_chained_weights_wide_for_month_range(
+    *,
+    start_year: int,
+    end_year: int,
+    target_year: int,
+    measures: Sequence[str] = ("VALUE_EUR", "QUANTITY_KG"),
+    monthly_base_dir: Path = MONTHLY_DATA_DIR,
+    weights_dir: Path = DEFAULT_WEIGHTS_DIR,
+    output_chained_weights_dir: Path = DEFAULT_CHAINED_WEIGHTS_DIR,
+    output_chained_diagnostics_dir: Path = DEFAULT_CHAINED_DIAGNOSTICS_DIR,
+    output_base_dir: Path = Path("outputs/apply"),
+    output_summary_path: Path | None = None,
+    finalize_weights: bool = False,
+    threshold_abs: float = 1e-3,
+    row_sum_tol: float = 1e-6,
+    assume_identity_for_missing: bool = True,
+    fail_on_missing: bool = True,
+    skip_existing: bool = True,
+) -> pd.DataFrame:
+    measures = [str(measure).strip().upper() for measure in measures]
+    chained_outputs = build_chained_weights_for_range(
+        start_year=start_year,
+        end_year=end_year,
+        target_year=target_year,
+        measures=measures,
+        weights_dir=weights_dir,
+        output_weights_dir=output_chained_weights_dir,
+        output_diagnostics_dir=output_chained_diagnostics_dir,
+        finalize_weights=finalize_weights,
+        threshold_abs=threshold_abs,
+        row_sum_tol=row_sum_tol,
+        fail_on_missing=fail_on_missing,
+    )
+
+    weights_by_year: dict[str, dict[str, pd.DataFrame]] = {}
+    for output in chained_outputs:
+        weights_by_year.setdefault(output.origin_year, {})[output.measure] = output.weights
+
+    existing_summary = pd.DataFrame()
+    if output_summary_path is None:
+        output_summary_path = output_base_dir / f"CN{target_year}" / "monthly" / "summary.csv"
+    if skip_existing and output_summary_path.exists():
+        existing_summary = pd.read_csv(output_summary_path)
+        if "origin_period" in existing_summary.columns:
+            existing_summary["origin_period"] = (
+                existing_summary["origin_period"].astype(str).str.zfill(6)
+            )
+    existing_periods = set(existing_summary.get("origin_period", []))
+    summary_rows: list[dict[str, object]] = (
+        existing_summary.to_dict("records") if not existing_summary.empty else []
+    )
+
+    for year in range(int(start_year), int(end_year) + 1):
+        origin = str(year)
+        for month in range(1, 13):
+            period = f"{origin}{month:02d}"
+            data_path = monthly_base_dir / f"comext_{period}.parquet"
+            if not data_path.exists():
+                raise FileNotFoundError(f"Missing monthly data file: {data_path}")
+            output_dir = output_base_dir / f"CN{target_year}" / "monthly"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = output_dir / f"comext_{period}_wide.parquet"
+            if skip_existing and output_path.exists() and period in existing_periods:
+                continue
+            data = pd.read_parquet(data_path)
+            n_rows_input = len(data)
+            n_codes_input = data["PRODUCT_NC"].astype(str).nunique()
+
+            weights_value = None
+            weights_quantity = None
+            if origin != str(target_year):
+                weights_for_year = weights_by_year.get(origin, {})
+                weights_value = weights_for_year.get("VALUE_EUR")
+                weights_quantity = weights_for_year.get("QUANTITY_KG")
+                if "VALUE_EUR" in measures and weights_value is None:
+                    raise ValueError(f"Missing chained VALUE_EUR weights for {origin}->{target_year}")
+                if "QUANTITY_KG" in measures and weights_quantity is None:
+                    raise ValueError(
+                        f"Missing chained QUANTITY_KG weights for {origin}->{target_year}"
+                    )
+            else:
+                weights_value = None if "VALUE_EUR" not in measures else pd.DataFrame(
+                    columns=["from_code", "to_code", "weight"]
+                )
+                weights_quantity = None if "QUANTITY_KG" not in measures else pd.DataFrame(
+                    columns=["from_code", "to_code", "weight"]
+                )
+
+            if origin == str(target_year):
+                output = data.copy()
+                output["PRODUCT_NC"] = _normalize_codes(output["PRODUCT_NC"])
+                if "VALUE_EUR" in measures:
+                    output["VALUE_EUR_w_value"] = output["VALUE_EUR"]
+                    output["QUANTITY_KG_w_value"] = output["QUANTITY_KG"]
+                if "QUANTITY_KG" in measures:
+                    output["VALUE_EUR_w_quantity"] = output["VALUE_EUR"]
+                    output["QUANTITY_KG_w_quantity"] = output["QUANTITY_KG"]
+                drop_cols = ["VALUE_EUR", "QUANTITY_KG"]
+                output = output.drop(columns=[col for col in drop_cols if col in output.columns])
+                missing_value = 0
+                missing_quantity = 0
+            else:
+                output, missing_value, missing_quantity = _apply_weights_wide(
+                    data=data,
+                    weights_value=weights_value if "VALUE_EUR" in measures else None,
+                    weights_quantity=weights_quantity if "QUANTITY_KG" in measures else None,
+                    assume_identity_for_missing=assume_identity_for_missing,
+                    fail_on_missing=fail_on_missing,
+                )
+
+            output.to_parquet(output_path, index=False)
+
+            summary_rows.append(
+                {
+                    "origin_period": period,
+                    "origin_year": origin,
+                    "origin_month": month,
+                    "target_year": str(target_year),
+                    "n_rows_input": n_rows_input,
+                    "n_rows_output": len(output),
+                    "n_codes_input": n_codes_input,
+                    "n_missing_value": missing_value,
+                    "n_missing_quantity": missing_quantity,
+                    "sum_value_eur_input": float(data["VALUE_EUR"].sum()),
+                    "sum_quantity_kg_input": float(data["QUANTITY_KG"].sum()),
+                    "sum_value_eur_w_value": float(output.get("VALUE_EUR_w_value", 0.0).sum()),
+                    "sum_quantity_kg_w_value": float(output.get("QUANTITY_KG_w_value", 0.0).sum()),
+                    "sum_value_eur_w_quantity": float(
+                        output.get("VALUE_EUR_w_quantity", 0.0).sum()
+                    ),
+                    "sum_quantity_kg_w_quantity": float(
+                        output.get("QUANTITY_KG_w_quantity", 0.0).sum()
+                    ),
+                }
+            )
+
+    summary = pd.DataFrame(summary_rows)
+    if "origin_period" in summary.columns:
+        summary["origin_period"] = summary["origin_period"].astype(str).str.zfill(6)
+        summary = summary.drop_duplicates(subset=["origin_period"], keep="last")
+    output_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary.to_csv(output_summary_path, index=False)
+    return summary
 
 
 def _apply_weights_to_frame(
@@ -174,7 +581,7 @@ def apply_weights_to_annual_period(
     strategy: str = "weights_split",
     annual_base_dir: Path = ANNUAL_DATA_DIR,
     weights_dir: Path = DEFAULT_WEIGHTS_DIR,
-    output_base_dir: Path = Path("outputs/harmonised/annual"),
+    output_base_dir: Path = Path("outputs/apply"),
     measure_columns: Sequence[str] = MEASURE_COLUMNS,
     fail_on_missing: bool = True,
     assume_identity_for_missing: bool = True,
@@ -314,7 +721,7 @@ def apply_weights_to_annual_period(
                 converted[col] = converted[col].fillna(0.0)
         n_codes_weighted = max(len(set(weights_value["from_code"])), len(set(weights_quantity["from_code"])))
 
-    output_dir = output_base_dir / f"CN{target_year}"
+    output_dir = output_base_dir / f"CN{target_year}" / "annual"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"comext_{origin_year}_{strategy}.parquet"
     converted.to_parquet(output_path, index=False)

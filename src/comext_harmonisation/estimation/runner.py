@@ -19,8 +19,8 @@ from ..weights import DEFAULT_WEIGHTS_DIR, empty_weight_table
 
 
 DEFAULT_CONCORDANCE_PATH = Path("data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls")
-DEFAULT_DIAGNOSTICS_DIR = Path("outputs/diagnostics")
-DEFAULT_SUMMARIES_DIR = Path("outputs/summaries")
+DEFAULT_DIAGNOSTICS_DIR = Path("outputs/estimate/diagnostics")
+DEFAULT_SUMMARY_PATH = Path("outputs/estimate/summary.csv")
 
 
 @dataclass(frozen=True)
@@ -53,24 +53,12 @@ def _write_csv(df: pd.DataFrame, path: Path) -> None:
     df.to_csv(path, index=False)
 
 
-def _write_summary_text(summary: pd.DataFrame, path: Path) -> None:
+def _append_csv(df: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    if summary.empty:
-        path.write_text("", encoding="utf-8")
+    if df.empty:
         return
-    if len(summary) == 1:
-        row = summary.iloc[0].to_dict()
-        lines = [f"{key}: {value}" for key, value in row.items()]
-    else:
-        lines = []
-        for row in summary.to_dict(orient="records"):
-            measure = row.get("measure", "")
-            header = f"[{measure}]" if measure else "[summary]"
-            lines.append(header)
-            for key, value in row.items():
-                lines.append(f"{key}: {value}")
-            lines.append("")
-    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    write_header = not path.exists()
+    df.to_csv(path, mode="a", index=False, header=write_header)
 
 
 def _sort_weights(df: pd.DataFrame) -> pd.DataFrame:
@@ -197,7 +185,7 @@ def run_weight_estimation_for_period(
     exclude_aggregate_codes: bool = True,
     output_weights_dir: Path = DEFAULT_WEIGHTS_DIR,
     output_diagnostics_dir: Path = DEFAULT_DIAGNOSTICS_DIR,
-    output_summaries_dir: Path = DEFAULT_SUMMARIES_DIR,
+    output_summary_path: Path = DEFAULT_SUMMARY_PATH,
     output_dir: Optional[Path] = None,
     fail_on_status: bool = True,
     write_summary: bool = True,
@@ -267,23 +255,25 @@ def run_weight_estimation_for_period(
     if output_dir is not None:
         output_weights_dir = output_dir / "weights"
         output_diagnostics_dir = output_dir / "diagnostics"
-        output_summaries_dir = output_dir / "summaries"
+        output_summary_path = output_dir / "summary.csv"
 
     measure_tag = estimation.measure.lower()
-    weights_path = output_weights_dir / f"weights_ambiguous_{period}_{direction}_{measure_tag}.csv"
-    deterministic_path = output_weights_dir / f"weights_deterministic_{period}_{direction}_{measure_tag}.csv"
-    diagnostics_path = output_diagnostics_dir / f"diagnostics_{period}_{direction}_{measure_tag}.csv"
-    summary_csv_path = (
-        output_summaries_dir / f"run_summary_{period}_{direction}_{measure_tag}.csv"
-        if write_summary
-        else None
-    )
+    weights_dir = output_weights_dir / period / direction / measure_tag
+    weights_dir.mkdir(parents=True, exist_ok=True)
+    weights_path = weights_dir / "weights_ambiguous.csv"
+    deterministic_path = weights_dir / "weights_deterministic.csv"
+
+    diagnostics_dir = output_diagnostics_dir / period / direction
+    diagnostics_dir.mkdir(parents=True, exist_ok=True)
+    diagnostics_path = diagnostics_dir / f"{measure_tag}.csv"
+
+    summary_csv_path = output_summary_path if write_summary else None
 
     _write_csv(weights_ambiguous, weights_path)
     _write_csv(weights_deterministic, deterministic_path)
     _write_csv(diagnostics, diagnostics_path)
     if summary_csv_path is not None:
-        _write_csv(summary, summary_csv_path)
+        _append_csv(summary, summary_csv_path)
 
     return RunnerOutputs(
         period=period,
@@ -313,7 +303,7 @@ def run_weight_estimation_for_period_multi(
     exclude_aggregate_codes: bool = True,
     output_weights_dir: Path = DEFAULT_WEIGHTS_DIR,
     output_diagnostics_dir: Path = DEFAULT_DIAGNOSTICS_DIR,
-    output_summaries_dir: Path = DEFAULT_SUMMARIES_DIR,
+    output_summary_path: Path = DEFAULT_SUMMARY_PATH,
     output_dir: Optional[Path] = None,
     fail_on_status: bool = True,
 ) -> list[RunnerOutputs]:
@@ -334,7 +324,7 @@ def run_weight_estimation_for_period_multi(
             exclude_aggregate_codes=exclude_aggregate_codes,
             output_weights_dir=output_weights_dir,
             output_diagnostics_dir=output_diagnostics_dir,
-            output_summaries_dir=output_summaries_dir,
+            output_summary_path=output_summary_path,
             output_dir=output_dir,
             fail_on_status=fail_on_status,
             write_summary=False,
@@ -344,11 +334,8 @@ def run_weight_estimation_for_period_multi(
 
     combined = pd.concat(summaries, ignore_index=True) if summaries else pd.DataFrame()
     if output_dir is not None:
-        output_summaries_dir = output_dir / "summaries"
+        output_summary_path = output_dir / "summary.csv"
 
-    summary_csv_path = output_summaries_dir / f"run_summary_{period}_{direction}.csv"
-    summary_txt_path = output_summaries_dir / f"run_summary_{period}_{direction}.txt"
-    _write_csv(combined, summary_csv_path)
-    _write_summary_text(combined, summary_txt_path)
+    _append_csv(combined, output_summary_path)
 
     return outputs

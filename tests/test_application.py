@@ -7,9 +7,10 @@ from comext_harmonisation.weights import WEIGHT_COLUMNS
 
 def _write_weights(tmp_path, *, period, direction, measure_tag, rows):
     weights_dir = tmp_path / "weights"
-    weights_dir.mkdir(parents=True, exist_ok=True)
-    amb_path = weights_dir / f"weights_ambiguous_{period}_{direction}_{measure_tag}.csv"
-    det_path = weights_dir / f"weights_deterministic_{period}_{direction}_{measure_tag}.csv"
+    weights_path = weights_dir / period / direction / measure_tag
+    weights_path.mkdir(parents=True, exist_ok=True)
+    amb_path = weights_path / "weights_ambiguous.csv"
+    det_path = weights_path / "weights_deterministic.csv"
     df = pd.DataFrame(rows)[WEIGHT_COLUMNS]
     df.to_csv(amb_path, index=False)
     pd.DataFrame(columns=WEIGHT_COLUMNS).to_csv(det_path, index=False)
@@ -100,7 +101,7 @@ def test_apply_weights_annual_value_strategy(tmp_path):
         assume_identity_for_missing=False,
     )
 
-    output_path = tmp_path / "out" / "CN2010" / "comext_2009_weights_value.parquet"
+    output_path = tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_value.parquet"
     result = pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
 
     assert diagnostics.n_rows_input == 2
@@ -197,7 +198,7 @@ def test_apply_weights_annual_split_strategy(tmp_path):
         assume_identity_for_missing=False,
     )
 
-    output_path = tmp_path / "out" / "CN2010" / "comext_2009_weights_split.parquet"
+    output_path = tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_split.parquet"
     result = pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
     assert result.loc[0, "VALUE_EUR"] == 30.0
     assert result.loc[1, "VALUE_EUR"] == 20.0
@@ -312,7 +313,7 @@ def test_apply_weights_annual_missing_weights_identity_default(tmp_path):
         assume_identity_for_missing=True,
     )
 
-    output_path = tmp_path / "out" / "CN2010" / "comext_2009_weights_value.parquet"
+    output_path = tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_value.parquet"
     result = pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
     assert result.loc[0, "PRODUCT_NC"] == "00000002"
     assert result.loc[1, "PRODUCT_NC"] == "00000011"

@@ -10,8 +10,8 @@ import pandas as pd
 from ..weights import DEFAULT_WEIGHTS_DIR, validate_weight_table
 
 
-DEFAULT_CHAINED_WEIGHTS_DIR = Path("outputs/weights/chained")
-DEFAULT_CHAINED_DIAGNOSTICS_DIR = Path("outputs/diagnostics/chained")
+DEFAULT_CHAINED_WEIGHTS_DIR = Path("outputs/chain")
+DEFAULT_CHAINED_DIAGNOSTICS_DIR = Path("outputs/chain")
 
 
 @dataclass(frozen=True)
@@ -61,8 +61,9 @@ def _load_weights(
     validate: bool = True,
 ) -> pd.DataFrame:
     measure_tag = measure.lower()
-    ambiguous_path = weights_dir / f"weights_ambiguous_{period}_{direction}_{measure_tag}.csv"
-    deterministic_path = weights_dir / f"weights_deterministic_{period}_{direction}_{measure_tag}.csv"
+    weights_path = weights_dir / period / direction / measure_tag
+    ambiguous_path = weights_path / "weights_ambiguous.csv"
+    deterministic_path = weights_path / "weights_deterministic.csv"
     if not ambiguous_path.exists():
         raise FileNotFoundError(f"Missing weights file: {ambiguous_path}")
     if not deterministic_path.exists():
@@ -73,9 +74,16 @@ def _load_weights(
         deterministic = deterministic.loc[
             ~deterministic["from_code"].isin(ambiguous["from_code"])
         ]
-    weights = ambiguous if deterministic.empty else pd.concat([ambiguous, deterministic], ignore_index=True)
-    if weights.empty:
+    frames = []
+    for frame in (ambiguous, deterministic):
+        if frame.empty:
+            continue
+        if frame.isna().all().all():
+            continue
+        frames.append(frame)
+    if not frames:
         raise ValueError(f"No weights found for period {period} ({measure}).")
+    weights = frames[0] if len(frames) == 1 else pd.concat(frames, ignore_index=True)
     weights = weights[["from_code", "to_code", "weight"]].copy()
     weights["from_code"] = _normalize_codes(weights["from_code"])
     weights["to_code"] = _normalize_codes(weights["to_code"])
@@ -131,6 +139,14 @@ def _check_weight_bounds(weights: pd.DataFrame, *, bound_tol: float, context: st
             "Weights outside [0, 1] tolerance in "
             f"{context}: min={min_weight}, max={max_weight}, tol={bound_tol}"
         )
+
+
+def _append_csv(df: pd.DataFrame, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if df.empty:
+        return
+    write_header = not path.exists()
+    df.to_csv(path, mode="a", index=False, header=write_header)
 
 
 def chain_weights_for_year(
@@ -455,16 +471,19 @@ def build_chained_weights_for_range(
             ]
 
             measure_tag = measure.lower()
-            weights_path = output_weights_dir / (
-                f"weights_chained_{origin}_{target}_{direction}_{measure_tag}.csv"
+            weights_path = (
+                output_weights_dir
+                / f"CN{target}"
+                / "weights"
+                / origin
+                / direction
+                / measure_tag
+                / "weights.csv"
             )
-            diagnostics_path = output_diagnostics_dir / (
-                f"diagnostics_chained_{origin}_{target}_{direction}_{measure_tag}.csv"
-            )
+            diagnostics_path = output_diagnostics_dir / f"CN{target}" / "diagnostics.csv"
             weights_path.parent.mkdir(parents=True, exist_ok=True)
-            diagnostics_path.parent.mkdir(parents=True, exist_ok=True)
             weights_out.to_csv(weights_path, index=False)
-            diagnostics.to_csv(diagnostics_path, index=False)
+            _append_csv(diagnostics, diagnostics_path)
 
             outputs.append(
                 ChainedWeightsOutput(

@@ -9,8 +9,10 @@ from comext_harmonisation.estimation.chaining import (
 
 def _write_weights(tmp_path, *, period, direction, measure, rows):
     measure_tag = measure.lower()
-    ambiguous_path = tmp_path / f"weights_ambiguous_{period}_{direction}_{measure_tag}.csv"
-    deterministic_path = tmp_path / f"weights_deterministic_{period}_{direction}_{measure_tag}.csv"
+    weights_path = tmp_path / period / direction / measure_tag
+    weights_path.mkdir(parents=True, exist_ok=True)
+    ambiguous_path = weights_path / "weights_ambiguous.csv"
+    deterministic_path = weights_path / "weights_deterministic.csv"
     pd.DataFrame(rows).to_csv(ambiguous_path, index=False)
     pd.DataFrame(columns=["from_code", "to_code", "weight"]).to_csv(deterministic_path, index=False)
 

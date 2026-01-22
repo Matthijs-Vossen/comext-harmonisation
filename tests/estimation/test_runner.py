@@ -274,9 +274,7 @@ def test_run_weight_estimation_for_period_multi_writes_combined_summary(tmp_path
     assert all(result.summary_csv_path is None for result in results)
     assert not (tmp_path / "summaries" / f"run_summary_{period}_{direction}_value_eur.csv").exists()
     assert not (tmp_path / "summaries" / f"run_summary_{period}_{direction}_quantity_kg.csv").exists()
-    summary_path = tmp_path / "summaries" / f"run_summary_{period}_{direction}.csv"
+    summary_path = tmp_path / "summary.csv"
     assert summary_path.exists()
-    summary_txt_path = tmp_path / "summaries" / f"run_summary_{period}_{direction}.txt"
-    assert summary_txt_path.exists()
     combined = pd.read_csv(summary_path)
     assert set(combined["measure"]) == {"VALUE_EUR", "QUANTITY_KG"}
