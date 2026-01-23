@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+import numpy as np
 import pandas as pd
+from scipy import sparse as sp
 from ..weights import DEFAULT_WEIGHTS_DIR, validate_weight_table
 
 
@@ -96,25 +98,55 @@ def _load_weights(
 def _max_row_sum_dev(weights: pd.DataFrame) -> float:
     if weights.empty:
         return 0.0
-    row_sums = weights.groupby("from_code")["weight"].sum()
+    row_sums = weights.groupby("from_code", sort=False)["weight"].sum()
     return float((row_sums - 1.0).abs().max())
 
 
 def _compose_weights(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
-    merged = left.merge(
-        right,
-        left_on="to_code",
-        right_on="from_code",
-        how="inner",
-        suffixes=("_left", "_right"),
+    if left.empty or right.empty:
+        return pd.DataFrame(columns=["from_code", "to_code", "weight"])
+
+    mid_codes = sorted(set(left["to_code"]) & set(right["from_code"]))
+    if not mid_codes:
+        return pd.DataFrame(columns=["from_code", "to_code", "weight"])
+
+    from_codes = sorted(left["from_code"].unique())
+    to_codes = sorted(right["to_code"].unique())
+    mid_index = {code: idx for idx, code in enumerate(mid_codes)}
+    from_index = {code: idx for idx, code in enumerate(from_codes)}
+    to_index = {code: idx for idx, code in enumerate(to_codes)}
+
+    left_filtered = left[left["to_code"].isin(mid_codes)]
+    right_filtered = right[right["from_code"].isin(mid_codes)]
+
+    left_rows = left_filtered["from_code"].map(from_index).to_numpy(dtype=int)
+    left_cols = left_filtered["to_code"].map(mid_index).to_numpy(dtype=int)
+    left_data = left_filtered["weight"].to_numpy(dtype=float)
+    left_mat = sp.coo_matrix(
+        (left_data, (left_rows, left_cols)),
+        shape=(len(from_codes), len(mid_codes)),
+    ).tocsr()
+
+    right_rows = right_filtered["from_code"].map(mid_index).to_numpy(dtype=int)
+    right_cols = right_filtered["to_code"].map(to_index).to_numpy(dtype=int)
+    right_data = right_filtered["weight"].to_numpy(dtype=float)
+    right_mat = sp.coo_matrix(
+        (right_data, (right_rows, right_cols)),
+        shape=(len(mid_codes), len(to_codes)),
+    ).tocsr()
+
+    chained = left_mat @ right_mat
+    if chained.nnz == 0:
+        return pd.DataFrame(columns=["from_code", "to_code", "weight"])
+
+    chained = chained.tocoo()
+    return pd.DataFrame(
+        {
+            "from_code": np.take(from_codes, chained.row),
+            "to_code": np.take(to_codes, chained.col),
+            "weight": chained.data,
+        }
     )
-    merged["weight"] = merged["weight_left"] * merged["weight_right"]
-    chained = (
-        merged.groupby(["from_code_left", "to_code_right"], as_index=False)["weight"]
-        .sum()
-        .rename(columns={"from_code_left": "from_code", "to_code_right": "to_code"})
-    )
-    return chained
 
 
 def _add_identity_rows(right: pd.DataFrame, *, required_from: set[str]) -> pd.DataFrame:

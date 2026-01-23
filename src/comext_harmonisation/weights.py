@@ -66,6 +66,6 @@ def validate_weight_table(
             key_cols = ["period", "from_vintage_year", "to_vintage_year", "from_code"]
         else:
             key_cols = ["from_code"]
-        row_sums = required.groupby(key_cols, dropna=False)["weight"].sum()
+        row_sums = required.groupby(key_cols, dropna=False, sort=False)["weight"].sum()
         if ((row_sums - 1.0).abs() > row_sum_tol).any():
             raise ValueError("Weight rows must sum to 1 within tolerance")

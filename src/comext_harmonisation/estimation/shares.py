@@ -107,7 +107,11 @@ def _prepare_side_shares(
     df = df[df["group_id"].isin(group_ids)]
 
     df = (
-        df.groupby(["REPORTER", "PARTNER", "group_id", code_col_name], as_index=False)
+        df.groupby(
+            ["REPORTER", "PARTNER", "group_id", code_col_name],
+            as_index=False,
+            sort=False,
+        )
         .agg(**{value_col: (value_col, "sum")})
     )
 
@@ -120,17 +124,17 @@ def _prepare_side_shares(
         return shares, totals
 
     totals = (
-        df.groupby("group_id", as_index=False)
+        df.groupby("group_id", as_index=False, sort=False)
         .agg(**{f"total_{value_col}": (value_col, "sum")})
     )
     pairs = (
         df.drop_duplicates(["group_id", "REPORTER", "PARTNER"])
-        .groupby("group_id", as_index=False)
+        .groupby("group_id", as_index=False, sort=False)
         .size()
         .rename(columns={"size": "n_pairs"})
     )
     n_rows = (
-        df.groupby("group_id", as_index=False)
+        df.groupby("group_id", as_index=False, sort=False)
         .size()
         .rename(columns={"size": "n_rows"})
     )

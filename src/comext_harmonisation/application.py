@@ -11,6 +11,7 @@ import pandas as pd
 from .estimation.shares import ANNUAL_DATA_DIR
 from .estimation.chaining import (
     build_chained_weights_for_range,
+    ChainedWeightsOutput,
     DEFAULT_CHAINED_DIAGNOSTICS_DIR,
     DEFAULT_CHAINED_WEIGHTS_DIR,
 )
@@ -79,7 +80,11 @@ def finalize_weights_table(
 
     df.loc[df["weight"].abs() < threshold_abs, "weight"] = 0.0
 
-    row_sums = df.groupby("from_code", as_index=False)["weight"].sum().rename(columns={"weight": "row_sum"})
+    row_sums = (
+        df.groupby("from_code", as_index=False, sort=False)["weight"]
+        .sum()
+        .rename(columns={"weight": "row_sum"})
+    )
     zero_rows = row_sums[row_sums["row_sum"] <= 0]
     if not zero_rows.empty:
         sample = zero_rows["from_code"].head(5).tolist()
@@ -89,7 +94,7 @@ def finalize_weights_table(
     df["weight"] = df["weight"] / df["row_sum"]
     df = df.drop(columns=["row_sum"])
 
-    row_sums = df.groupby("from_code")["weight"].sum()
+    row_sums = df.groupby("from_code", sort=False)["weight"].sum()
     max_dev = float((row_sums - 1.0).abs().max()) if not row_sums.empty else 0.0
     if max_dev > row_sum_tol:
         raise ValueError(f"Row sums deviate from 1 by {max_dev} (tolerance {row_sum_tol})")
@@ -268,27 +273,32 @@ def apply_chained_weights_wide_for_range(
     output_chained_diagnostics_dir: Path = DEFAULT_CHAINED_DIAGNOSTICS_DIR,
     output_base_dir: Path = Path("outputs/apply"),
     output_summary_path: Path | None = None,
+    chained_outputs: Sequence[ChainedWeightsOutput] | None = None,
     finalize_weights: bool = False,
     threshold_abs: float = 1e-3,
     row_sum_tol: float = 1e-6,
     assume_identity_for_missing: bool = True,
     fail_on_missing: bool = True,
     skip_existing: bool = True,
+    max_workers: int | None = None,
+    show_progress: bool = False,
+    progress_desc: str | None = None,
 ) -> pd.DataFrame:
     measures = [str(measure).strip().upper() for measure in measures]
-    chained_outputs = build_chained_weights_for_range(
-        start_year=start_year,
-        end_year=end_year,
-        target_year=target_year,
-        measures=measures,
-        weights_dir=weights_dir,
-        output_weights_dir=output_chained_weights_dir,
-        output_diagnostics_dir=output_chained_diagnostics_dir,
-        finalize_weights=finalize_weights,
-        threshold_abs=threshold_abs,
-        row_sum_tol=row_sum_tol,
-        fail_on_missing=fail_on_missing,
-    )
+    if chained_outputs is None:
+        chained_outputs = build_chained_weights_for_range(
+            start_year=start_year,
+            end_year=end_year,
+            target_year=target_year,
+            measures=measures,
+            weights_dir=weights_dir,
+            output_weights_dir=output_chained_weights_dir,
+            output_diagnostics_dir=output_chained_diagnostics_dir,
+            finalize_weights=finalize_weights,
+            threshold_abs=threshold_abs,
+            row_sum_tol=row_sum_tol,
+            fail_on_missing=fail_on_missing,
+        )
 
     weights_by_year: dict[str, dict[str, pd.DataFrame]] = {}
     for output in chained_outputs:
@@ -306,16 +316,21 @@ def apply_chained_weights_wide_for_range(
         existing_summary.to_dict("records") if not existing_summary.empty else []
     )
 
+    output_dir = output_base_dir / f"CN{target_year}" / "annual"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    years_to_process: list[str] = []
     for year in range(int(start_year), int(end_year) + 1):
         origin = str(year)
-        data_path = annual_base_dir / f"comext_{origin}.parquet"
-        if not data_path.exists():
-            raise FileNotFoundError(f"Missing annual data file: {data_path}")
-        output_dir = output_base_dir / f"CN{target_year}" / "annual"
-        output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / f"comext_{origin}_wide.parquet"
         if skip_existing and output_path.exists() and origin in existing_years:
             continue
+        years_to_process.append(origin)
+
+    def _process_year(origin: str) -> dict[str, object]:
+        data_path = annual_base_dir / f"comext_{origin}.parquet"
+        if not data_path.exists():
+            raise FileNotFoundError(f"Missing annual data file: {data_path}")
         data = pd.read_parquet(data_path)
         n_rows_input = len(data)
         n_codes_input = data["PRODUCT_NC"].astype(str).nunique()
@@ -360,29 +375,62 @@ def apply_chained_weights_wide_for_range(
                 fail_on_missing=fail_on_missing,
             )
 
+        output_path = output_dir / f"comext_{origin}_wide.parquet"
         output.to_parquet(output_path, index=False)
 
-        summary_rows.append(
-            {
-                "origin_year": origin,
-                "target_year": str(target_year),
-                "n_rows_input": n_rows_input,
-                "n_rows_output": len(output),
-                "n_codes_input": n_codes_input,
-                "n_missing_value": missing_value,
-                "n_missing_quantity": missing_quantity,
-                "sum_value_eur_input": float(data["VALUE_EUR"].sum()),
-                "sum_quantity_kg_input": float(data["QUANTITY_KG"].sum()),
-                "sum_value_eur_w_value": float(output.get("VALUE_EUR_w_value", 0.0).sum()),
-                "sum_quantity_kg_w_value": float(output.get("QUANTITY_KG_w_value", 0.0).sum()),
-                "sum_value_eur_w_quantity": float(
-                    output.get("VALUE_EUR_w_quantity", 0.0).sum()
-                ),
-                "sum_quantity_kg_w_quantity": float(
-                    output.get("QUANTITY_KG_w_quantity", 0.0).sum()
-                ),
-            }
-        )
+        return {
+            "origin_year": origin,
+            "target_year": str(target_year),
+            "n_rows_input": n_rows_input,
+            "n_rows_output": len(output),
+            "n_codes_input": n_codes_input,
+            "n_missing_value": missing_value,
+            "n_missing_quantity": missing_quantity,
+            "sum_value_eur_input": float(data["VALUE_EUR"].sum()),
+            "sum_quantity_kg_input": float(data["QUANTITY_KG"].sum()),
+            "sum_value_eur_w_value": float(output.get("VALUE_EUR_w_value", 0.0).sum()),
+            "sum_quantity_kg_w_value": float(output.get("QUANTITY_KG_w_value", 0.0).sum()),
+            "sum_value_eur_w_quantity": float(
+                output.get("VALUE_EUR_w_quantity", 0.0).sum()
+            ),
+            "sum_quantity_kg_w_quantity": float(
+                output.get("QUANTITY_KG_w_quantity", 0.0).sum()
+            ),
+        }
+
+    show_progress = bool(show_progress and years_to_process)
+
+    if max_workers is None or max_workers <= 1 or len(years_to_process) <= 1:
+        iterator = years_to_process
+        if show_progress:
+            from tqdm import tqdm
+
+            iterator = tqdm(
+                years_to_process,
+                desc=progress_desc or "Apply annual",
+                total=len(years_to_process),
+            )
+        for origin in iterator:
+            summary_rows.append(_process_year(origin))
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        progress = None
+        if show_progress:
+            from tqdm import tqdm
+
+            progress = tqdm(
+                total=len(years_to_process),
+                desc=progress_desc or "Apply annual",
+            )
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_process_year, origin): origin for origin in years_to_process}
+            for future in as_completed(futures):
+                summary_rows.append(future.result())
+                if progress is not None:
+                    progress.update(1)
+        if progress is not None:
+            progress.close()
 
     summary = pd.DataFrame(summary_rows)
     if "origin_year" in summary.columns:
@@ -405,27 +453,32 @@ def apply_chained_weights_wide_for_month_range(
     output_chained_diagnostics_dir: Path = DEFAULT_CHAINED_DIAGNOSTICS_DIR,
     output_base_dir: Path = Path("outputs/apply"),
     output_summary_path: Path | None = None,
+    chained_outputs: Sequence[ChainedWeightsOutput] | None = None,
     finalize_weights: bool = False,
     threshold_abs: float = 1e-3,
     row_sum_tol: float = 1e-6,
     assume_identity_for_missing: bool = True,
     fail_on_missing: bool = True,
     skip_existing: bool = True,
+    max_workers: int | None = None,
+    show_progress: bool = False,
+    progress_desc: str | None = None,
 ) -> pd.DataFrame:
     measures = [str(measure).strip().upper() for measure in measures]
-    chained_outputs = build_chained_weights_for_range(
-        start_year=start_year,
-        end_year=end_year,
-        target_year=target_year,
-        measures=measures,
-        weights_dir=weights_dir,
-        output_weights_dir=output_chained_weights_dir,
-        output_diagnostics_dir=output_chained_diagnostics_dir,
-        finalize_weights=finalize_weights,
-        threshold_abs=threshold_abs,
-        row_sum_tol=row_sum_tol,
-        fail_on_missing=fail_on_missing,
-    )
+    if chained_outputs is None:
+        chained_outputs = build_chained_weights_for_range(
+            start_year=start_year,
+            end_year=end_year,
+            target_year=target_year,
+            measures=measures,
+            weights_dir=weights_dir,
+            output_weights_dir=output_chained_weights_dir,
+            output_diagnostics_dir=output_chained_diagnostics_dir,
+            finalize_weights=finalize_weights,
+            threshold_abs=threshold_abs,
+            row_sum_tol=row_sum_tol,
+            fail_on_missing=fail_on_missing,
+        )
 
     weights_by_year: dict[str, dict[str, pd.DataFrame]] = {}
     for output in chained_outputs:
@@ -445,89 +498,130 @@ def apply_chained_weights_wide_for_month_range(
         existing_summary.to_dict("records") if not existing_summary.empty else []
     )
 
+    output_dir = output_base_dir / f"CN{target_year}" / "monthly"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    periods_to_process: list[tuple[str, str, int]] = []
     for year in range(int(start_year), int(end_year) + 1):
         origin = str(year)
         for month in range(1, 13):
             period = f"{origin}{month:02d}"
-            data_path = monthly_base_dir / f"comext_{period}.parquet"
-            if not data_path.exists():
-                raise FileNotFoundError(f"Missing monthly data file: {data_path}")
-            output_dir = output_base_dir / f"CN{target_year}" / "monthly"
-            output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / f"comext_{period}_wide.parquet"
             if skip_existing and output_path.exists() and period in existing_periods:
                 continue
-            data = pd.read_parquet(data_path)
-            n_rows_input = len(data)
-            n_codes_input = data["PRODUCT_NC"].astype(str).nunique()
+            periods_to_process.append((period, origin, month))
 
-            weights_value = None
-            weights_quantity = None
-            if origin != str(target_year):
-                weights_for_year = weights_by_year.get(origin, {})
-                weights_value = weights_for_year.get("VALUE_EUR")
-                weights_quantity = weights_for_year.get("QUANTITY_KG")
-                if "VALUE_EUR" in measures and weights_value is None:
-                    raise ValueError(f"Missing chained VALUE_EUR weights for {origin}->{target_year}")
-                if "QUANTITY_KG" in measures and weights_quantity is None:
-                    raise ValueError(
-                        f"Missing chained QUANTITY_KG weights for {origin}->{target_year}"
-                    )
-            else:
-                weights_value = None if "VALUE_EUR" not in measures else pd.DataFrame(
-                    columns=["from_code", "to_code", "weight"]
+    def _process_period(period: str, origin: str, month: int) -> dict[str, object]:
+        data_path = monthly_base_dir / f"comext_{period}.parquet"
+        if not data_path.exists():
+            raise FileNotFoundError(f"Missing monthly data file: {data_path}")
+        data = pd.read_parquet(data_path)
+        n_rows_input = len(data)
+        n_codes_input = data["PRODUCT_NC"].astype(str).nunique()
+
+        weights_value = None
+        weights_quantity = None
+        if origin != str(target_year):
+            weights_for_year = weights_by_year.get(origin, {})
+            weights_value = weights_for_year.get("VALUE_EUR")
+            weights_quantity = weights_for_year.get("QUANTITY_KG")
+            if "VALUE_EUR" in measures and weights_value is None:
+                raise ValueError(f"Missing chained VALUE_EUR weights for {origin}->{target_year}")
+            if "QUANTITY_KG" in measures and weights_quantity is None:
+                raise ValueError(
+                    f"Missing chained QUANTITY_KG weights for {origin}->{target_year}"
                 )
-                weights_quantity = None if "QUANTITY_KG" not in measures else pd.DataFrame(
-                    columns=["from_code", "to_code", "weight"]
-                )
-
-            if origin == str(target_year):
-                output = data.copy()
-                output["PRODUCT_NC"] = _normalize_codes(output["PRODUCT_NC"])
-                if "VALUE_EUR" in measures:
-                    output["VALUE_EUR_w_value"] = output["VALUE_EUR"]
-                    output["QUANTITY_KG_w_value"] = output["QUANTITY_KG"]
-                if "QUANTITY_KG" in measures:
-                    output["VALUE_EUR_w_quantity"] = output["VALUE_EUR"]
-                    output["QUANTITY_KG_w_quantity"] = output["QUANTITY_KG"]
-                drop_cols = ["VALUE_EUR", "QUANTITY_KG"]
-                output = output.drop(columns=[col for col in drop_cols if col in output.columns])
-                missing_value = 0
-                missing_quantity = 0
-            else:
-                output, missing_value, missing_quantity = _apply_weights_wide(
-                    data=data,
-                    weights_value=weights_value if "VALUE_EUR" in measures else None,
-                    weights_quantity=weights_quantity if "QUANTITY_KG" in measures else None,
-                    assume_identity_for_missing=assume_identity_for_missing,
-                    fail_on_missing=fail_on_missing,
-                )
-
-            output.to_parquet(output_path, index=False)
-
-            summary_rows.append(
-                {
-                    "origin_period": period,
-                    "origin_year": origin,
-                    "origin_month": month,
-                    "target_year": str(target_year),
-                    "n_rows_input": n_rows_input,
-                    "n_rows_output": len(output),
-                    "n_codes_input": n_codes_input,
-                    "n_missing_value": missing_value,
-                    "n_missing_quantity": missing_quantity,
-                    "sum_value_eur_input": float(data["VALUE_EUR"].sum()),
-                    "sum_quantity_kg_input": float(data["QUANTITY_KG"].sum()),
-                    "sum_value_eur_w_value": float(output.get("VALUE_EUR_w_value", 0.0).sum()),
-                    "sum_quantity_kg_w_value": float(output.get("QUANTITY_KG_w_value", 0.0).sum()),
-                    "sum_value_eur_w_quantity": float(
-                        output.get("VALUE_EUR_w_quantity", 0.0).sum()
-                    ),
-                    "sum_quantity_kg_w_quantity": float(
-                        output.get("QUANTITY_KG_w_quantity", 0.0).sum()
-                    ),
-                }
+        else:
+            weights_value = None if "VALUE_EUR" not in measures else pd.DataFrame(
+                columns=["from_code", "to_code", "weight"]
             )
+            weights_quantity = None if "QUANTITY_KG" not in measures else pd.DataFrame(
+                columns=["from_code", "to_code", "weight"]
+            )
+
+        if origin == str(target_year):
+            output = data.copy()
+            output["PRODUCT_NC"] = _normalize_codes(output["PRODUCT_NC"])
+            if "VALUE_EUR" in measures:
+                output["VALUE_EUR_w_value"] = output["VALUE_EUR"]
+                output["QUANTITY_KG_w_value"] = output["QUANTITY_KG"]
+            if "QUANTITY_KG" in measures:
+                output["VALUE_EUR_w_quantity"] = output["VALUE_EUR"]
+                output["QUANTITY_KG_w_quantity"] = output["QUANTITY_KG"]
+            drop_cols = ["VALUE_EUR", "QUANTITY_KG"]
+            output = output.drop(columns=[col for col in drop_cols if col in output.columns])
+            missing_value = 0
+            missing_quantity = 0
+        else:
+            output, missing_value, missing_quantity = _apply_weights_wide(
+                data=data,
+                weights_value=weights_value if "VALUE_EUR" in measures else None,
+                weights_quantity=weights_quantity if "QUANTITY_KG" in measures else None,
+                assume_identity_for_missing=assume_identity_for_missing,
+                fail_on_missing=fail_on_missing,
+            )
+
+        output_path = output_dir / f"comext_{period}_wide.parquet"
+        output.to_parquet(output_path, index=False)
+
+        return {
+            "origin_period": period,
+            "origin_year": origin,
+            "origin_month": month,
+            "target_year": str(target_year),
+            "n_rows_input": n_rows_input,
+            "n_rows_output": len(output),
+            "n_codes_input": n_codes_input,
+            "n_missing_value": missing_value,
+            "n_missing_quantity": missing_quantity,
+            "sum_value_eur_input": float(data["VALUE_EUR"].sum()),
+            "sum_quantity_kg_input": float(data["QUANTITY_KG"].sum()),
+            "sum_value_eur_w_value": float(output.get("VALUE_EUR_w_value", 0.0).sum()),
+            "sum_quantity_kg_w_value": float(output.get("QUANTITY_KG_w_value", 0.0).sum()),
+            "sum_value_eur_w_quantity": float(
+                output.get("VALUE_EUR_w_quantity", 0.0).sum()
+            ),
+            "sum_quantity_kg_w_quantity": float(
+                output.get("QUANTITY_KG_w_quantity", 0.0).sum()
+            ),
+        }
+
+    show_progress = bool(show_progress and periods_to_process)
+
+    if max_workers is None or max_workers <= 1 or len(periods_to_process) <= 1:
+        iterator = periods_to_process
+        if show_progress:
+            from tqdm import tqdm
+
+            iterator = tqdm(
+                periods_to_process,
+                desc=progress_desc or "Apply monthly",
+                total=len(periods_to_process),
+            )
+        for period, origin, month in iterator:
+            summary_rows.append(_process_period(period, origin, month))
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        progress = None
+        if show_progress:
+            from tqdm import tqdm
+
+            progress = tqdm(
+                total=len(periods_to_process),
+                desc=progress_desc or "Apply monthly",
+            )
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(_process_period, period, origin, month): period
+                for period, origin, month in periods_to_process
+            }
+            for future in as_completed(futures):
+                summary_rows.append(future.result())
+                if progress is not None:
+                    progress.update(1)
+        if progress is not None:
+            progress.close()
 
     summary = pd.DataFrame(summary_rows)
     if "origin_period" in summary.columns:
@@ -570,7 +664,9 @@ def _apply_weights_to_frame(
 
     if id_columns is None:
         id_columns = [col for col in merged.columns if col not in measure_columns]
-    result = merged.groupby(list(id_columns), as_index=False)[list(measure_columns)].sum()
+    result = merged.groupby(list(id_columns), as_index=False, sort=False)[
+        list(measure_columns)
+    ].sum()
     return result
 
 

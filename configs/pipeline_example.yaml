@@ -1,0 +1,88 @@
+# Year range and target CN vintage (all inclusive).
+# - start:                        first year to process (inclusive)
+# - end:                          last year to process (inclusive)
+# - target:                       target CN vintage year
+years:
+  start: 2010
+  end: 2014
+  target: 2012
+
+# Measures to estimate/chain/apply.
+# - Use BOTH or a list of VALUE_EUR/QUANTITY_KG
+measures: [VALUE_EUR, QUANTITY_KG]
+
+# Stage toggles.
+# - estimate:                     run estimation for adjacent-year weights
+# - chain:                        chain weights to target
+# - apply_annual:                 apply to annual data
+# - apply_monthly:                apply to monthly data
+stages:
+  estimate: true
+  chain: true
+  apply_annual: false
+  apply_monthly: true
+
+# Input/output paths.
+# - concordance_path:               CN concordance XLS
+# - concordance_sheet:              sheet name or index (null = default)
+# - annual_base_dir:                annual parquet input directory
+# - monthly_base_dir:               monthly parquet input directory
+# - estimate_weights_dir:           estimation weights output directory
+# - estimate_diagnostics_dir:       estimation diagnostics output directory
+# - estimate_summary_path:          estimation summary CSV path
+# - chain_weights_dir:              chained weights output directory
+# - chain_diagnostics_dir:          chained diagnostics output directory
+# - apply_output_dir:               apply output base directory
+paths:
+  concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
+  concordance_sheet: null
+  annual_base_dir: data/extracted_annual_no_confidential/products_like
+  monthly_base_dir: data/extracted_no_confidential/products_like
+  estimate_weights_dir: outputs/estimate/weights
+  estimate_diagnostics_dir: outputs/estimate/diagnostics
+  estimate_summary_path: outputs/estimate/summary.csv
+  chain_weights_dir: outputs/chain
+  chain_diagnostics_dir: outputs/chain
+  apply_output_dir: outputs/apply
+
+# Estimation settings.
+# - flow:                           FLOW code used for estimation
+# - include_aggregate_codes:        include XA/XO/XR/XZ during estimation
+# - fail_on_status:                 fail on non-solved status
+# - skip_existing:                  skip estimation if outputs exist
+estimation:
+  flow: "1"
+  include_aggregate_codes: false
+  fail_on_status: true
+  skip_existing: true
+
+# Chaining settings.
+# - finalize_weights:               clamp/renorm chained weights before apply
+# - threshold_abs:                  absolute clamp threshold
+# - row_sum_tol:                    row-sum tolerance for validation
+# - fail_on_missing:                fail on missing codes or row-sum deviations
+chaining:
+  finalize_weights: true
+  threshold_abs: 0.001
+  row_sum_tol: 0.000001
+  fail_on_missing: true
+
+# Apply settings.
+# - skip_existing:                  skip apply if output exists
+# - assume_identity_for_missing:    identity rows for missing codes
+# - fail_on_missing:                fail if missing codes remain
+apply:
+  skip_existing: true
+  assume_identity_for_missing: true
+  fail_on_missing: true
+
+# Parallelism caps per stage (null = sequential).
+# - max_workers_matrices:            group matrix builds
+# - max_workers_solver:              solver per group
+# - max_workers_chain:               chaining across measures
+# - max_workers_apply:               apply stage (annual/monthly)
+parallel:
+  max_workers_matrices: 8
+  max_workers_solver: 8
+  max_workers_chain: 8
+  max_workers_apply: 4

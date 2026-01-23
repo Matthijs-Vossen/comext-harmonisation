@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 import pandas as pd
@@ -216,6 +217,7 @@ def estimate_weights(
     matrices: Dict[str, GroupMatrices],
     groups: ConcordanceGroups,
     direction: str | None = None,
+    max_workers: int | None = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Estimate conversion weights for all groups in the matrices."""
     direction = direction or estimation.direction
@@ -223,18 +225,40 @@ def estimate_weights(
     weight_tables = []
     diagnostics = []
 
-    for group_id, group in matrices.items():
-        weights, diag = _solve_group(
+    group_ids = list(matrices.keys())
+
+    def _solve_for_group(group_id: str) -> tuple[pd.DataFrame, SolverDiagnostics]:
+        group = matrices[group_id]
+        return _solve_group(
             group=group,
             groups=groups,
             direction=direction,
             vintage_a_year=estimation.vintage_a_year,
             vintage_b_year=estimation.vintage_b_year,
         )
-        weight_tables.append(weights)
-        diagnostics.append(diag.__dict__)
 
-    weights_df = pd.concat(weight_tables, ignore_index=True) if weight_tables else pd.DataFrame(columns=WEIGHT_COLUMNS)
+    if max_workers is None or max_workers <= 1 or len(group_ids) <= 1:
+        for group_id in group_ids:
+            weights, diag = _solve_for_group(group_id)
+            weight_tables.append(weights)
+            diagnostics.append(diag.__dict__)
+    else:
+        results: Dict[str, tuple[pd.DataFrame, SolverDiagnostics]] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_solve_for_group, group_id): group_id for group_id in group_ids}
+            for future in as_completed(futures):
+                group_id = futures[future]
+                results[group_id] = future.result()
+        for group_id in sorted(results.keys()):
+            weights, diag = results[group_id]
+            weight_tables.append(weights)
+            diagnostics.append(diag.__dict__)
+
+    weights_df = (
+        pd.concat(weight_tables, ignore_index=True)
+        if weight_tables
+        else pd.DataFrame(columns=WEIGHT_COLUMNS)
+    )
     diagnostics_df = pd.DataFrame(diagnostics)
 
     return weights_df, diagnostics_df

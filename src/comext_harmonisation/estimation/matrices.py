@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 from scipy import sparse
@@ -70,6 +71,7 @@ def build_group_matrices(
     *,
     groups: ConcordanceGroups,
     dense: bool = False,
+    max_workers: int | None = None,
 ) -> Dict[str, GroupMatrices]:
     """Build pair-by-code matrices for each ambiguous group."""
     if estimation.shares_a.empty and estimation.shares_b.empty:
@@ -82,12 +84,20 @@ def build_group_matrices(
     if "skip_reason" in group_totals.columns:
         group_totals = group_totals[group_totals["skip_reason"] == ""]
 
-    for group_id in sorted(group_totals["group_id"].unique()):
+    group_ids = sorted(group_totals["group_id"].unique())
+
+    def _build_group_matrix(group_id: str) -> GroupMatrices:
         a_codes = (
-            edges.loc[edges["group_id"] == group_id, "vintage_a_code"].dropna().unique().tolist()
+            edges.loc[edges["group_id"] == group_id, "vintage_a_code"]
+            .dropna()
+            .unique()
+            .tolist()
         )
         b_codes = (
-            edges.loc[edges["group_id"] == group_id, "vintage_b_code"].dropna().unique().tolist()
+            edges.loc[edges["group_id"] == group_id, "vintage_b_code"]
+            .dropna()
+            .unique()
+            .tolist()
         )
         a_codes.sort()
         b_codes.sort()
@@ -122,7 +132,7 @@ def build_group_matrices(
         dense_a = _dense_from_sparse(matrix_a, pair_multi, a_codes) if dense else None
         dense_b = _dense_from_sparse(matrix_b, pair_multi, b_codes) if dense else None
 
-        matrices[group_id] = GroupMatrices(
+        return GroupMatrices(
             group_id=group_id,
             period=estimation.period,
             pairs=pairs,
@@ -133,5 +143,20 @@ def build_group_matrices(
             dense_a=dense_a,
             dense_b=dense_b,
         )
+
+    if max_workers is None or max_workers <= 1 or len(group_ids) <= 1:
+        for group_id in group_ids:
+            matrices[group_id] = _build_group_matrix(group_id)
+        return matrices
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_build_group_matrix, group_id): group_id for group_id in group_ids}
+        results: Dict[str, GroupMatrices] = {}
+        for future in as_completed(futures):
+            group_id = futures[future]
+            results[group_id] = future.result()
+
+    for group_id in group_ids:
+        matrices[group_id] = results[group_id]
 
     return matrices

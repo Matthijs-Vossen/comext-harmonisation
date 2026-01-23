@@ -189,6 +189,8 @@ def run_weight_estimation_for_period(
     output_dir: Optional[Path] = None,
     fail_on_status: bool = True,
     write_summary: bool = True,
+    max_workers_matrices: int | None = None,
+    max_workers_solver: int | None = None,
 ) -> RunnerOutputs:
     """Run the full estimation pipeline for one concordance period."""
     started_at = datetime.now(timezone.utc)
@@ -209,12 +211,15 @@ def run_weight_estimation_for_period(
         exclude_aggregate_codes=exclude_aggregate_codes,
     )
 
-    matrices = build_group_matrices(estimation, groups=groups, dense=False)
+    matrices = build_group_matrices(
+        estimation, groups=groups, dense=False, max_workers=max_workers_matrices
+    )
     weights_ambiguous, diagnostics = estimate_weights(
         estimation=estimation,
         matrices=matrices,
         groups=groups,
         direction=direction,
+        max_workers=max_workers_solver,
     )
 
     weights_ambiguous = _sort_weights(
@@ -306,6 +311,8 @@ def run_weight_estimation_for_period_multi(
     output_summary_path: Path = DEFAULT_SUMMARY_PATH,
     output_dir: Optional[Path] = None,
     fail_on_status: bool = True,
+    max_workers_matrices: int | None = None,
+    max_workers_solver: int | None = None,
 ) -> list[RunnerOutputs]:
     """Run estimation for multiple measures and write a combined summary."""
     outputs: list[RunnerOutputs] = []
@@ -328,6 +335,8 @@ def run_weight_estimation_for_period_multi(
             output_dir=output_dir,
             fail_on_status=fail_on_status,
             write_summary=False,
+            max_workers_matrices=max_workers_matrices,
+            max_workers_solver=max_workers_solver,
         )
         outputs.append(result)
         summaries.append(result.summary)
