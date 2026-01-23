@@ -19,20 +19,18 @@ measures: [VALUE_EUR, QUANTITY_KG]
 stages:
   estimate: true
   chain: true
-  apply_annual: false
-  apply_monthly: true
+  apply_annual: true
+  apply_monthly: false
 
 # Input/output paths.
 # - concordance_path:               CN concordance XLS
 # - concordance_sheet:              sheet name or index (null = default)
 # - annual_base_dir:                annual parquet input directory
 # - monthly_base_dir:               monthly parquet input directory
-# - estimate_weights_dir:           estimation weights output directory
-# - estimate_diagnostics_dir:       estimation diagnostics output directory
-# - estimate_summary_path:          estimation summary CSV path
-# - chain_weights_dir:              chained weights output directory
-# - chain_diagnostics_dir:          chained diagnostics output directory
-# - apply_output_dir:               apply output base directory
+# - estimate_weights_dir:           estimation weights output directory (shared cache)
+# - estimate_diagnostics_dir:       estimation diagnostics output directory (shared cache)
+# - estimate_summary_path:          estimation summary CSV path (shared cache)
+# - run_base_dir:                   base directory for per-run outputs/logs
 paths:
   concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
   concordance_sheet: null
@@ -41,9 +39,7 @@ paths:
   estimate_weights_dir: outputs/estimate/weights
   estimate_diagnostics_dir: outputs/estimate/diagnostics
   estimate_summary_path: outputs/estimate/summary.csv
-  chain_weights_dir: outputs/chain
-  chain_diagnostics_dir: outputs/chain
-  apply_output_dir: outputs/apply
+  run_base_dir: outputs/runs
 
 # Estimation settings.
 # - flow:                           FLOW code used for estimation

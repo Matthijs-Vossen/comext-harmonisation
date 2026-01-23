@@ -51,9 +51,7 @@ class PathsConfig:
     estimate_weights_dir: Path
     estimate_diagnostics_dir: Path
     estimate_summary_path: Path
-    chain_weights_dir: Path
-    chain_diagnostics_dir: Path
-    apply_output_dir: Path
+    run_base_dir: Path
 
 
 @dataclass(frozen=True)
@@ -124,9 +122,7 @@ def load_pipeline_config(path: Path) -> PipelineConfig:
             "estimate_weights_dir": "outputs/estimate/weights",
             "estimate_diagnostics_dir": "outputs/estimate/diagnostics",
             "estimate_summary_path": "outputs/estimate/summary.csv",
-            "chain_weights_dir": "outputs/chain",
-            "chain_diagnostics_dir": "outputs/chain",
-            "apply_output_dir": "outputs/apply",
+            "run_base_dir": "outputs/runs",
         },
         data.get("paths"),
     )
@@ -187,9 +183,7 @@ def load_pipeline_config(path: Path) -> PipelineConfig:
             estimate_weights_dir=Path(paths["estimate_weights_dir"]),
             estimate_diagnostics_dir=Path(paths["estimate_diagnostics_dir"]),
             estimate_summary_path=Path(paths["estimate_summary_path"]),
-            chain_weights_dir=Path(paths["chain_weights_dir"]),
-            chain_diagnostics_dir=Path(paths["chain_diagnostics_dir"]),
-            apply_output_dir=Path(paths["apply_output_dir"]),
+            run_base_dir=Path(paths["run_base_dir"]),
         ),
         estimation=EstimationConfig(
             flow=str(estimation["flow"]),

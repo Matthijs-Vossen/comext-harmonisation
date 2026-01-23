@@ -6,6 +6,8 @@ import argparse
 from pathlib import Path
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+import shutil
 
 import pandas as pd
 from tqdm import tqdm
@@ -50,32 +52,33 @@ def _combine_chain_diagnostics(
     combined_path.parent.mkdir(parents=True, exist_ok=True)
     combined.to_csv(combined_path, index=False)
 
-def _print_config_summary(config) -> None:
+def _print_config_summary(config, write_line, run_dir: Path, chain_dir: Path, apply_dir: Path) -> None:
     years = config.years
-    print("Pipeline run settings:")
-    print(f"- years: {years.start}-{years.end} -> CN{years.target}")
-    print(f"- measures: {', '.join(config.measures)}")
-    print(
+    write_line("Pipeline run settings:")
+    write_line(f"- years: {years.start}-{years.end} -> CN{years.target}")
+    write_line(f"- measures: {', '.join(config.measures)}")
+    write_line(
         "- stages: "
         f"estimate={config.stages.estimate}, "
         f"chain={config.stages.chain}, "
         f"apply_annual={config.stages.apply_annual}, "
         f"apply_monthly={config.stages.apply_monthly}"
     )
-    print(
+    write_line(
         "- workers: "
         f"matrices={config.parallel.max_workers_matrices}, "
         f"solver={config.parallel.max_workers_solver}, "
         f"chain={config.parallel.max_workers_chain}, "
         f"apply={config.parallel.max_workers_apply}"
     )
-    print(
+    write_line(
         "- paths: "
         f"estimate={config.paths.estimate_weights_dir}, "
-        f"chain={config.paths.chain_weights_dir}, "
-        f"apply={config.paths.apply_output_dir}"
+        f"run={run_dir}, "
+        f"chain={chain_dir}, "
+        f"apply={apply_dir}"
     )
-    print()
+    write_line()
 
 
 def main() -> None:
@@ -92,8 +95,33 @@ def main() -> None:
     from comext_harmonisation.pipeline_config import load_pipeline_config
 
     config = load_pipeline_config(Path(args.config))
-    print()
-    _print_config_summary(config)
+
+    run_base_dir = config.paths.run_base_dir
+    run_base_dir.mkdir(parents=True, exist_ok=True)
+    run_id = datetime.now(timezone.utc).strftime("run_%Y%m%d_%H%M%S")
+    run_dir = run_base_dir / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    log_path = run_dir / "run.log"
+    config_copy_path = run_dir / "config.yaml"
+    shutil.copy2(Path(args.config), config_copy_path)
+
+    def _log(message: str = "") -> None:
+        if message is None:
+            message = ""
+        try:
+            tqdm.write(message)
+        except Exception:
+            print(message)
+        with log_path.open("a") as handle:
+            handle.write(f"{message}\n")
+
+    _log()
+    _log(f"run_id: {run_id}")
+    _log(f"config: {config_copy_path}")
+    chain_dir = run_dir / "chain"
+    apply_dir = run_dir / "apply"
+    _log(f"run_dir: {run_dir}")
+    _print_config_summary(config, _log, run_dir, chain_dir, apply_dir)
     measures = config.measures
     start_year = config.years.start
     end_year = config.years.end
@@ -102,12 +130,14 @@ def main() -> None:
     estimate_weights_dir = config.paths.estimate_weights_dir
     estimate_diagnostics_dir = config.paths.estimate_diagnostics_dir
     estimate_summary_path = config.paths.estimate_summary_path
-    chain_weights_dir = config.paths.chain_weights_dir
-    chain_diagnostics_dir = config.paths.chain_diagnostics_dir
-    apply_output_dir = config.paths.apply_output_dir
+    chain_weights_dir = run_dir / "chain"
+    chain_diagnostics_dir = run_dir / "chain"
+    apply_output_dir = run_dir / "apply"
+
+    stage_stats: dict[str, int | str] = {}
 
     if config.stages.estimate:
-        print("Stage: estimation")
+        _log("Stage: estimation")
         periods = _estimate_periods(start_year, end_year, target_year)
         skipped = 0
         processed = 0
@@ -140,12 +170,14 @@ def main() -> None:
                 max_workers_solver=config.parallel.max_workers_solver,
             )
             processed += 1
-        print(f"Estimation complete: processed={processed}, skipped={skipped}")
-        print()
+        _log(f"Estimation complete: processed={processed}, skipped={skipped}")
+        _log()
+        stage_stats["estimate_processed"] = processed
+        stage_stats["estimate_skipped"] = skipped
 
     chained_outputs = []
     if config.stages.chain:
-        print("Stage: chaining")
+        _log("Stage: chaining")
         if config.parallel.max_workers_chain and config.parallel.max_workers_chain > 1 and len(measures) > 1:
             diag_paths: list[Path] = []
 
@@ -174,7 +206,7 @@ def main() -> None:
 
             combined_path = chain_diagnostics_dir / f"CN{target_year}" / "diagnostics.csv"
             _combine_chain_diagnostics(combined_path=combined_path, diag_paths=diag_paths)
-            print(f"Chaining complete: measures={len(measures)} (parallel)")
+            _log(f"Chaining complete: measures={len(measures)} (parallel)")
         else:
             for measure in tqdm(measures, desc="Chaining measures"):
                 chained_outputs.extend(
@@ -192,11 +224,12 @@ def main() -> None:
                         fail_on_missing=config.chaining.fail_on_missing,
                     )
                 )
-            print(f"Chaining complete: measures={len(measures)}")
-        print()
+            _log(f"Chaining complete: measures={len(measures)}")
+        _log()
+        stage_stats["chain_measures"] = len(measures)
 
     if config.stages.apply_annual:
-        print("Stage: apply annual")
+        _log("Stage: apply annual")
         skipped = 0
         processed = 0
         for year in range(start_year, end_year + 1):
@@ -229,11 +262,13 @@ def main() -> None:
             show_progress=True,
             progress_desc="Applying annual",
         )
-        print(f"Apply annual complete: processed={processed}, skipped={skipped}")
-        print()
+        _log(f"Apply annual complete: processed={processed}, skipped={skipped}")
+        _log()
+        stage_stats["apply_annual_processed"] = processed
+        stage_stats["apply_annual_skipped"] = skipped
 
     if config.stages.apply_monthly:
-        print("Stage: apply monthly")
+        _log("Stage: apply monthly")
         skipped = 0
         processed = 0
         for year in range(start_year, end_year + 1):
@@ -270,8 +305,35 @@ def main() -> None:
             show_progress=True,
             progress_desc="Applying monthly",
         )
-        print(f"Apply monthly complete: processed={processed}, skipped={skipped}")
-        print()
+        _log(f"Apply monthly complete: processed={processed}, skipped={skipped}")
+        _log()
+        stage_stats["apply_monthly_processed"] = processed
+        stage_stats["apply_monthly_skipped"] = skipped
+
+    index_path = run_base_dir / "index.csv"
+    index_row = {
+        "run_id": run_id,
+        "timestamp_utc": run_id.replace("run_", ""),
+        "config_path": str(config_copy_path),
+        "run_dir": str(run_dir),
+        "start_year": start_year,
+        "end_year": end_year,
+        "target_year": target_year,
+        "measures": ",".join(measures),
+        "estimate_weights_dir": str(estimate_weights_dir),
+        "chain_dir": str(chain_weights_dir),
+        "apply_dir": str(apply_output_dir),
+        "estimate_processed": stage_stats.get("estimate_processed", 0),
+        "estimate_skipped": stage_stats.get("estimate_skipped", 0),
+        "apply_annual_processed": stage_stats.get("apply_annual_processed", 0),
+        "apply_annual_skipped": stage_stats.get("apply_annual_skipped", 0),
+        "apply_monthly_processed": stage_stats.get("apply_monthly_processed", 0),
+        "apply_monthly_skipped": stage_stats.get("apply_monthly_skipped", 0),
+    }
+    index_df = pd.DataFrame([index_row])
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not index_path.exists()
+    index_df.to_csv(index_path, mode="a", index=False, header=write_header)
 
 
 if __name__ == "__main__":
