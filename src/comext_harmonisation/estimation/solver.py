@@ -135,16 +135,6 @@ def _solve_group(
         from_year = vintage_b_year
         to_year = vintage_a_year
 
-    max_abs = 0.0
-    if X.nnz:
-        max_abs = max(max_abs, float(np.max(np.abs(X.data))))
-    if Y.nnz:
-        max_abs = max(max_abs, float(np.max(np.abs(Y.data))))
-    scale = 1.0 / max_abs if max_abs > 0 else 1.0
-    if scale != 1.0:
-        X = X * scale
-        Y = Y * scale
-
     allowed_by_to = _build_allowed_links(
         edges,
         from_codes=from_codes,

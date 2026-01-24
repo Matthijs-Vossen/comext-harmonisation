@@ -339,3 +339,32 @@ def test_finalize_weights_table_clamps_and_renormalizes():
     assert (finalized["weight"] > 0).all()
     assert ("00000012" not in finalized["to_code"].tolist())
     assert ("00000023" not in finalized["to_code"].tolist())
+
+
+def test_finalize_weights_table_raises_on_large_negative():
+    weights = pd.DataFrame(
+        [
+            {"from_code": "00000001", "to_code": "00000011", "weight": 0.7},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 0.3},
+            {"from_code": "00000001", "to_code": "00000013", "weight": -1e-5},
+        ]
+    )
+
+    with pytest.raises(ValueError, match="below -neg_tol"):
+        finalize_weights_table(weights, neg_tol=1e-6, pos_tol=0.0, row_sum_tol=1e-9)
+
+
+def test_finalize_weights_table_clamps_small_negative():
+    weights = pd.DataFrame(
+        [
+            {"from_code": "00000001", "to_code": "00000011", "weight": 0.6},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 0.4},
+            {"from_code": "00000001", "to_code": "00000013", "weight": -5e-7},
+        ]
+    )
+
+    finalized = finalize_weights_table(weights, neg_tol=1e-6, pos_tol=0.0, row_sum_tol=1e-9)
+    sums = finalized.groupby("from_code")["weight"].sum()
+    assert pytest.approx(sums.loc["00000001"], abs=1e-12) == 1.0
+    assert (finalized["weight"] >= 0).all()
+    assert ("00000013" not in finalized["to_code"].tolist())

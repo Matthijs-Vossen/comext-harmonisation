@@ -3,7 +3,7 @@
 # - end:                          last year to process (inclusive)
 # - target:                       target CN vintage year
 years:
-  start: 1994
+  start: 1988
   end: 2024
   target: 2012
 
@@ -80,7 +80,7 @@ apply:
 # - max_workers_chain:               chaining across measures
 # - max_workers_apply:               apply stage (annual/monthly)
 parallel:
-  max_workers_matrices: 8
-  max_workers_solver: 8
-  max_workers_chain: 8
-  max_workers_apply: 4
+  max_workers_matrices: 12
+  max_workers_solver: 12
+  max_workers_chain: 12
+  max_workers_apply: 10
