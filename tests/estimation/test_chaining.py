@@ -268,8 +268,8 @@ def test_chain_finalization(tmp_path):
         direction="a_to_b",
         measure="VALUE_EUR",
         rows=[
-            {"from_code": "00000001", "to_code": "00000011", "weight": 0.9995},
-            {"from_code": "00000001", "to_code": "00000012", "weight": 0.0005},
+            {"from_code": "00000001", "to_code": "00000011", "weight": 0.99999999995},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 5e-11},
         ],
     )
 
@@ -282,7 +282,8 @@ def test_chain_finalization(tmp_path):
         output_weights_dir=tmp_path / "outw",
         output_diagnostics_dir=tmp_path / "outd",
         finalize_weights=True,
-        threshold_abs=1e-3,
+        neg_tol=1e-6,
+        pos_tol=1e-10,
     )
 
     weights = _get_output(outputs, origin_year="2010", direction="a_to_b", measure="VALUE_EUR")

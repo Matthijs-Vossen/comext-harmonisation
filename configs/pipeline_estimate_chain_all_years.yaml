@@ -3,8 +3,8 @@
 # - end:                          last year to process (inclusive)
 # - target:                       target CN vintage year
 years:
-  start: 2010
-  end: 2011
+  start: 1994
+  end: 2024
   target: 2012
 
 # Measures to estimate/chain/apply.
@@ -19,7 +19,7 @@ measures: [VALUE_EUR, QUANTITY_KG]
 stages:
   estimate: true
   chain: true
-  apply_annual: true
+  apply_annual: false
   apply_monthly: false
 
 # Input/output paths.
@@ -50,7 +50,7 @@ estimation:
   flow: "1"
   include_aggregate_codes: false
   fail_on_status: true
-  skip_existing: true
+  skip_existing: false
 
 # Chaining settings.
 # - finalize_weights:               clamp/renorm chained weights before apply

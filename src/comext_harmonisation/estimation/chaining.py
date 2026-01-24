@@ -188,7 +188,8 @@ def chain_weights_for_year(
     measure: str,
     weights_dir: Path = DEFAULT_WEIGHTS_DIR,
     finalize_weights: bool = False,
-    threshold_abs: float = 1e-3,
+    neg_tol: float = 1e-6,
+    pos_tol: float = 1e-10,
     row_sum_tol: float = 1e-6,
     fail_on_missing: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str]:
@@ -276,7 +277,7 @@ def chain_weights_for_year(
         from ..application import finalize_weights_table
 
         current = finalize_weights_table(
-            current, threshold_abs=threshold_abs, row_sum_tol=row_sum_tol
+            current, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
         )
 
     diagnostics = pd.DataFrame(diagnostics_rows)
@@ -429,7 +430,8 @@ def build_chained_weights_for_range(
     output_weights_dir: Path = DEFAULT_CHAINED_WEIGHTS_DIR,
     output_diagnostics_dir: Path = DEFAULT_CHAINED_DIAGNOSTICS_DIR,
     finalize_weights: bool = False,
-    threshold_abs: float = 1e-3,
+    neg_tol: float = 1e-6,
+    pos_tol: float = 1e-10,
     row_sum_tol: float = 1e-6,
     fail_on_missing: bool = True,
 ) -> list[ChainedWeightsOutput]:
@@ -475,7 +477,7 @@ def build_chained_weights_for_range(
                 from ..application import finalize_weights_table
 
                 weights = finalize_weights_table(
-                    weights, threshold_abs=threshold_abs, row_sum_tol=row_sum_tol
+                    weights, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
                 )
 
             diagnostics_row = dict(all_diagnostics.get(origin, {}))
@@ -486,7 +488,8 @@ def build_chained_weights_for_range(
                     "n_to_codes_final": weights["to_code"].nunique(),
                     "max_row_sum_dev": _max_row_sum_dev(weights),
                     "finalize_weights": finalize_weights,
-                    "threshold_abs": threshold_abs,
+                    "neg_tol": neg_tol,
+                    "pos_tol": pos_tol,
                     "row_sum_tol": row_sum_tol,
                 }
             )

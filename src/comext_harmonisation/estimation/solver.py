@@ -135,6 +135,16 @@ def _solve_group(
         from_year = vintage_b_year
         to_year = vintage_a_year
 
+    max_abs = 0.0
+    if X.nnz:
+        max_abs = max(max_abs, float(np.max(np.abs(X.data))))
+    if Y.nnz:
+        max_abs = max(max_abs, float(np.max(np.abs(Y.data))))
+    scale = 1.0 / max_abs if max_abs > 0 else 1.0
+    if scale != 1.0:
+        X = X * scale
+        Y = Y * scale
+
     allowed_by_to = _build_allowed_links(
         edges,
         from_codes=from_codes,
@@ -156,17 +166,18 @@ def _solve_group(
         eps_abs=1e-8,
         eps_rel=1e-8,
         polishing=True,
+        scaling=20,
+        max_iter=200000,
     )
     solver.setup(**setup_kwargs)
     try:
         result = solver.solve(raise_error=True)
-    except Exception:
-        solver = osqp.OSQP()
-        relaxed_kwargs = dict(setup_kwargs)
-        relaxed_kwargs["eps_abs"] = 1e-6
-        relaxed_kwargs["eps_rel"] = 1e-6
-        solver.setup(**relaxed_kwargs)
-        result = solver.solve(raise_error=True)
+    except Exception as exc:
+        raise RuntimeError(
+            "OSQP failed for "
+            f"group_id={group.group_id} period={group.period} direction={direction} "
+            f"from_year={from_year} to_year={to_year}"
+        ) from exc
 
     weights = result.x
     status = result.info.status

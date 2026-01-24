@@ -65,7 +65,8 @@ class EstimationConfig:
 @dataclass(frozen=True)
 class ChainingConfig:
     finalize_weights: bool
-    threshold_abs: float
+    neg_tol: float
+    pos_tol: float
     row_sum_tol: float
     fail_on_missing: bool
 
@@ -119,9 +120,9 @@ def load_pipeline_config(path: Path) -> PipelineConfig:
             "concordance_sheet": None,
             "annual_base_dir": "data/extracted_annual_no_confidential/products_like",
             "monthly_base_dir": "data/extracted_no_confidential/products_like",
-            "estimate_weights_dir": "outputs/estimate/weights",
-            "estimate_diagnostics_dir": "outputs/estimate/diagnostics",
-            "estimate_summary_path": "outputs/estimate/summary.csv",
+            "estimate_weights_dir": "outputs/weights/adjacent",
+            "estimate_diagnostics_dir": "outputs/weights/diagnostics",
+            "estimate_summary_path": "outputs/weights/summary.csv",
             "run_base_dir": "outputs/runs",
         },
         data.get("paths"),
@@ -138,7 +139,8 @@ def load_pipeline_config(path: Path) -> PipelineConfig:
     chaining = _merge(
         {
             "finalize_weights": False,
-            "threshold_abs": 1e-3,
+            "neg_tol": 1e-6,
+            "pos_tol": 1e-10,
             "row_sum_tol": 1e-6,
             "fail_on_missing": True,
         },
@@ -193,7 +195,8 @@ def load_pipeline_config(path: Path) -> PipelineConfig:
         ),
         chaining=ChainingConfig(
             finalize_weights=bool(chaining["finalize_weights"]),
-            threshold_abs=float(chaining["threshold_abs"]),
+            neg_tol=float(chaining["neg_tol"]),
+            pos_tol=float(chaining["pos_tol"]),
             row_sum_tol=float(chaining["row_sum_tol"]),
             fail_on_missing=bool(chaining["fail_on_missing"]),
         ),

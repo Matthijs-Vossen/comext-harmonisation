@@ -19,8 +19,8 @@ from ..weights import DEFAULT_WEIGHTS_DIR, empty_weight_table
 
 
 DEFAULT_CONCORDANCE_PATH = Path("data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls")
-DEFAULT_DIAGNOSTICS_DIR = Path("outputs/estimate/diagnostics")
-DEFAULT_SUMMARY_PATH = Path("outputs/estimate/summary.csv")
+DEFAULT_DIAGNOSTICS_DIR = Path("outputs/weights/diagnostics")
+DEFAULT_SUMMARY_PATH = Path("outputs/weights/summary.csv")
 
 
 @dataclass(frozen=True)

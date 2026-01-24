@@ -52,33 +52,50 @@ def _combine_chain_diagnostics(
     combined_path.parent.mkdir(parents=True, exist_ok=True)
     combined.to_csv(combined_path, index=False)
 
+def _log_section(section_key: str, items: list[tuple[str, str]], write_line) -> None:
+    write_line()
+    write_line(f"[{section_key}]")
+    if not items:
+        return
+    width = max(len(key) for key, _ in items)
+    for key, value in items:
+        write_line(f"{key.ljust(width)} = {value}")
+
+
 def _print_config_summary(config, write_line, run_dir: Path, chain_dir: Path, apply_dir: Path) -> None:
     years = config.years
-    write_line("Pipeline run settings:")
-    write_line(f"- years: {years.start}-{years.end} -> CN{years.target}")
-    write_line(f"- measures: {', '.join(config.measures)}")
-    write_line(
-        "- stages: "
-        f"estimate={config.stages.estimate}, "
-        f"chain={config.stages.chain}, "
-        f"apply_annual={config.stages.apply_annual}, "
-        f"apply_monthly={config.stages.apply_monthly}"
-    )
-    write_line(
-        "- workers: "
-        f"matrices={config.parallel.max_workers_matrices}, "
-        f"solver={config.parallel.max_workers_solver}, "
-        f"chain={config.parallel.max_workers_chain}, "
-        f"apply={config.parallel.max_workers_apply}"
-    )
-    write_line(
-        "- paths: "
-        f"estimate={config.paths.estimate_weights_dir}, "
-        f"run={run_dir}, "
-        f"chain={chain_dir}, "
-        f"apply={apply_dir}"
-    )
-    write_line()
+    items = [
+        ("years", f"{years.start}-{years.end} -> CN{years.target}"),
+        ("measures", ", ".join(config.measures)),
+        (
+            "stages",
+            (
+                f"estimate={config.stages.estimate}, "
+                f"chain={config.stages.chain}, "
+                f"apply_annual={config.stages.apply_annual}, "
+                f"apply_monthly={config.stages.apply_monthly}"
+            ),
+        ),
+        (
+            "workers",
+            (
+                f"matrices={config.parallel.max_workers_matrices}, "
+                f"solver={config.parallel.max_workers_solver}, "
+                f"chain={config.parallel.max_workers_chain}, "
+                f"apply={config.parallel.max_workers_apply}"
+            ),
+        ),
+        (
+            "paths",
+            (
+                f"estimate={config.paths.estimate_weights_dir}, "
+                f"run={run_dir}, "
+                f"chain={chain_dir}, "
+                f"apply={apply_dir}"
+            ),
+        ),
+    ]
+    _log_section("pipeline_settings", items, write_line)
 
 
 def main() -> None:
@@ -96,9 +113,14 @@ def main() -> None:
 
     config = load_pipeline_config(Path(args.config))
 
+    measures = config.measures
+    start_year = config.years.start
+    end_year = config.years.end
+    target_year = config.years.target
+
     run_base_dir = config.paths.run_base_dir
     run_base_dir.mkdir(parents=True, exist_ok=True)
-    run_id = datetime.now(timezone.utc).strftime("run_%Y%m%d_%H%M%S")
+    run_id = datetime.now().strftime("run_%Y-%m-%dT%H-%M-%S_CN") + str(target_year)
     run_dir = run_base_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     log_path = run_dir / "run.log"
@@ -115,18 +137,18 @@ def main() -> None:
         with log_path.open("a") as handle:
             handle.write(f"{message}\n")
 
-    _log()
-    _log(f"run_id: {run_id}")
-    _log(f"config: {config_copy_path}")
     chain_dir = run_dir / "chain"
     apply_dir = run_dir / "apply"
-    _log(f"run_dir: {run_dir}")
+    _log_section(
+        "run_metadata",
+        [
+            ("run_id", str(run_id)),
+            ("config", str(config_copy_path)),
+            ("run_dir", str(run_dir)),
+        ],
+        _log,
+    )
     _print_config_summary(config, _log, run_dir, chain_dir, apply_dir)
-    measures = config.measures
-    start_year = config.years.start
-    end_year = config.years.end
-    target_year = config.years.target
-
     estimate_weights_dir = config.paths.estimate_weights_dir
     estimate_diagnostics_dir = config.paths.estimate_diagnostics_dir
     estimate_summary_path = config.paths.estimate_summary_path
@@ -137,7 +159,6 @@ def main() -> None:
     stage_stats: dict[str, int | str] = {}
 
     if config.stages.estimate:
-        _log("Stage: estimation")
         periods = _estimate_periods(start_year, end_year, target_year)
         skipped = 0
         processed = 0
@@ -149,6 +170,15 @@ def main() -> None:
                 skipped += 1
                 continue
             to_process.append((period, direction))
+        _log_section(
+            "stage_estimation",
+            [
+                ("periods_total", str(len(periods))),
+                ("periods_to_run", str(len(to_process))),
+                ("periods_skipped", str(skipped)),
+            ],
+            _log,
+        )
         iterator = to_process
         if to_process:
             iterator = tqdm(to_process, desc="Estimating periods")
@@ -170,14 +200,16 @@ def main() -> None:
                 max_workers_solver=config.parallel.max_workers_solver,
             )
             processed += 1
-        _log(f"Estimation complete: processed={processed}, skipped={skipped}")
-        _log()
+        _log_section(
+            "stage_estimation_complete",
+            [("processed", str(processed)), ("skipped", str(skipped))],
+            _log,
+        )
         stage_stats["estimate_processed"] = processed
         stage_stats["estimate_skipped"] = skipped
 
     chained_outputs = []
     if config.stages.chain:
-        _log("Stage: chaining")
         if config.parallel.max_workers_chain and config.parallel.max_workers_chain > 1 and len(measures) > 1:
             diag_paths: list[Path] = []
 
@@ -192,23 +224,38 @@ def main() -> None:
                     output_weights_dir=chain_weights_dir,
                     output_diagnostics_dir=diag_dir,
                     finalize_weights=config.chaining.finalize_weights,
-                    threshold_abs=config.chaining.threshold_abs,
+                    neg_tol=config.chaining.neg_tol,
+                    pos_tol=config.chaining.pos_tol,
                     row_sum_tol=config.chaining.row_sum_tol,
                     fail_on_missing=config.chaining.fail_on_missing,
                 )
                 diag_paths.append(diag_dir / f"CN{target_year}" / "diagnostics.csv")
                 return outputs
 
+            _log_section(
+                "stage_chaining",
+                [("measures", f"{len(measures)} (parallel)")],
+                _log,
+            )
             with ThreadPoolExecutor(max_workers=config.parallel.max_workers_chain) as executor:
                 futures = {executor.submit(_chain_for_measure, measure): measure for measure in measures}
-                for future in tqdm(as_completed(futures), total=len(futures), desc="Chaining measures"):
+                for future in as_completed(futures):
                     chained_outputs.extend(future.result())
 
             combined_path = chain_diagnostics_dir / f"CN{target_year}" / "diagnostics.csv"
             _combine_chain_diagnostics(combined_path=combined_path, diag_paths=diag_paths)
-            _log(f"Chaining complete: measures={len(measures)} (parallel)")
+            _log_section(
+                "stage_chaining_complete",
+                [("measures", f"{len(measures)} (parallel)")],
+                _log,
+            )
         else:
-            for measure in tqdm(measures, desc="Chaining measures"):
+            _log_section(
+                "stage_chaining",
+                [("measures", str(len(measures)))],
+                _log,
+            )
+            for measure in measures:
                 chained_outputs.extend(
                     build_chained_weights_for_range(
                         start_year=start_year,
@@ -219,17 +266,20 @@ def main() -> None:
                         output_weights_dir=chain_weights_dir,
                         output_diagnostics_dir=chain_diagnostics_dir,
                         finalize_weights=config.chaining.finalize_weights,
-                        threshold_abs=config.chaining.threshold_abs,
+                        neg_tol=config.chaining.neg_tol,
+                        pos_tol=config.chaining.pos_tol,
                         row_sum_tol=config.chaining.row_sum_tol,
                         fail_on_missing=config.chaining.fail_on_missing,
                     )
                 )
-            _log(f"Chaining complete: measures={len(measures)}")
-        _log()
+            _log_section(
+                "stage_chaining_complete",
+                [("measures", str(len(measures)))],
+                _log,
+            )
         stage_stats["chain_measures"] = len(measures)
 
     if config.stages.apply_annual:
-        _log("Stage: apply annual")
         skipped = 0
         processed = 0
         for year in range(start_year, end_year + 1):
@@ -241,6 +291,15 @@ def main() -> None:
                 skipped += 1
             else:
                 processed += 1
+        _log_section(
+            "stage_apply_annual",
+            [
+                ("years_total", str(end_year - start_year + 1)),
+                ("years_to_run", str(processed)),
+                ("years_skipped", str(skipped)),
+            ],
+            _log,
+        )
         apply_chained_weights_wide_for_range(
             start_year=start_year,
             end_year=end_year,
@@ -253,7 +312,8 @@ def main() -> None:
             output_base_dir=apply_output_dir,
             chained_outputs=chained_outputs if chained_outputs else None,
             finalize_weights=config.chaining.finalize_weights,
-            threshold_abs=config.chaining.threshold_abs,
+            neg_tol=config.chaining.neg_tol,
+            pos_tol=config.chaining.pos_tol,
             row_sum_tol=config.chaining.row_sum_tol,
             assume_identity_for_missing=config.apply.assume_identity_for_missing,
             fail_on_missing=config.apply.fail_on_missing,
@@ -262,13 +322,15 @@ def main() -> None:
             show_progress=True,
             progress_desc="Applying annual",
         )
-        _log(f"Apply annual complete: processed={processed}, skipped={skipped}")
-        _log()
+        _log_section(
+            "stage_apply_annual_complete",
+            [("processed", str(processed)), ("skipped", str(skipped))],
+            _log,
+        )
         stage_stats["apply_annual_processed"] = processed
         stage_stats["apply_annual_skipped"] = skipped
 
     if config.stages.apply_monthly:
-        _log("Stage: apply monthly")
         skipped = 0
         processed = 0
         for year in range(start_year, end_year + 1):
@@ -284,6 +346,15 @@ def main() -> None:
                     skipped += 1
                 else:
                     processed += 1
+        _log_section(
+            "stage_apply_monthly",
+            [
+                ("months_total", str((end_year - start_year + 1) * 12)),
+                ("months_to_run", str(processed)),
+                ("months_skipped", str(skipped)),
+            ],
+            _log,
+        )
         apply_chained_weights_wide_for_month_range(
             start_year=start_year,
             end_year=end_year,
@@ -296,7 +367,8 @@ def main() -> None:
             output_base_dir=apply_output_dir,
             chained_outputs=chained_outputs if chained_outputs else None,
             finalize_weights=config.chaining.finalize_weights,
-            threshold_abs=config.chaining.threshold_abs,
+            neg_tol=config.chaining.neg_tol,
+            pos_tol=config.chaining.pos_tol,
             row_sum_tol=config.chaining.row_sum_tol,
             assume_identity_for_missing=config.apply.assume_identity_for_missing,
             fail_on_missing=config.apply.fail_on_missing,
@@ -305,15 +377,113 @@ def main() -> None:
             show_progress=True,
             progress_desc="Applying monthly",
         )
-        _log(f"Apply monthly complete: processed={processed}, skipped={skipped}")
-        _log()
+        _log_section(
+            "stage_apply_monthly_complete",
+            [("processed", str(processed)), ("skipped", str(skipped))],
+            _log,
+        )
         stage_stats["apply_monthly_processed"] = processed
         stage_stats["apply_monthly_skipped"] = skipped
+
+    sanity_items: list[tuple[str, str]] = []
+    if config.stages.chain:
+        chain_diag_path = chain_diagnostics_dir / f"CN{target_year}" / "diagnostics.csv"
+        if chain_diag_path.exists():
+            chain_diag = pd.read_csv(chain_diag_path)
+            max_row_sum_dev = chain_diag["max_row_sum_dev"].max()
+            sanity_items.append(("chain max_row_sum_dev", str(max_row_sum_dev)))
+        else:
+            sanity_items.append(("chain diagnostics", "missing"))
+
+    if config.stages.apply_monthly:
+        monthly_summary = apply_output_dir / f"CN{target_year}" / "monthly" / "summary.csv"
+        if monthly_summary.exists():
+            summary = pd.read_csv(monthly_summary)
+            if "origin_period" in summary.columns:
+                summary["origin_period"] = summary["origin_period"].astype(str).str.zfill(6)
+            totals = [
+                ("sum_value_eur_input", "sum_value_eur_w_value"),
+                ("sum_quantity_kg_input", "sum_quantity_kg_w_value"),
+                ("sum_value_eur_input", "sum_value_eur_w_quantity"),
+                ("sum_quantity_kg_input", "sum_quantity_kg_w_quantity"),
+            ]
+            for src, dst in totals:
+                if src in summary.columns and dst in summary.columns:
+                    diff = (summary[dst] - summary[src]).abs()
+                    sanity_items.append(
+                        (f"{src}->{dst}", f"max_abs={diff.max()} mean_abs={diff.mean()}")
+                    )
+            if "n_missing_value" in summary.columns:
+                sanity_items.append(
+                    ("missing_value max", str(summary["n_missing_value"].max()))
+                )
+            if "n_missing_quantity" in summary.columns:
+                sanity_items.append(
+                    ("missing_quantity max", str(summary["n_missing_quantity"].max()))
+                )
+            if "n_rows_input" in summary.columns and "n_rows_output" in summary.columns:
+                sanity_items.append(
+                    (
+                        "output rows < input",
+                        str((summary["n_rows_output"] < summary["n_rows_input"]).sum()),
+                    )
+                )
+                sanity_items.append(
+                    (
+                        "output rows > input",
+                        str((summary["n_rows_output"] > summary["n_rows_input"]).sum()),
+                    )
+                )
+        else:
+            sanity_items.append(("monthly summary", "missing"))
+
+    if config.stages.apply_annual:
+        annual_summary = apply_output_dir / f"CN{target_year}" / "summary.csv"
+        if annual_summary.exists():
+            summary = pd.read_csv(annual_summary)
+            totals = [
+                ("sum_value_eur_input", "sum_value_eur_w_value"),
+                ("sum_quantity_kg_input", "sum_quantity_kg_w_value"),
+                ("sum_value_eur_input", "sum_value_eur_w_quantity"),
+                ("sum_quantity_kg_input", "sum_quantity_kg_w_quantity"),
+            ]
+            for src, dst in totals:
+                if src in summary.columns and dst in summary.columns:
+                    diff = (summary[dst] - summary[src]).abs()
+                    sanity_items.append(
+                        (f"{src}->{dst}", f"max_abs={diff.max()} mean_abs={diff.mean()}")
+                    )
+            if "n_missing_value" in summary.columns:
+                sanity_items.append(
+                    ("missing_value max", str(summary["n_missing_value"].max()))
+                )
+            if "n_missing_quantity" in summary.columns:
+                sanity_items.append(
+                    ("missing_quantity max", str(summary["n_missing_quantity"].max()))
+                )
+            if "n_rows_input" in summary.columns and "n_rows_output" in summary.columns:
+                sanity_items.append(
+                    (
+                        "output rows < input",
+                        str((summary["n_rows_output"] < summary["n_rows_input"]).sum()),
+                    )
+                )
+                sanity_items.append(
+                    (
+                        "output rows > input",
+                        str((summary["n_rows_output"] > summary["n_rows_input"]).sum()),
+                    )
+                )
+        else:
+            sanity_items.append(("annual summary", "missing"))
+
+    if sanity_items:
+        _log_section("sanity_checks", sanity_items, _log)
 
     index_path = run_base_dir / "index.csv"
     index_row = {
         "run_id": run_id,
-        "timestamp_utc": run_id.replace("run_", ""),
+        "timestamp_local": run_id.replace("run_", ""),
         "config_path": str(config_copy_path),
         "run_dir": str(run_dir),
         "start_year": start_year,

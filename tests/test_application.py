@@ -325,14 +325,14 @@ def test_finalize_weights_table_clamps_and_renormalizes():
     weights = pd.DataFrame(
         [
             {"from_code": "00000001", "to_code": "00000011", "weight": 0.999},
-            {"from_code": "00000001", "to_code": "00000012", "weight": 0.0005},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 5e-11},
             {"from_code": "00000002", "to_code": "00000021", "weight": 0.5},
             {"from_code": "00000002", "to_code": "00000022", "weight": 0.5},
-            {"from_code": "00000002", "to_code": "00000023", "weight": -0.0002},
+            {"from_code": "00000002", "to_code": "00000023", "weight": -0.0000005},
         ]
     )
 
-    finalized = finalize_weights_table(weights, threshold_abs=1e-3, row_sum_tol=1e-9)
+    finalized = finalize_weights_table(weights, neg_tol=1e-6, pos_tol=1e-10, row_sum_tol=1e-9)
     sums = finalized.groupby("from_code")["weight"].sum()
     assert pytest.approx(sums.loc["00000001"], abs=1e-12) == 1.0
     assert pytest.approx(sums.loc["00000002"], abs=1e-12) == 1.0

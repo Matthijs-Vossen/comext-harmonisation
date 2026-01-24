@@ -56,12 +56,13 @@ class ChainedApplySummary:
 def finalize_weights_table(
     weights: pd.DataFrame,
     *,
-    threshold_abs: float = 1e-3,
+    neg_tol: float = 1e-6,
+    pos_tol: float = 1e-10,
     row_sum_tol: float = 1e-9,
 ) -> pd.DataFrame:
     """Clamp small weights and renormalize rows by from_code."""
-    if threshold_abs < 0:
-        raise ValueError("threshold_abs must be non-negative")
+    if neg_tol < 0 or pos_tol < 0:
+        raise ValueError("neg_tol and pos_tol must be non-negative")
 
     required = {"from_code", "to_code", "weight"}
     missing = required.difference(weights.columns)
@@ -73,12 +74,15 @@ def finalize_weights_table(
     df["to_code"] = _normalize_codes(df["to_code"])
     df["weight"] = df["weight"].astype(float)
 
-    too_negative = df["weight"] < -threshold_abs
+    too_negative = df["weight"] < -neg_tol
     if too_negative.any():
         sample = df.loc[too_negative, ["from_code", "to_code", "weight"]].head(5).to_dict("records")
-        raise ValueError(f"Found weights below -threshold_abs: {sample}")
+        raise ValueError(f"Found weights below -neg_tol: {sample}")
 
-    df.loc[df["weight"].abs() < threshold_abs, "weight"] = 0.0
+    if neg_tol > 0:
+        df.loc[(df["weight"] < 0) & (df["weight"] >= -neg_tol), "weight"] = 0.0
+    if pos_tol > 0:
+        df.loc[(df["weight"] > 0) & (df["weight"] < pos_tol), "weight"] = 0.0
 
     row_sums = (
         df.groupby("from_code", as_index=False, sort=False)["weight"]
@@ -275,7 +279,8 @@ def apply_chained_weights_wide_for_range(
     output_summary_path: Path | None = None,
     chained_outputs: Sequence[ChainedWeightsOutput] | None = None,
     finalize_weights: bool = False,
-    threshold_abs: float = 1e-3,
+    neg_tol: float = 1e-6,
+    pos_tol: float = 1e-10,
     row_sum_tol: float = 1e-6,
     assume_identity_for_missing: bool = True,
     fail_on_missing: bool = True,
@@ -295,7 +300,8 @@ def apply_chained_weights_wide_for_range(
             output_weights_dir=output_chained_weights_dir,
             output_diagnostics_dir=output_chained_diagnostics_dir,
             finalize_weights=finalize_weights,
-            threshold_abs=threshold_abs,
+            neg_tol=neg_tol,
+            pos_tol=pos_tol,
             row_sum_tol=row_sum_tol,
             fail_on_missing=fail_on_missing,
         )
@@ -455,7 +461,8 @@ def apply_chained_weights_wide_for_month_range(
     output_summary_path: Path | None = None,
     chained_outputs: Sequence[ChainedWeightsOutput] | None = None,
     finalize_weights: bool = False,
-    threshold_abs: float = 1e-3,
+    neg_tol: float = 1e-6,
+    pos_tol: float = 1e-10,
     row_sum_tol: float = 1e-6,
     assume_identity_for_missing: bool = True,
     fail_on_missing: bool = True,
@@ -475,7 +482,8 @@ def apply_chained_weights_wide_for_month_range(
             output_weights_dir=output_chained_weights_dir,
             output_diagnostics_dir=output_chained_diagnostics_dir,
             finalize_weights=finalize_weights,
-            threshold_abs=threshold_abs,
+            neg_tol=neg_tol,
+            pos_tol=pos_tol,
             row_sum_tol=row_sum_tol,
             fail_on_missing=fail_on_missing,
         )
@@ -682,7 +690,8 @@ def apply_weights_to_annual_period(
     fail_on_missing: bool = True,
     assume_identity_for_missing: bool = True,
     finalize_weights: bool = False,
-    threshold_abs: float = 1e-3,
+    neg_tol: float = 1e-6,
+    pos_tol: float = 1e-10,
     row_sum_tol: float = 1e-9,
 ) -> ApplyDiagnostics:
     """Apply estimated weights to annual data for a concordance period."""
@@ -724,7 +733,7 @@ def apply_weights_to_annual_period(
         )
         if finalize_weights:
             weights = finalize_weights_table(
-                weights, threshold_abs=threshold_abs, row_sum_tol=row_sum_tol
+                weights, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
             )
         missing_codes = data_codes - set(weights["from_code"])
         if missing_codes and assume_identity_for_missing:
@@ -764,10 +773,10 @@ def apply_weights_to_annual_period(
         )
         if finalize_weights:
             weights_value = finalize_weights_table(
-                weights_value, threshold_abs=threshold_abs, row_sum_tol=row_sum_tol
+                weights_value, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
             )
             weights_quantity = finalize_weights_table(
-                weights_quantity, threshold_abs=threshold_abs, row_sum_tol=row_sum_tol
+                weights_quantity, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
             )
         missing_value = data_codes - set(weights_value["from_code"])
         missing_quantity = data_codes - set(weights_quantity["from_code"])

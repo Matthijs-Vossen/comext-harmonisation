@@ -28,7 +28,7 @@ WEIGHT_DTYPES: Dict[str, str] = {
     "weight": "float64",
 }
 
-DEFAULT_WEIGHTS_DIR = Path("outputs/estimate/weights")
+DEFAULT_WEIGHTS_DIR = Path("outputs/weights/adjacent")
 
 
 def empty_weight_table() -> pd.DataFrame:
