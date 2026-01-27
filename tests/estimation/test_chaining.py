@@ -44,6 +44,10 @@ def _get_output(outputs, *, origin_year, direction, measure):
     raise AssertionError(f"Missing output for {origin_year} {direction} {measure}")
 
 
+def _universe(mapping):
+    return {int(year): set(codes) for year, codes in mapping.items()}
+
+
 def test_chain_weights_forward(tmp_path):
     _write_weights(
         tmp_path,
@@ -72,6 +76,12 @@ def test_chain_weights_forward(tmp_path):
         origin_year="2009",
         target_year="2011",
         measure="VALUE_EUR",
+        code_universe=_universe(
+            {
+                2009: ["00000001", "00000002"],
+                2010: ["00000011", "00000012"],
+            }
+        ),
         weights_dir=tmp_path,
         finalize_weights=False,
     )
@@ -91,7 +101,7 @@ def test_chain_weights_forward(tmp_path):
     assert not diagnostics.empty
 
 
-def test_chain_weights_missing_raises(tmp_path):
+def test_chain_weights_missing_step_identity_preserved(tmp_path):
     _write_weights(
         tmp_path,
         period="20092010",
@@ -113,15 +123,32 @@ def test_chain_weights_missing_raises(tmp_path):
         ],
     )
 
-    with pytest.raises(ValueError, match="Missing chained weights"):
-        chain_weights_for_year(
-            origin_year="2009",
-            target_year="2011",
-            measure="VALUE_EUR",
-            weights_dir=tmp_path,
-            finalize_weights=False,
-            fail_on_missing=True,
-        )
+    weights, _, direction = chain_weights_for_year(
+        origin_year="2009",
+        target_year="2011",
+        measure="VALUE_EUR",
+        code_universe=_universe(
+            {
+                2009: ["00000001", "00000002"],
+                2010: ["00000011", "00000012"],
+            }
+        ),
+        weights_dir=tmp_path,
+        finalize_weights=False,
+        fail_on_missing=True,
+    )
+
+    assert direction == "a_to_b"
+    weights = weights.sort_values(["from_code", "to_code"]).reset_index(drop=True)
+    expected = pd.DataFrame(
+        [
+            {"from_code": "00000001", "to_code": "00000012", "weight": 0.4},
+            {"from_code": "00000001", "to_code": "00000021", "weight": 0.6},
+            {"from_code": "00000002", "to_code": "00000012", "weight": 1.0},
+        ]
+    ).sort_values(["from_code", "to_code"]).reset_index(drop=True)
+
+    pd.testing.assert_frame_equal(weights, expected)
 
 
 def test_chain_weights_backward(tmp_path):
@@ -151,6 +178,12 @@ def test_chain_weights_backward(tmp_path):
         origin_year="2012",
         target_year="2010",
         measure="VALUE_EUR",
+        code_universe=_universe(
+            {
+                2012: ["00000011", "00000012"],
+                2011: ["00000001", "00000002"],
+            }
+        ),
         weights_dir=tmp_path,
         finalize_weights=False,
     )
@@ -194,6 +227,13 @@ def test_chain_identity_injection(tmp_path):
         end_year=2012,
         target_year=2012,
         measures=["VALUE_EUR"],
+        code_universe=_universe(
+            {
+                2010: ["00000001", "00000002"],
+                2011: ["00000011", "00000012"],
+                2012: ["00000021"],
+            }
+        ),
         weights_dir=tmp_path,
         output_weights_dir=tmp_path / "outw",
         output_diagnostics_dir=tmp_path / "outd",
@@ -238,6 +278,13 @@ def test_chain_caching_consistency(tmp_path):
         end_year=2012,
         target_year=2012,
         measures=["VALUE_EUR"],
+        code_universe=_universe(
+            {
+                2010: ["00000001"],
+                2011: ["00000011", "00000012"],
+                2012: ["00000021", "00000022"],
+            }
+        ),
         weights_dir=tmp_path,
         output_weights_dir=tmp_path / "outw",
         output_diagnostics_dir=tmp_path / "outd",
@@ -278,6 +325,12 @@ def test_chain_finalization(tmp_path):
         end_year=2011,
         target_year=2011,
         measures=["VALUE_EUR"],
+        code_universe=_universe(
+            {
+                2010: ["00000001"],
+                2011: ["00000011", "00000012"],
+            }
+        ),
         weights_dir=tmp_path,
         output_weights_dir=tmp_path / "outw",
         output_diagnostics_dir=tmp_path / "outd",
@@ -320,6 +373,14 @@ def test_chain_multi_step_both_directions(tmp_path):
         end_year=2013,
         target_year=2011,
         measures=["VALUE_EUR"],
+        code_universe=_universe(
+            {
+                2010: ["00000001"],
+                2011: ["00000011"],
+                2012: ["00000021"],
+                2013: ["00000031"],
+            }
+        ),
         weights_dir=tmp_path,
         output_weights_dir=tmp_path / "outw",
         output_diagnostics_dir=tmp_path / "outd",
@@ -335,3 +396,172 @@ def test_chain_multi_step_both_directions(tmp_path):
     weights_2013 = weights_2013[["from_code", "to_code", "weight"]].reset_index(drop=True)
     expected = pd.DataFrame([{"from_code": "00000031", "to_code": "00000011", "weight": 1.0}])
     pd.testing.assert_frame_equal(weights_2013, expected)
+
+
+def test_chain_missing_identity_drops_forward_codes(tmp_path):
+    _write_weights(
+        tmp_path,
+        period="20042005",
+        direction="a_to_b",
+        measure="VALUE_EUR",
+        rows=[
+            {"from_code": "00000001", "to_code": "00000011", "weight": 0.5},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 0.5},
+        ],
+    )
+    _write_weights(
+        tmp_path,
+        period="20052006",
+        direction="a_to_b",
+        measure="VALUE_EUR",
+        rows=[
+            {"from_code": "00000011", "to_code": "00000021", "weight": 0.5},
+            {"from_code": "00000011", "to_code": "00000022", "weight": 0.5},
+        ],
+    )
+
+    outputs = build_chained_weights_for_range(
+        start_year=2004,
+        end_year=2006,
+        target_year=2006,
+        measures=["VALUE_EUR"],
+        code_universe=_universe(
+            {
+                2004: ["00000001"],
+                2005: ["00000011", "00000012"],
+                2006: ["00000021", "00000022"],
+            }
+        ),
+        weights_dir=tmp_path,
+        output_weights_dir=tmp_path / "outw",
+        output_diagnostics_dir=tmp_path / "outd",
+        finalize_weights=False,
+    )
+
+    weights = _get_output(outputs, origin_year="2004", direction="a_to_b", measure="VALUE_EUR")
+    weights = weights[["from_code", "to_code", "weight"]].sort_values(
+        ["from_code", "to_code"]
+    )
+    expected = pd.DataFrame(
+        [
+            {"from_code": "00000001", "to_code": "00000021", "weight": 0.25},
+            {"from_code": "00000001", "to_code": "00000022", "weight": 0.25},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 0.5},
+        ]
+    ).sort_values(["from_code", "to_code"])
+    pd.testing.assert_frame_equal(
+        weights.reset_index(drop=True),
+        expected.reset_index(drop=True),
+    )
+
+
+def test_chain_missing_identity_drops_backward_codes(tmp_path):
+    _write_weights(
+        tmp_path,
+        period="20062007",
+        direction="b_to_a",
+        measure="VALUE_EUR",
+        rows=[
+            {"from_code": "00000011", "to_code": "00000021", "weight": 0.5},
+            {"from_code": "00000011", "to_code": "00000022", "weight": 0.5},
+            {"from_code": "00000012", "to_code": "00000023", "weight": 1.0},
+        ],
+    )
+    _write_weights(
+        tmp_path,
+        period="20072008",
+        direction="b_to_a",
+        measure="VALUE_EUR",
+        rows=[
+            {"from_code": "00000001", "to_code": "00000011", "weight": 0.5},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 0.5},
+        ],
+    )
+
+    outputs = build_chained_weights_for_range(
+        start_year=2006,
+        end_year=2008,
+        target_year=2006,
+        measures=["VALUE_EUR"],
+        code_universe=_universe(
+            {
+                2007: ["00000011", "00000012"],
+                2008: ["00000001"],
+                2006: ["00000021", "00000022", "00000023"],
+            }
+        ),
+        weights_dir=tmp_path,
+        output_weights_dir=tmp_path / "outw",
+        output_diagnostics_dir=tmp_path / "outd",
+        finalize_weights=False,
+    )
+
+    weights = _get_output(outputs, origin_year="2008", direction="b_to_a", measure="VALUE_EUR")
+    weights = weights[["from_code", "to_code", "weight"]].sort_values(
+        ["from_code", "to_code"]
+    )
+    expected = pd.DataFrame(
+        [
+            {"from_code": "00000001", "to_code": "00000021", "weight": 0.25},
+            {"from_code": "00000001", "to_code": "00000022", "weight": 0.25},
+            {"from_code": "00000001", "to_code": "00000023", "weight": 0.5},
+        ]
+    ).sort_values(["from_code", "to_code"])
+    pd.testing.assert_frame_equal(
+        weights.reset_index(drop=True),
+        expected.reset_index(drop=True),
+    )
+
+
+def test_chain_missing_step_identity_preserves_universe_code(tmp_path):
+    _write_weights(
+        tmp_path,
+        period="20062007",
+        direction="b_to_a",
+        measure="VALUE_EUR",
+        rows=[
+            {"from_code": "00000012", "to_code": "00000023", "weight": 1.0},
+        ],
+    )
+    _write_weights(
+        tmp_path,
+        period="20072008",
+        direction="b_to_a",
+        measure="VALUE_EUR",
+        rows=[
+            {"from_code": "00000001", "to_code": "00000011", "weight": 1.0},
+        ],
+    )
+
+    outputs = build_chained_weights_for_range(
+        start_year=2006,
+        end_year=2008,
+        target_year=2006,
+        measures=["VALUE_EUR"],
+        code_universe=_universe(
+            {
+                2007: ["00000012"],
+                2008: ["00000001", "00000012"],
+                2006: ["00000023"],
+            }
+        ),
+        weights_dir=tmp_path,
+        output_weights_dir=tmp_path / "outw",
+        output_diagnostics_dir=tmp_path / "outd",
+        finalize_weights=False,
+    )
+
+    weights = _get_output(outputs, origin_year="2008", direction="b_to_a", measure="VALUE_EUR")
+    weights = weights[["from_code", "to_code", "weight"]].sort_values(
+        ["from_code", "to_code"]
+    )
+    expected = pd.DataFrame(
+        [
+            {"from_code": "00000001", "to_code": "00000011", "weight": 1.0},
+            {"from_code": "00000012", "to_code": "00000023", "weight": 1.0},
+        ]
+    ).sort_values(["from_code", "to_code"])
+    pd.testing.assert_frame_equal(
+        weights.reset_index(drop=True),
+        expected.reset_index(drop=True),
+    )

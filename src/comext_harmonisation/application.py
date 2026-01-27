@@ -11,6 +11,7 @@ import pandas as pd
 from .estimation.shares import ANNUAL_DATA_DIR
 from .estimation.chaining import (
     build_chained_weights_for_range,
+    build_code_universe_from_annual,
     ChainedWeightsOutput,
     DEFAULT_CHAINED_DIAGNOSTICS_DIR,
     DEFAULT_CHAINED_WEIGHTS_DIR,
@@ -291,11 +292,16 @@ def apply_chained_weights_wide_for_range(
 ) -> pd.DataFrame:
     measures = [str(measure).strip().upper() for measure in measures]
     if chained_outputs is None:
+        code_universe = build_code_universe_from_annual(
+            annual_base_dir=annual_base_dir,
+            years=range(int(start_year), int(end_year) + 1),
+        )
         chained_outputs = build_chained_weights_for_range(
             start_year=start_year,
             end_year=end_year,
             target_year=target_year,
             measures=measures,
+            code_universe=code_universe,
             weights_dir=weights_dir,
             output_weights_dir=output_chained_weights_dir,
             output_diagnostics_dir=output_chained_diagnostics_dir,
@@ -454,6 +460,7 @@ def apply_chained_weights_wide_for_month_range(
     target_year: int,
     measures: Sequence[str] = ("VALUE_EUR", "QUANTITY_KG"),
     monthly_base_dir: Path = MONTHLY_DATA_DIR,
+    annual_base_dir: Path = ANNUAL_DATA_DIR,
     weights_dir: Path = DEFAULT_WEIGHTS_DIR,
     output_chained_weights_dir: Path = DEFAULT_CHAINED_WEIGHTS_DIR,
     output_chained_diagnostics_dir: Path = DEFAULT_CHAINED_DIAGNOSTICS_DIR,
@@ -473,11 +480,16 @@ def apply_chained_weights_wide_for_month_range(
 ) -> pd.DataFrame:
     measures = [str(measure).strip().upper() for measure in measures]
     if chained_outputs is None:
+        code_universe = build_code_universe_from_annual(
+            annual_base_dir=annual_base_dir,
+            years=range(int(start_year), int(end_year) + 1),
+        )
         chained_outputs = build_chained_weights_for_range(
             start_year=start_year,
             end_year=end_year,
             target_year=target_year,
             measures=measures,
+            code_universe=code_universe,
             weights_dir=weights_dir,
             output_weights_dir=output_chained_weights_dir,
             output_diagnostics_dir=output_chained_diagnostics_dir,

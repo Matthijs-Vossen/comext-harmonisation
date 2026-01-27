@@ -106,6 +106,7 @@ def main() -> None:
     from comext_harmonisation import (
         run_weight_estimation_for_period_multi,
         build_chained_weights_for_range,
+        build_code_universe_from_annual,
         apply_chained_weights_wide_for_range,
         apply_chained_weights_wide_for_month_range,
     )
@@ -210,6 +211,10 @@ def main() -> None:
 
     chained_outputs = []
     if config.stages.chain:
+        code_universe = build_code_universe_from_annual(
+            annual_base_dir=config.paths.annual_base_dir,
+            years=range(start_year, end_year + 1),
+        )
         if config.parallel.max_workers_chain and config.parallel.max_workers_chain > 1 and len(measures) > 1:
             diag_paths: list[Path] = []
 
@@ -220,6 +225,7 @@ def main() -> None:
                     end_year=end_year,
                     target_year=target_year,
                     measures=[measure],
+                    code_universe=code_universe,
                     weights_dir=estimate_weights_dir,
                     output_weights_dir=chain_weights_dir,
                     output_diagnostics_dir=diag_dir,
@@ -262,6 +268,7 @@ def main() -> None:
                         end_year=end_year,
                         target_year=target_year,
                         measures=[measure],
+                        code_universe=code_universe,
                         weights_dir=estimate_weights_dir,
                         output_weights_dir=chain_weights_dir,
                         output_diagnostics_dir=chain_diagnostics_dir,

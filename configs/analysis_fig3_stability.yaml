@@ -1,0 +1,44 @@
+# Figure-3 style analysis with stability filter enabled.
+
+years:
+  start: 2004
+  end: 2008
+  target: 2006
+
+break:
+  period: "20062007"
+  direction: "b_to_a"
+
+measures:
+  weights_source: VALUE_EUR
+  analysis_measure: VALUE_EUR
+
+paths:
+  concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
+  concordance_sheet: null
+  annual_base_dir: data/extracted_annual_no_confidential/products_like
+  weights_dir: outputs/weights/adjacent
+  output_dir: outputs/analysis/fig3_stability
+
+chaining:
+  finalize_weights: true
+  neg_tol: 0.000001
+  pos_tol: 0.0000000001
+  row_sum_tol: 0.000001
+
+sample:
+  exclude_reporters: []
+  exclude_partners: []
+
+stability_filter:
+  enabled: true
+  years: [2004, 2005, 2007]
+
+plot:
+  output_path: outputs/analysis/fig3_stability/fig3.png
+  point_alpha: 0.3
+  point_size: 8
+  axis_padding: 0.04
+  point_color: "black"
+  use_latex: true
+  latex_preamble: "\\usepackage{newtxtext,newtxmath}"

@@ -5,7 +5,7 @@
 years:
   start: 1988
   end: 2024
-  target: 2012
+  target: 1988
 
 # Measures to estimate/chain/apply.
 # - Use BOTH or a list of VALUE_EUR/QUANTITY_KG

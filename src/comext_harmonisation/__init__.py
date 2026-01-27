@@ -40,6 +40,7 @@ from .estimation import (
     DEFAULT_CHAINED_WEIGHTS_DIR,
     DEFAULT_CHAINED_DIAGNOSTICS_DIR,
 )
+from .analysis import Fig3Config, load_fig3_config, run_fig3_analysis
 
 __all__ = [
     "read_concordance_xls",
@@ -81,4 +82,7 @@ __all__ = [
     "build_chained_weights_for_range",
     "DEFAULT_CHAINED_WEIGHTS_DIR",
     "DEFAULT_CHAINED_DIAGNOSTICS_DIR",
+    "Fig3Config",
+    "load_fig3_config",
+    "run_fig3_analysis",
 ]

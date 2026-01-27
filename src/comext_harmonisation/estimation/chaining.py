@@ -14,6 +14,7 @@ from ..weights import DEFAULT_WEIGHTS_DIR, validate_weight_table
 
 DEFAULT_CHAINED_WEIGHTS_DIR = Path("outputs/chain")
 DEFAULT_CHAINED_DIAGNOSTICS_DIR = Path("outputs/chain")
+DEFAULT_ANNUAL_DATA_DIR = Path("data/extracted_annual_no_confidential/products_like")
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,28 @@ def _normalize_codes(series: pd.Series) -> pd.Series:
     mask = codes.str.isdigit()
     codes = codes.where(~mask, codes.str.zfill(8))
     return codes
+
+
+def build_code_universe_from_annual(
+    *, annual_base_dir: Path, years: Sequence[int]
+) -> dict[int, set[str]]:
+    universe: dict[int, set[str]] = {}
+    for year in years:
+        data_path = annual_base_dir / f"comext_{year}.parquet"
+        if not data_path.exists():
+            raise FileNotFoundError(f"Missing annual data file: {data_path}")
+        data = pd.read_parquet(data_path, columns=["PRODUCT_NC"])
+        codes = _normalize_codes(data["PRODUCT_NC"]).dropna().unique().tolist()
+        universe[int(year)] = set(codes)
+    return universe
+
+
+def _normalize_code_set(codes: set[str]) -> set[str]:
+    if not codes:
+        return set()
+    series = pd.Series(list(codes))
+    normalized = _normalize_codes(series)
+    return set(normalized.tolist())
 
 
 def _chain_periods(origin_year: str, target_year: str) -> tuple[list[str], str]:
@@ -103,56 +126,79 @@ def _max_row_sum_dev(weights: pd.DataFrame) -> float:
 
 
 def _compose_weights(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
-    if left.empty or right.empty:
+    if left.empty:
+        return pd.DataFrame(columns=["from_code", "to_code", "weight"])
+    if right.empty:
+        return left.groupby(["from_code", "to_code"], as_index=False)["weight"].sum()
+
+    left_to = set(left["to_code"])
+    right_from = set(right["from_code"])
+    common_mid = sorted(left_to & right_from)
+    missing_mid = sorted(left_to - right_from)
+
+    chained_parts: list[pd.DataFrame] = []
+
+    if common_mid:
+        from_codes = sorted(left["from_code"].unique())
+        to_codes = sorted(right["to_code"].unique())
+        mid_index = {code: idx for idx, code in enumerate(common_mid)}
+        from_index = {code: idx for idx, code in enumerate(from_codes)}
+        to_index = {code: idx for idx, code in enumerate(to_codes)}
+
+        left_filtered = left[left["to_code"].isin(common_mid)]
+        right_filtered = right[right["from_code"].isin(common_mid)]
+
+        left_rows = left_filtered["from_code"].map(from_index).to_numpy(dtype=int)
+        left_cols = left_filtered["to_code"].map(mid_index).to_numpy(dtype=int)
+        left_data = left_filtered["weight"].to_numpy(dtype=float)
+        left_mat = sp.coo_matrix(
+            (left_data, (left_rows, left_cols)),
+            shape=(len(from_codes), len(common_mid)),
+        ).tocsr()
+
+        right_rows = right_filtered["from_code"].map(mid_index).to_numpy(dtype=int)
+        right_cols = right_filtered["to_code"].map(to_index).to_numpy(dtype=int)
+        right_data = right_filtered["weight"].to_numpy(dtype=float)
+        right_mat = sp.coo_matrix(
+            (right_data, (right_rows, right_cols)),
+            shape=(len(common_mid), len(to_codes)),
+        ).tocsr()
+
+        chained = left_mat @ right_mat
+        if chained.nnz:
+            chained = chained.tocoo()
+            chained_parts.append(
+                pd.DataFrame(
+                    {
+                        "from_code": np.take(from_codes, chained.row),
+                        "to_code": np.take(to_codes, chained.col),
+                        "weight": chained.data,
+                    }
+                )
+            )
+
+    if missing_mid:
+        carry = left[left["to_code"].isin(missing_mid)]
+        carry = carry.groupby(["from_code", "to_code"], as_index=False)["weight"].sum()
+        chained_parts.append(carry)
+
+    if not chained_parts:
         return pd.DataFrame(columns=["from_code", "to_code", "weight"])
 
-    mid_codes = sorted(set(left["to_code"]) & set(right["from_code"]))
-    if not mid_codes:
-        return pd.DataFrame(columns=["from_code", "to_code", "weight"])
-
-    from_codes = sorted(left["from_code"].unique())
-    to_codes = sorted(right["to_code"].unique())
-    mid_index = {code: idx for idx, code in enumerate(mid_codes)}
-    from_index = {code: idx for idx, code in enumerate(from_codes)}
-    to_index = {code: idx for idx, code in enumerate(to_codes)}
-
-    left_filtered = left[left["to_code"].isin(mid_codes)]
-    right_filtered = right[right["from_code"].isin(mid_codes)]
-
-    left_rows = left_filtered["from_code"].map(from_index).to_numpy(dtype=int)
-    left_cols = left_filtered["to_code"].map(mid_index).to_numpy(dtype=int)
-    left_data = left_filtered["weight"].to_numpy(dtype=float)
-    left_mat = sp.coo_matrix(
-        (left_data, (left_rows, left_cols)),
-        shape=(len(from_codes), len(mid_codes)),
-    ).tocsr()
-
-    right_rows = right_filtered["from_code"].map(mid_index).to_numpy(dtype=int)
-    right_cols = right_filtered["to_code"].map(to_index).to_numpy(dtype=int)
-    right_data = right_filtered["weight"].to_numpy(dtype=float)
-    right_mat = sp.coo_matrix(
-        (right_data, (right_rows, right_cols)),
-        shape=(len(mid_codes), len(to_codes)),
-    ).tocsr()
-
-    chained = left_mat @ right_mat
-    if chained.nnz == 0:
-        return pd.DataFrame(columns=["from_code", "to_code", "weight"])
-
-    chained = chained.tocoo()
-    return pd.DataFrame(
-        {
-            "from_code": np.take(from_codes, chained.row),
-            "to_code": np.take(to_codes, chained.col),
-            "weight": chained.data,
-        }
-    )
+    combined = pd.concat(chained_parts, ignore_index=True)
+    return combined.groupby(["from_code", "to_code"], as_index=False)["weight"].sum()
 
 
-def _add_identity_rows(right: pd.DataFrame, *, required_from: set[str]) -> pd.DataFrame:
-    missing = required_from - set(right["from_code"])
+def _inject_step_identity(
+    step_weights: pd.DataFrame,
+    *,
+    universe_codes: set[str],
+) -> pd.DataFrame:
+    if step_weights.empty:
+        return step_weights
+    missing = _normalize_code_set(universe_codes) - set(step_weights["from_code"])
     if not missing:
-        return right
+        return step_weights
     identity = pd.DataFrame(
         {
             "from_code": list(missing),
@@ -160,7 +206,7 @@ def _add_identity_rows(right: pd.DataFrame, *, required_from: set[str]) -> pd.Da
             "weight": 1.0,
         }
     )
-    return pd.concat([right, identity], ignore_index=True)
+    return pd.concat([step_weights, identity], ignore_index=True)
 
 
 def _check_weight_bounds(weights: pd.DataFrame, *, bound_tol: float, context: str) -> None:
@@ -186,6 +232,7 @@ def chain_weights_for_year(
     origin_year: str | int,
     target_year: str | int,
     measure: str,
+    code_universe: dict[int, set[str]],
     weights_dir: Path = DEFAULT_WEIGHTS_DIR,
     finalize_weights: bool = False,
     neg_tol: float = 1e-6,
@@ -210,6 +257,12 @@ def chain_weights_for_year(
             measure=measure,
             weights_dir=weights_dir,
             validate=False,
+        )
+        step_year = int(period[:4]) if direction == "a_to_b" else int(period[4:])
+        if step_year not in code_universe:
+            raise ValueError(f"Missing code universe for year {step_year}")
+        step_weights = _inject_step_identity(
+            step_weights, universe_codes=code_universe[step_year]
         )
         _check_weight_bounds(
             step_weights,
@@ -289,6 +342,7 @@ def _build_forward_chains(
     start_year: int,
     target_year: int,
     measure: str,
+    code_universe: dict[int, set[str]],
     weights_dir: Path,
     row_sum_tol: float,
     fail_on_missing: bool,
@@ -306,6 +360,11 @@ def _build_forward_chains(
             weights_dir=weights_dir,
             validate=False,
         )
+        if year not in code_universe:
+            raise ValueError(f"Missing code universe for year {year}")
+        step_weights = _inject_step_identity(
+            step_weights, universe_codes=code_universe[year]
+        )
         _check_weight_bounds(
             step_weights,
             bound_tol=row_sum_tol,
@@ -315,9 +374,6 @@ def _build_forward_chains(
         if cumulative_next is None:
             current = step_weights
         else:
-            cumulative_next = _add_identity_rows(
-                cumulative_next, required_from=set(step_weights["to_code"])
-            )
             current = _compose_weights(step_weights, cumulative_next)
         missing_from = expected_from - set(current["from_code"])
         max_dev = _max_row_sum_dev(current)
@@ -357,6 +413,7 @@ def _build_backward_chains(
     end_year: int,
     target_year: int,
     measure: str,
+    code_universe: dict[int, set[str]],
     weights_dir: Path,
     row_sum_tol: float,
     fail_on_missing: bool,
@@ -374,6 +431,11 @@ def _build_backward_chains(
             weights_dir=weights_dir,
             validate=False,
         )
+        if year not in code_universe:
+            raise ValueError(f"Missing code universe for year {year}")
+        step_weights = _inject_step_identity(
+            step_weights, universe_codes=code_universe[year]
+        )
         _check_weight_bounds(
             step_weights,
             bound_tol=row_sum_tol,
@@ -383,9 +445,6 @@ def _build_backward_chains(
         if cumulative_prev is None:
             current = step_weights
         else:
-            cumulative_prev = _add_identity_rows(
-                cumulative_prev, required_from=set(step_weights["to_code"])
-            )
             current = _compose_weights(step_weights, cumulative_prev)
         missing_from = expected_from - set(current["from_code"])
         max_dev = _max_row_sum_dev(current)
@@ -426,6 +485,7 @@ def build_chained_weights_for_range(
     end_year: str | int,
     target_year: str | int,
     measures: Sequence[str],
+    code_universe: dict[int, set[str]],
     weights_dir: Path = DEFAULT_WEIGHTS_DIR,
     output_weights_dir: Path = DEFAULT_CHAINED_WEIGHTS_DIR,
     output_diagnostics_dir: Path = DEFAULT_CHAINED_DIAGNOSTICS_DIR,
@@ -453,6 +513,7 @@ def build_chained_weights_for_range(
                 start_year=start,
                 target_year=int(target),
                 measure=measure,
+                code_universe=code_universe,
                 weights_dir=weights_dir,
                 row_sum_tol=row_sum_tol,
                 fail_on_missing=fail_on_missing,
@@ -462,6 +523,7 @@ def build_chained_weights_for_range(
                 end_year=end,
                 target_year=int(target),
                 measure=measure,
+                code_universe=code_universe,
                 weights_dir=weights_dir,
                 row_sum_tol=row_sum_tol,
                 fail_on_missing=fail_on_missing,
