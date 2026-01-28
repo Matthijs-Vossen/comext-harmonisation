@@ -1,24 +1,31 @@
-# Figure-3 style analysis with stability filter enabled.
+# Stress-test share stability analysis (CN2011 target).
+
+analysis_type: stress_test
 
 years:
-  start: 2004
-  end: 2008
-  target: 2006
-
-break:
-  period: "20062007"
-  direction: "b_to_a"
+  target: 2011
+  chains:
+    - base_year: 2006
+      compare_year: 2011
+    - base_year: 2016
+      compare_year: 2011
+    - base_year: 2001
+      compare_year: 2011
+    - base_year: 2021
+      compare_year: 2011
 
 measures:
   weights_source: VALUE_EUR
   analysis_measure: VALUE_EUR
+
+metrics: ["r2_45"]
 
 paths:
   concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
   concordance_sheet: null
   annual_base_dir: data/extracted_annual_no_confidential/products_like
   weights_dir: outputs/weights/adjacent
-  output_dir: outputs/analysis/fig3_stability
+  output_dir: outputs/analysis/stress_test
 
 chaining:
   finalize_weights: true
@@ -30,12 +37,9 @@ sample:
   exclude_reporters: []
   exclude_partners: []
 
-stability_filter:
-  enabled: true
-  years: [2004, 2005, 2007]
-
 plot:
-  output_path: outputs/analysis/fig3_stability/fig3.png
+  output_path: outputs/analysis/stress_test/fig.png
+  #title: "CN8 trade-share stability: long-horizon chaining to CN2011 (non-trivial components)"
   point_alpha: 0.3
   point_size: 8
   axis_padding: 0.04
