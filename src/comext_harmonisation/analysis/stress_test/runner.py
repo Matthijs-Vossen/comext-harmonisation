@@ -11,9 +11,16 @@ import pandas as pd
 
 from ..common.metrics import r2_45
 from ..common.plotting import plot_share_panels
-from ..common.shares import PanelPair, build_year_shares, normalize_codes
+from ..common.shares import (
+    PanelPair,
+    build_year_shares,
+    normalize_codes,
+)
 from ..config import StressConfig
-from ...estimation.chaining import build_chained_weights_for_range, build_code_universe_from_annual
+from ...estimation.chaining import (
+    build_chained_weights_for_range,
+    build_code_universe_from_annual,
+)
 from ...estimation.runner import load_concordance_groups
 from ...mappings import get_ambiguous_group_summary
 
@@ -135,17 +142,95 @@ def _load_annual_totals(
 def _sample_source_codes(
     *,
     sample_target_codes: set[str],
-    weights_to_target: pd.DataFrame | None,
+    period_edges: pd.DataFrame,
+    direction: str,
+    code_universe: dict[int, set[str]],
 ) -> set[str]:
-    if not sample_target_codes:
+    if not sample_target_codes or period_edges.empty:
         return set()
-    if weights_to_target is None:
-        return set(sample_target_codes)
-    weights = weights_to_target[["from_code", "to_code"]].copy()
-    weights["from_code"] = normalize_codes(weights["from_code"])
-    weights["to_code"] = normalize_codes(weights["to_code"])
-    matched = weights[weights["to_code"].isin(sample_target_codes)]["from_code"].unique().tolist()
-    return set(matched)
+    period = str(period_edges["period"].iloc[0])
+    implicit_identities = _implicit_identity_codes(
+        period=period,
+        period_edges=period_edges,
+        code_universe=code_universe,
+    )
+    if direction == "a_to_b":
+        target_col = "vintage_b_code"
+        source_col = "vintage_a_code"
+    else:
+        target_col = "vintage_a_code"
+        source_col = "vintage_b_code"
+    edges = period_edges[[source_col, target_col]].copy()
+    edges[source_col] = normalize_codes(edges[source_col])
+    edges[target_col] = normalize_codes(edges[target_col])
+    matched = edges[edges[target_col].isin(sample_target_codes)][source_col].unique().tolist()
+    implicit = set(sample_target_codes) & implicit_identities
+    return set(matched) | implicit
+
+
+def _implicit_identity_codes(
+    *,
+    period: str,
+    period_edges: pd.DataFrame,
+    code_universe: dict[int, set[str]],
+) -> set[str]:
+    year_a = int(period[:4])
+    year_b = int(period[4:])
+    codes_a = code_universe.get(year_a, set())
+    codes_b = code_universe.get(year_b, set())
+    if not codes_a or not codes_b:
+        return set()
+    common = set(codes_a) & set(codes_b)
+    if period_edges is None or period_edges.empty:
+        return common
+    concord_codes = set(
+        normalize_codes(period_edges["vintage_a_code"]).dropna().astype(str).tolist()
+    )
+    concord_codes |= set(
+        normalize_codes(period_edges["vintage_b_code"]).dropna().astype(str).tolist()
+    )
+    return common - concord_codes
+
+
+def _reachability_sets(
+    *,
+    chain_steps: list[dict[str, int | str]],
+    groups,
+    sample_target_codes: set[str],
+    code_universe: dict[int, set[str]],
+) -> dict[str, set[str]]:
+    if not sample_target_codes:
+        return {}
+    reachable_next = set(sample_target_codes)
+    reach_by_period: dict[str, set[str]] = {}
+    for step in reversed(chain_steps):
+        period = str(step["period"])
+        direction = str(step["direction"])
+        period_edges = groups.edges.loc[groups.edges["period"] == period]
+        implicit = _implicit_identity_codes(
+            period=period,
+            period_edges=period_edges,
+            code_universe=code_universe,
+        )
+        if period_edges.empty:
+            reachable = set(reachable_next) & implicit
+            reach_by_period[period] = reachable
+            reachable_next = reachable
+            continue
+        if direction == "a_to_b":
+            target_col = "vintage_b_code"
+            source_col = "vintage_a_code"
+        else:
+            target_col = "vintage_a_code"
+            source_col = "vintage_b_code"
+        edges = period_edges[[source_col, target_col]].copy()
+        edges[source_col] = normalize_codes(edges[source_col])
+        edges[target_col] = normalize_codes(edges[target_col])
+        reachable = set(edges[edges[target_col].isin(reachable_next)][source_col].unique().tolist())
+        reachable |= set(reachable_next) & implicit
+        reach_by_period[period] = reachable
+        reachable_next = reachable
+    return reach_by_period
 
 
 def _load_step_weights(
@@ -261,8 +346,9 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
     years = config.years
     measures = config.measures
     metrics_set = {name.lower() for name in config.metrics}
-    want_exposure = bool(metrics_set & {"exposure", "exposure_weighted"})
-    want_diffuseness = bool(metrics_set & {"diffuseness", "diffuseness_weighted"})
+    want_exposure = "exposure_weighted" in metrics_set
+    want_source_exposure = "exposure_weighted_reach" in metrics_set
+    want_diffuseness = "diffuseness_weighted" in metrics_set
 
     groups = load_concordance_groups(
         concordance_path=config.paths.concordance_path,
@@ -325,37 +411,51 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                     "compare_year": compare_year,
                     "n_points": 0,
                     "r2_45": float("nan"),
-                    "ambiguity_exposure": float("nan"),
-                    "diffuseness": float("nan"),
+                    "ambiguity_exposure_weighted": float("nan"),
+                    "ambiguity_exposure_weighted_reach": float("nan"),
+                    "diffuseness_weighted": float("nan"),
                 }
             )
             continue
 
         chain_steps = _chain_steps(base_year, years.target)
-        exposures: list[float] = []
-        diffuseness: list[float] = []
         step_rows_chain: list[dict[str, object]] = []
+        reach_by_period = (
+            _reachability_sets(
+                chain_steps=chain_steps,
+                groups=groups,
+                sample_target_codes=sample_codes,
+                code_universe=code_universe,
+            )
+            if (want_source_exposure or want_exposure or want_diffuseness)
+            else {}
+        )
 
-        if want_exposure or want_diffuseness:
+        if want_exposure or want_source_exposure or want_diffuseness:
             for step_idx, step in enumerate(chain_steps, start=1):
                 period = str(step["period"])
                 direction = str(step["direction"])
                 source_year = int(step["source_year"])
-                weights_to_target = weights_by_year.get(str(source_year)) if source_year != years.target else None
+                period_edges = groups.edges.loc[groups.edges["period"] == period]
                 sample_source_codes = _sample_source_codes(
                     sample_target_codes=sample_codes,
-                    weights_to_target=weights_to_target,
+                    period_edges=period_edges,
+                    direction=direction,
+                    code_universe=code_universe,
                 )
+                sample_reach_codes = reach_by_period.get(period, set())
 
-                totals = _load_annual_totals(
+                totals_all = _load_annual_totals(
                     annual_base_dir=config.paths.annual_base_dir,
                     year=source_year,
                     measure=measures.analysis_measure,
                     exclude_reporters=config.sample.exclude_reporters,
                     exclude_partners=config.sample.exclude_partners,
                 )
-                totals = totals.loc[totals["PRODUCT_NC"].isin(sample_source_codes)]
-                total_trade = float(totals["value"].sum())
+                totals_step = totals_all.loc[totals_all["PRODUCT_NC"].isin(sample_source_codes)]
+                total_trade = float(totals_step["value"].sum())
+                totals_reach = totals_all.loc[totals_all["PRODUCT_NC"].isin(sample_reach_codes)]
+                total_trade_reach = float(totals_reach["value"].sum())
 
                 step_weights = _load_step_weights(
                     period=period,
@@ -363,33 +463,41 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                     measure=measures.weights_source,
                     weights_dir=config.paths.weights_dir,
                 )
-                period_edges = groups.edges.loc[groups.edges["period"] == period]
                 feasible_map = _feasible_target_map(period_edges, direction)
-                ambiguous_sources = {
+                ambiguous_all = {
                     code
                     for code, targets in feasible_map.items()
                     if len(targets) > 1
                 }
                 estimable_sources = set(step_weights["from_code"].unique().tolist())
-                ambiguous_sources = (
-                    ambiguous_sources
-                    & estimable_sources
-                    & set(totals["PRODUCT_NC"].unique().tolist())
-                )
-                totals = totals.loc[totals["PRODUCT_NC"].isin(estimable_sources)]
-
+                ambiguous_sources_step = ambiguous_all & set(totals_step["PRODUCT_NC"].unique().tolist())
                 ambiguous_trade = float(
-                    totals.loc[totals["PRODUCT_NC"].isin(ambiguous_sources), "value"].sum()
+                    totals_step.loc[totals_step["PRODUCT_NC"].isin(ambiguous_sources_step), "value"].sum()
                 )
                 exposure = float("nan")
                 if want_exposure and total_trade > 0:
                     exposure = ambiguous_trade / total_trade
-                    exposures.append(exposure)
+
+                source_exposure = float("nan")
+                ambiguous_trade_reach = float("nan")
+                ambiguous_sources_reach = set()
+                if want_source_exposure or want_diffuseness:
+                    ambiguous_sources_reach = ambiguous_all & set(
+                        totals_reach["PRODUCT_NC"].unique().tolist()
+                    )
+                    ambiguous_trade_reach = float(
+                        totals_reach.loc[
+                            totals_reach["PRODUCT_NC"].isin(ambiguous_sources_reach), "value"
+                        ].sum()
+                    )
+                    if want_source_exposure and total_trade_reach > 0:
+                        source_exposure = ambiguous_trade_reach / total_trade_reach
 
                 step_entropy = float("nan")
-                if want_diffuseness and ambiguous_trade > 0 and ambiguous_sources:
+                entropy_sources = ambiguous_sources_reach & estimable_sources
+                if want_diffuseness and ambiguous_trade_reach > 0 and entropy_sources:
                     entropy_rows = []
-                    for code in ambiguous_sources:
+                    for code in entropy_sources:
                         weights_code = step_weights.loc[step_weights["from_code"] == code, "weight"]
                         weights_code = weights_code[weights_code > 0]
                         weights_sum = float(weights_code.sum())
@@ -406,7 +514,9 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                         else:
                             h_val = float(-(positive_probs * np.log(positive_probs)).sum())
                             h_norm = h_val / float(np.log(k_est))
-                        trade_val = float(totals.loc[totals["PRODUCT_NC"] == code, "value"].sum())
+                        trade_val = float(
+                            totals_reach.loc[totals_reach["PRODUCT_NC"] == code, "value"].sum()
+                        )
                         entropy_rows.append((trade_val, h_norm))
                     if entropy_rows:
                         weights_trade = np.array([row[0] for row in entropy_rows], dtype=float)
@@ -414,7 +524,6 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                         denom = float(weights_trade.sum())
                         if denom > 0:
                             step_entropy = float((weights_trade * values).sum() / denom)
-                            diffuseness.append(step_entropy)
 
                 step_rows_chain.append(
                     {
@@ -425,11 +534,18 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                         "period": period,
                         "direction": direction,
                         "source_year": source_year,
+                        "n_reach_codes": int(len(sample_reach_codes)),
+                        "n_ambiguous_reach": int(len(ambiguous_sources_reach)),
+                        "n_estimable_sources": int(len(estimable_sources)),
+                        "n_entropy_sources": int(len(entropy_sources)),
                         "total_trade_sample": total_trade,
+                        "total_trade_reach": total_trade_reach,
                         "ambiguous_trade": ambiguous_trade,
                         "ambiguity_exposure": exposure,
+                        "ambiguity_exposure_reach": source_exposure,
+                        "ambiguous_trade_reach": ambiguous_trade_reach,
                         "diffuseness": step_entropy,
-                        "n_ambiguous_sources": int(len(ambiguous_sources)),
+                        "n_ambiguous_sources": int(len(ambiguous_sources_reach)),
                     }
                 )
 
@@ -454,9 +570,8 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
             if "r2_45" in metrics_set
             else float("nan")
         )
-        exposure_mean = float(np.nanmean(exposures)) if exposures else float("nan")
-        diffuseness_mean = float(np.nanmean(diffuseness)) if diffuseness else float("nan")
         exposure_weighted = float("nan")
+        exposure_weighted_reach = float("nan")
         diffuseness_weighted = float("nan")
         steps_df = pd.DataFrame(step_rows_chain)
         if not steps_df.empty:
@@ -468,9 +583,17 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                     exposure_weighted = float(
                         (exp_w[exp_mask] * exp_vals[exp_mask]).sum() / exp_w[exp_mask].sum()
                     )
+            if "exposure_weighted_reach" in metrics_set:
+                exp_vals = steps_df["ambiguity_exposure_reach"].to_numpy(dtype=float)
+                exp_w = steps_df["total_trade_reach"].to_numpy(dtype=float)
+                exp_mask = np.isfinite(exp_vals) & np.isfinite(exp_w) & (exp_w > 0)
+                if exp_mask.any():
+                    exposure_weighted_reach = float(
+                        (exp_w[exp_mask] * exp_vals[exp_mask]).sum() / exp_w[exp_mask].sum()
+                    )
             if "diffuseness_weighted" in metrics_set:
                 diff_vals = steps_df["diffuseness"].to_numpy(dtype=float)
-                diff_w = steps_df["ambiguous_trade"].to_numpy(dtype=float)
+                diff_w = steps_df["ambiguous_trade_reach"].to_numpy(dtype=float)
                 diff_mask = np.isfinite(diff_vals) & np.isfinite(diff_w) & (diff_w > 0)
                 if diff_mask.any():
                     diffuseness_weighted = float(
@@ -479,12 +602,10 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
         lines = []
         if "r2_45" in metrics_set:
             lines.append(rf"$R^2$ = {r2_val:.3f}")
-        if "exposure" in metrics_set:
-            lines.append(rf"$E$ = {exposure_mean:.3f}")
         if "exposure_weighted" in metrics_set:
             lines.append(rf"$E_w$ = {exposure_weighted:.3f}")
-        if "diffuseness" in metrics_set:
-            lines.append(rf"$H$ = {diffuseness_mean:.3f}")
+        if "exposure_weighted_reach" in metrics_set:
+            lines.append(rf"$E_w^{{reach}}$ = {exposure_weighted_reach:.3f}")
         if "diffuseness_weighted" in metrics_set:
             lines.append(rf"$H_w$ = {diffuseness_weighted:.3f}")
         annotation_by_year[base_year] = "\n".join(lines)
@@ -494,10 +615,13 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                 "compare_year": compare_year,
                 "n_points": int(len(merged)),
                 "r2_45": r2_val,
-                "ambiguity_exposure": exposure_mean if "exposure" in metrics_set else float("nan"),
-                "diffuseness": diffuseness_mean if "diffuseness" in metrics_set else float("nan"),
                 "ambiguity_exposure_weighted": (
                     exposure_weighted if "exposure_weighted" in metrics_set else float("nan")
+                ),
+                "ambiguity_exposure_weighted_reach": (
+                    exposure_weighted_reach
+                    if "exposure_weighted_reach" in metrics_set
+                    else float("nan")
                 ),
                 "diffuseness_weighted": (
                     diffuseness_weighted if "diffuseness_weighted" in metrics_set else float("nan")

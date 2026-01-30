@@ -290,9 +290,8 @@ def load_stress_config(path: Path) -> StressConfig:
     if not metric_names:
         metric_names = [
             "r2_45",
-            "exposure",
-            "diffuseness",
             "exposure_weighted",
+            "exposure_weighted_reach",
             "diffuseness_weighted",
         ]
 
