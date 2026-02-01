@@ -9,9 +9,11 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
-from ..common.metrics import r2_45
+from ..common.metrics import r2_45, weighted_mean
 from ..common.plotting import plot_share_panels
 from ..common.shares import PanelPair, build_year_shares, normalize_codes
+from ..common.steps import compute_step_metrics, chain_steps
+from ..common.steps import compute_step_metrics
 from ..config import StressConfig
 from ...estimation.chaining import build_chained_weights_for_range, build_code_universe_from_annual
 from ...estimation.runner import load_concordance_groups
@@ -44,33 +46,6 @@ class _UnionFind:
             root_left, root_right = root_right, root_left
         self._parent[root_right] = root_left
         self._size[root_left] += self._size[root_right]
-
-
-def _chain_steps(base_year: int, target_year: int) -> list[dict[str, int | str]]:
-    steps: list[dict[str, int | str]] = []
-    if base_year == target_year:
-        return steps
-    if base_year < target_year:
-        for year in range(base_year, target_year):
-            steps.append(
-                {
-                    "period": f"{year}{year + 1}",
-                    "direction": "a_to_b",
-                    "source_year": year,
-                    "target_year": year + 1,
-                }
-            )
-    else:
-        for year in range(base_year - 1, target_year - 1, -1):
-            steps.append(
-                {
-                    "period": f"{year}{year + 1}",
-                    "direction": "b_to_a",
-                    "source_year": year + 1,
-                    "target_year": year,
-                }
-            )
-    return steps
 
 
 def _map_codes_to_target(codes: Iterable[str], weights: pd.DataFrame | None) -> set[str]:
@@ -106,85 +81,6 @@ def _ambiguous_edges_for_step(
     return groups.edges.merge(summary_period[["period", "group_id"]], on=["period", "group_id"], how="inner")
 
 
-def _load_annual_totals(
-    *,
-    annual_base_dir: Path,
-    year: int,
-    measure: str,
-    exclude_reporters: Iterable[str],
-    exclude_partners: Iterable[str],
-) -> pd.DataFrame:
-    data_path = annual_base_dir / f"comext_{year}.parquet"
-    if not data_path.exists():
-        raise FileNotFoundError(f"Missing annual data file: {data_path}")
-    cols = ["REPORTER", "PARTNER", "PRODUCT_NC", measure]
-    data = pd.read_parquet(data_path, columns=cols)
-    if exclude_reporters:
-        data = data.loc[~data["REPORTER"].isin(exclude_reporters)]
-    if exclude_partners:
-        data = data.loc[~data["PARTNER"].isin(exclude_partners)]
-    totals = (
-        data.groupby("PRODUCT_NC", as_index=False, sort=False)[measure]
-        .sum()
-        .rename(columns={measure: "value"})
-    )
-    totals["PRODUCT_NC"] = normalize_codes(totals["PRODUCT_NC"])
-    return totals
-
-
-def _sample_source_codes(
-    *,
-    sample_target_codes: set[str],
-    weights_to_target: pd.DataFrame | None,
-) -> set[str]:
-    if not sample_target_codes:
-        return set()
-    if weights_to_target is None:
-        return set(sample_target_codes)
-    weights = weights_to_target[["from_code", "to_code"]].copy()
-    weights["from_code"] = normalize_codes(weights["from_code"])
-    weights["to_code"] = normalize_codes(weights["to_code"])
-    matched = weights[weights["to_code"].isin(sample_target_codes)]["from_code"].unique().tolist()
-    return set(matched)
-
-
-def _load_step_weights(
-    *,
-    period: str,
-    direction: str,
-    measure: str,
-    weights_dir: Path,
-) -> pd.DataFrame:
-    measure_tag = measure.lower()
-    weights_path = weights_dir / period / direction / measure_tag / "weights_ambiguous.csv"
-    if not weights_path.exists():
-        raise FileNotFoundError(f"Missing weights file: {weights_path}")
-    weights = pd.read_csv(weights_path)
-    if weights.empty:
-        return pd.DataFrame(columns=["from_code", "to_code", "weight"])
-    weights = weights[["from_code", "to_code", "weight"]].copy()
-    weights["from_code"] = normalize_codes(weights["from_code"])
-    weights["to_code"] = normalize_codes(weights["to_code"])
-    weights["weight"] = weights["weight"].astype(float)
-    return weights
-
-
-def _feasible_target_map(
-    period_edges: pd.DataFrame,
-    direction: str,
-) -> dict[str, list[str]]:
-    if period_edges.empty:
-        return {}
-    if direction == "a_to_b":
-        grouped = period_edges.groupby("vintage_a_code", sort=False)["vintage_b_code"].unique()
-    else:
-        grouped = period_edges.groupby("vintage_b_code", sort=False)["vintage_a_code"].unique()
-    mapping: dict[str, list[str]] = {}
-    for code, targets in grouped.items():
-        mapping[str(code)] = normalize_codes(pd.Series(list(targets))).tolist()
-    return mapping
-
-
 def _build_chain_group_map(
     *,
     groups,
@@ -195,7 +91,7 @@ def _build_chain_group_map(
     uf = _UnionFind()
     sample_codes: set[str] = set()
 
-    for step in _chain_steps(base_year, target_year):
+    for step in chain_steps(base_year, target_year):
         period = str(step["period"])
         direction = str(step["direction"])
         step_edges = _ambiguous_edges_for_step(groups=groups, period=period, direction=direction)
@@ -261,8 +157,8 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
     years = config.years
     measures = config.measures
     metrics_set = {name.lower() for name in config.metrics}
-    want_exposure = bool(metrics_set & {"exposure", "exposure_weighted"})
-    want_diffuseness = bool(metrics_set & {"diffuseness", "diffuseness_weighted"})
+    want_exposure = "exposure_weighted" in metrics_set
+    want_diffuseness = "diffuseness_weighted" in metrics_set
 
     groups = load_concordance_groups(
         concordance_path=config.paths.concordance_path,
@@ -325,113 +221,27 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                     "compare_year": compare_year,
                     "n_points": 0,
                     "r2_45": float("nan"),
-                    "ambiguity_exposure": float("nan"),
-                    "diffuseness": float("nan"),
+                    "ambiguity_exposure_weighted": float("nan"),
+                    "diffuseness_weighted": float("nan"),
                 }
             )
             continue
 
-        chain_steps = _chain_steps(base_year, years.target)
-        exposures: list[float] = []
-        diffuseness: list[float] = []
-        step_rows_chain: list[dict[str, object]] = []
-
-        if want_exposure or want_diffuseness:
-            for step_idx, step in enumerate(chain_steps, start=1):
-                period = str(step["period"])
-                direction = str(step["direction"])
-                source_year = int(step["source_year"])
-                weights_to_target = weights_by_year.get(str(source_year)) if source_year != years.target else None
-                sample_source_codes = _sample_source_codes(
-                    sample_target_codes=sample_codes,
-                    weights_to_target=weights_to_target,
-                )
-
-                totals = _load_annual_totals(
-                    annual_base_dir=config.paths.annual_base_dir,
-                    year=source_year,
-                    measure=measures.analysis_measure,
-                    exclude_reporters=config.sample.exclude_reporters,
-                    exclude_partners=config.sample.exclude_partners,
-                )
-                totals = totals.loc[totals["PRODUCT_NC"].isin(sample_source_codes)]
-                total_trade = float(totals["value"].sum())
-
-                step_weights = _load_step_weights(
-                    period=period,
-                    direction=direction,
-                    measure=measures.weights_source,
-                    weights_dir=config.paths.weights_dir,
-                )
-                period_edges = groups.edges.loc[groups.edges["period"] == period]
-                feasible_map = _feasible_target_map(period_edges, direction)
-                ambiguous_sources = {
-                    code
-                    for code, targets in feasible_map.items()
-                    if len(targets) > 1
-                }
-                estimable_sources = set(step_weights["from_code"].unique().tolist())
-                ambiguous_sources = (
-                    ambiguous_sources
-                    & estimable_sources
-                    & set(totals["PRODUCT_NC"].unique().tolist())
-                )
-                totals = totals.loc[totals["PRODUCT_NC"].isin(estimable_sources)]
-
-                ambiguous_trade = float(
-                    totals.loc[totals["PRODUCT_NC"].isin(ambiguous_sources), "value"].sum()
-                )
-                exposure = float("nan")
-                if want_exposure and total_trade > 0:
-                    exposure = ambiguous_trade / total_trade
-                    exposures.append(exposure)
-
-                step_entropy = float("nan")
-                if want_diffuseness and ambiguous_trade > 0 and ambiguous_sources:
-                    entropy_rows = []
-                    for code in ambiguous_sources:
-                        weights_code = step_weights.loc[step_weights["from_code"] == code, "weight"]
-                        weights_code = weights_code[weights_code > 0]
-                        weights_sum = float(weights_code.sum())
-                        if weights_sum <= 0:
-                            raise ValueError(
-                                f"Entropy computation failed for {period} {direction}: "
-                                f"row {code} has no positive weights after clipping."
-                            )
-                        probs = (weights_code / weights_sum).to_numpy()
-                        positive_probs = probs[probs > 0]
-                        k_est = len(feasible_map.get(code, []))
-                        if k_est <= 1:
-                            h_norm = 0.0
-                        else:
-                            h_val = float(-(positive_probs * np.log(positive_probs)).sum())
-                            h_norm = h_val / float(np.log(k_est))
-                        trade_val = float(totals.loc[totals["PRODUCT_NC"] == code, "value"].sum())
-                        entropy_rows.append((trade_val, h_norm))
-                    if entropy_rows:
-                        weights_trade = np.array([row[0] for row in entropy_rows], dtype=float)
-                        values = np.array([row[1] for row in entropy_rows], dtype=float)
-                        denom = float(weights_trade.sum())
-                        if denom > 0:
-                            step_entropy = float((weights_trade * values).sum() / denom)
-                            diffuseness.append(step_entropy)
-
-                step_rows_chain.append(
-                    {
-                        "base_year": base_year,
-                        "compare_year": compare_year,
-                        "target_year": years.target,
-                        "step_index": step_idx,
-                        "period": period,
-                        "direction": direction,
-                        "source_year": source_year,
-                        "total_trade_sample": total_trade,
-                        "ambiguous_trade": ambiguous_trade,
-                        "ambiguity_exposure": exposure,
-                        "diffuseness": step_entropy,
-                        "n_ambiguous_sources": int(len(ambiguous_sources)),
-                    }
-                )
+        step_rows_chain = compute_step_metrics(
+            base_year=base_year,
+            target_year=years.target,
+            sample_target_codes=sample_codes,
+            weights_by_year=weights_by_year,
+            groups=groups,
+            annual_base_dir=config.paths.annual_base_dir,
+            measure=measures.analysis_measure,
+            weights_dir=config.paths.weights_dir,
+            weights_source=measures.weights_source,
+            exclude_reporters=config.sample.exclude_reporters,
+            exclude_partners=config.sample.exclude_partners,
+            compute_exposure=want_exposure,
+            compute_diffuseness=want_diffuseness,
+        )
 
         shares_by_year = build_year_shares(
             years=[base_year, compare_year],
@@ -454,8 +264,6 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
             if "r2_45" in metrics_set
             else float("nan")
         )
-        exposure_mean = float(np.nanmean(exposures)) if exposures else float("nan")
-        diffuseness_mean = float(np.nanmean(diffuseness)) if diffuseness else float("nan")
         exposure_weighted = float("nan")
         diffuseness_weighted = float("nan")
         steps_df = pd.DataFrame(step_rows_chain)
@@ -463,28 +271,16 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
             if "exposure_weighted" in metrics_set:
                 exp_vals = steps_df["ambiguity_exposure"].to_numpy(dtype=float)
                 exp_w = steps_df["total_trade_sample"].to_numpy(dtype=float)
-                exp_mask = np.isfinite(exp_vals) & np.isfinite(exp_w) & (exp_w > 0)
-                if exp_mask.any():
-                    exposure_weighted = float(
-                        (exp_w[exp_mask] * exp_vals[exp_mask]).sum() / exp_w[exp_mask].sum()
-                    )
+                exposure_weighted = weighted_mean(exp_vals, exp_w)
             if "diffuseness_weighted" in metrics_set:
                 diff_vals = steps_df["diffuseness"].to_numpy(dtype=float)
                 diff_w = steps_df["ambiguous_trade"].to_numpy(dtype=float)
-                diff_mask = np.isfinite(diff_vals) & np.isfinite(diff_w) & (diff_w > 0)
-                if diff_mask.any():
-                    diffuseness_weighted = float(
-                        (diff_w[diff_mask] * diff_vals[diff_mask]).sum() / diff_w[diff_mask].sum()
-                    )
+                diffuseness_weighted = weighted_mean(diff_vals, diff_w)
         lines = []
         if "r2_45" in metrics_set:
             lines.append(rf"$R^2$ = {r2_val:.3f}")
-        if "exposure" in metrics_set:
-            lines.append(rf"$E$ = {exposure_mean:.3f}")
         if "exposure_weighted" in metrics_set:
             lines.append(rf"$E_w$ = {exposure_weighted:.3f}")
-        if "diffuseness" in metrics_set:
-            lines.append(rf"$H$ = {diffuseness_mean:.3f}")
         if "diffuseness_weighted" in metrics_set:
             lines.append(rf"$H_w$ = {diffuseness_weighted:.3f}")
         annotation_by_year[base_year] = "\n".join(lines)
@@ -494,8 +290,6 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                 "compare_year": compare_year,
                 "n_points": int(len(merged)),
                 "r2_45": r2_val,
-                "ambiguity_exposure": exposure_mean if "exposure" in metrics_set else float("nan"),
-                "diffuseness": diffuseness_mean if "diffuseness" in metrics_set else float("nan"),
                 "ambiguity_exposure_weighted": (
                     exposure_weighted if "exposure_weighted" in metrics_set else float("nan")
                 ),

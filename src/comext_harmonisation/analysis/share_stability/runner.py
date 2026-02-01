@@ -6,15 +6,17 @@ from dataclasses import asdict
 from typing import Sequence
 
 import pandas as pd
+import numpy as np
 
 from ..config import ShareStabilityConfig
-from ..common.metrics import r2_45
+from ..common.metrics import r2_45, weighted_mean
 from ..common.plotting import plot_share_panels
 from ..common.shares import (
     build_panel_pairs,
     build_year_shares,
     normalize_codes,
 )
+from ..common.steps import compute_step_metrics
 from ...estimation.chaining import build_chained_weights_for_range, build_code_universe_from_annual
 from ...estimation.runner import load_concordance_groups
 from ...mappings import get_ambiguous_group_summary
@@ -167,6 +169,14 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
 
     pairs: list[tuple[int, pd.DataFrame]] = []
     panel_stats: dict[int, dict[str, int]] = {}
+    annotation_by_year: dict[int, str] = {}
+
+    sample_group_ids = group_ids_filtered if group_ids_filtered != group_ids else group_ids
+    sample_target_codes = set(
+        group_map.loc[group_map["group_id"].isin(sample_group_ids), "target_code"]
+        .astype(str)
+        .tolist()
+    )
     panel_pairs = build_panel_pairs(
         start_year=years.start,
         end_year=years.end,
@@ -198,9 +208,88 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
             }
         pairs.append((pair.x_year, merged))
 
-    annotation_by_year = None
-    if "r2_45" not in metrics_set:
-        annotation_by_year = {pair.x_year: "" for pair in panel_pairs}
+    summary_path = config.paths.output_dir / "summary.csv"
+    summary_rows = []
+    want_exposure = "exposure_weighted" in metrics_set
+    want_diffuseness = "diffuseness_weighted" in metrics_set
+    metrics_cache: dict[int, tuple[float, float]] = {}
+
+    def _metrics_for_year(year: int) -> tuple[float, float]:
+        if year in metrics_cache:
+            return metrics_cache[year]
+        if year == years.target:
+            metrics_cache[year] = (float("nan"), float("nan"))
+            return metrics_cache[year]
+        step_rows_chain = compute_step_metrics(
+            base_year=year,
+            target_year=years.target,
+            sample_target_codes=sample_target_codes,
+            weights_by_year=weights_by_year,
+            groups=groups,
+            annual_base_dir=config.paths.annual_base_dir,
+            measure=measures.analysis_measure,
+            weights_dir=config.paths.weights_dir,
+            weights_source=measures.weights_source,
+            exclude_reporters=config.sample.exclude_reporters,
+            exclude_partners=config.sample.exclude_partners,
+            compute_exposure=want_exposure,
+            compute_diffuseness=want_diffuseness,
+        )
+        steps_df = pd.DataFrame(step_rows_chain)
+        exposure_weighted = float("nan")
+        diffuseness_weighted = float("nan")
+        if not steps_df.empty:
+            if want_exposure:
+                exp_vals = steps_df["ambiguity_exposure"].to_numpy(dtype=float)
+                exp_w = steps_df["total_trade_sample"].to_numpy(dtype=float)
+                exposure_weighted = weighted_mean(exp_vals, exp_w)
+            if want_diffuseness:
+                diff_vals = steps_df["diffuseness"].to_numpy(dtype=float)
+                diff_w = steps_df["ambiguous_trade"].to_numpy(dtype=float)
+                diffuseness_weighted = weighted_mean(diff_vals, diff_w)
+        metrics_cache[year] = (exposure_weighted, diffuseness_weighted)
+        return metrics_cache[year]
+
+    for year, df in pairs:
+        exposure_weighted = float("nan")
+        diffuseness_weighted = float("nan")
+        panel_step_years = {year, year + 1}
+        if (want_exposure or want_diffuseness) and (years.target in panel_step_years):
+            source_year = year if (year + 1) == years.target else year + 1
+            exposure_weighted, diffuseness_weighted = _metrics_for_year(source_year)
+
+        lines = []
+        if "r2_45" in metrics_set:
+            r2_val = r2_45(df["share_t"].to_numpy(), df["share_t1"].to_numpy())
+            lines.append(rf"$R^2$ = {r2_val:.3f}")
+        else:
+            r2_val = float("nan")
+        if want_exposure:
+            lines.append(rf"$E_w$ = {exposure_weighted:.3f}")
+        if want_diffuseness:
+            lines.append(rf"$H_w$ = {diffuseness_weighted:.3f}")
+        if lines:
+            annotation_by_year[year] = "\n".join(lines)
+
+        stats = panel_stats.get(year, {})
+        summary_rows.append(
+            {
+                "year_t": year,
+                "year_t1": year + 1,
+                "n_points": len(df),
+                "r2_45": r2_val,
+                "ambiguity_exposure_weighted": (
+                    exposure_weighted if want_exposure else float("nan")
+                ),
+                "diffuseness_weighted": (
+                    diffuseness_weighted if want_diffuseness else float("nan")
+                ),
+                "n_codes_filtered": stats.get("n_codes_filtered", 0),
+            }
+        )
+    summary = pd.DataFrame(summary_rows)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary.to_csv(summary_path, index=False)
 
     plot_share_panels(
         pairs=panel_pairs,
@@ -212,29 +301,8 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
         point_color=config.plot.point_color,
         use_latex=config.plot.use_latex,
         latex_preamble=config.plot.latex_preamble,
-        annotation_by_year=annotation_by_year,
+        annotation_by_year=annotation_by_year if annotation_by_year else None,
     )
-
-    summary_path = config.paths.output_dir / "summary.csv"
-    summary_rows = []
-    for year, df in pairs:
-        stats = panel_stats.get(year, {})
-        summary_rows.append(
-            {
-                "year_t": year,
-                "year_t1": year + 1,
-                "n_points": len(df),
-                "r2_45": (
-                    r2_45(df["share_t"].to_numpy(), df["share_t1"].to_numpy())
-                    if "r2_45" in metrics_set
-                    else float("nan")
-                ),
-                "n_codes_filtered": stats.get("n_codes_filtered", 0),
-            }
-        )
-    summary = pd.DataFrame(summary_rows)
-    summary_path.parent.mkdir(parents=True, exist_ok=True)
-    summary.to_csv(summary_path, index=False)
 
     return {
         "output_plot": str(config.plot.output_path),
