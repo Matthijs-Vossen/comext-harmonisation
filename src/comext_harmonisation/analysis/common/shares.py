@@ -136,6 +136,134 @@ def build_year_shares(
     return shares_by_year
 
 
+def build_year_shares_from_totals(
+    *,
+    years: Iterable[int],
+    target_year: int,
+    totals_by_year: dict[int, pd.DataFrame],
+    weights_by_year: dict[str, pd.DataFrame],
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+) -> dict[int, pd.DataFrame]:
+    shares_by_year: dict[int, pd.DataFrame] = {}
+    for year in years:
+        if year not in totals_by_year:
+            raise KeyError(f"Missing totals for year {year}")
+        totals = totals_by_year[year]
+        weights = weights_by_year.get(str(year)) if year != target_year else None
+        converted = convert_totals_to_target(
+            totals=totals,
+            weights=weights,
+            assume_identity_for_missing=True,
+        )
+        shares = compute_group_shares(
+            totals=converted,
+            group_map=group_map,
+            group_ids=group_ids,
+        )
+        shares = shares.rename(columns={"target_code": "product_code"})
+        shares["year"] = year
+        shares_by_year[year] = shares
+    return shares_by_year
+
+
+def build_target_values_for_groups(
+    *,
+    target_year: int,
+    annual_base_dir: Path,
+    measure: str,
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+    exclude_reporters: Sequence[str],
+    exclude_partners: Sequence[str],
+) -> pd.DataFrame:
+    data_path = annual_base_dir / f"comext_{target_year}.parquet"
+    if not data_path.exists():
+        raise FileNotFoundError(f"Missing annual data file: {data_path}")
+    data = pd.read_parquet(data_path, columns=["REPORTER", "PARTNER", "PRODUCT_NC", measure])
+    data = filter_partners(
+        data,
+        exclude_reporters=exclude_reporters,
+        exclude_partners=exclude_partners,
+    )
+    totals = (
+        data.groupby("PRODUCT_NC", as_index=False, sort=False)[measure]
+        .sum()
+        .rename(columns={measure: "value"})
+    )
+    converted = convert_totals_to_target(
+        totals=totals,
+        weights=None,
+        assume_identity_for_missing=True,
+    )
+    df = converted.merge(group_map, on="target_code", how="inner")
+    df = df[df["group_id"].isin(group_ids)]
+    df = df.rename(columns={"target_code": "product_code"})
+    return df[["group_id", "product_code", "value"]]
+
+
+def build_values_for_groups(
+    *,
+    year: int,
+    target_year: int,
+    annual_base_dir: Path,
+    weights_by_year: dict[str, pd.DataFrame],
+    measure: str,
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+    exclude_reporters: Sequence[str],
+    exclude_partners: Sequence[str],
+) -> pd.DataFrame:
+    data_path = annual_base_dir / f"comext_{year}.parquet"
+    if not data_path.exists():
+        raise FileNotFoundError(f"Missing annual data file: {data_path}")
+    data = pd.read_parquet(data_path, columns=["REPORTER", "PARTNER", "PRODUCT_NC", measure])
+    data = filter_partners(
+        data,
+        exclude_reporters=exclude_reporters,
+        exclude_partners=exclude_partners,
+    )
+    totals = (
+        data.groupby("PRODUCT_NC", as_index=False, sort=False)[measure]
+        .sum()
+        .rename(columns={measure: "value"})
+    )
+    weights = weights_by_year.get(str(year)) if year != target_year else None
+    converted = convert_totals_to_target(
+        totals=totals,
+        weights=weights,
+        assume_identity_for_missing=True,
+    )
+    df = converted.merge(group_map, on="target_code", how="inner")
+    df = df[df["group_id"].isin(group_ids)]
+    df = df.rename(columns={"target_code": "product_code"})
+    return df[["group_id", "product_code", "value"]]
+
+
+def build_values_for_groups_from_totals(
+    *,
+    year: int,
+    target_year: int,
+    totals_by_year: dict[int, pd.DataFrame],
+    weights_by_year: dict[str, pd.DataFrame],
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+) -> pd.DataFrame:
+    if year not in totals_by_year:
+        raise KeyError(f"Missing totals for year {year}")
+    totals = totals_by_year[year]
+    weights = weights_by_year.get(str(year)) if year != target_year else None
+    converted = convert_totals_to_target(
+        totals=totals,
+        weights=weights,
+        assume_identity_for_missing=True,
+    )
+    df = converted.merge(group_map, on="target_code", how="inner")
+    df = df[df["group_id"].isin(group_ids)]
+    df = df.rename(columns={"target_code": "product_code"})
+    return df[["group_id", "product_code", "value"]]
+
+
 def build_panel_pairs(
     *,
     start_year: int,

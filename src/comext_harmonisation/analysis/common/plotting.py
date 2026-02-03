@@ -123,3 +123,88 @@ def plot_share_panels(
     fig.tight_layout(rect=[0, 0, 1, top_margin])
     fig.savefig(output_path, dpi=300, bbox_inches="tight", pad_inches=0.02)
     plt.close(fig)
+
+
+def plot_chain_length_panels(
+    *,
+    data: pd.DataFrame,
+    output_path: Path,
+    title: str | None,
+    point_color: str,
+    point_size: float = 6.0,
+    use_latex: bool,
+    latex_preamble: str,
+    metrics: Sequence[str] | None = None,
+) -> None:
+    import matplotlib.pyplot as plt
+    from matplotlib import rcParams
+
+    if use_latex:
+        rcParams["text.usetex"] = True
+        rcParams["font.family"] = "serif"
+        rcParams["text.latex.preamble"] = latex_preamble
+
+    if metrics is None:
+        metrics = [
+            "r2_45_weighted_symmetric",
+            "exposure_weighted",
+            "diffuseness_weighted",
+        ]
+    metric_map = {
+        "r2_45_weighted_symmetric": ("one_minus_r2_sym", "1 − $R^2_{sym}$"),
+        "mae_weighted": ("mae_weighted", "wMAE"),
+        "exposure_weighted": ("exposure_weighted", "$E_w$"),
+        "diffuseness_weighted": ("diffuseness_weighted", "$H_w$"),
+    }
+    metrics = [name.lower() for name in metrics]
+    metric_rows = [metric_map[name] for name in metrics if name in metric_map]
+    if not metric_rows:
+        metric_rows = [metric_map["r2_45_weighted_symmetric"]]
+    directions = ["backward", "forward"]
+    fig, axes = plt.subplots(
+        nrows=len(metric_rows),
+        ncols=len(directions),
+        figsize=(8, 6),
+        sharex=False,
+        squeeze=False,
+    )
+
+    y_limits: dict[str, tuple[float, float]] = {}
+    for metric, _ in metric_rows:
+        vals = data.loc[data[metric].notna(), metric]
+        if vals.empty:
+            y_limits[metric] = (0.0, 1.0)
+        else:
+            lo = float(vals.min())
+            hi = float(vals.max())
+            pad = 0.02 if hi > lo else 0.05
+            y_limits[metric] = (max(0.0, lo - pad), min(1.0, hi + pad))
+
+    for col, direction in enumerate(directions):
+        df_dir = data[data["direction"] == direction].sort_values("chain_length")
+        for row, (metric, label) in enumerate(metric_rows):
+            ax = axes[row][col]
+            ax.plot(
+                df_dir["chain_length"],
+                df_dir[metric],
+                marker="o",
+                markersize=point_size,
+                color=point_color,
+                linewidth=1.0,
+            )
+            ax.set_ylim(*y_limits[metric])
+            ax.set_xlabel("Chain length")
+            ax.set_ylabel(label)
+            if row == 0:
+                ax.set_title(f"{direction.title()} chaining")
+
+    if title:
+        fig.suptitle(title, y=0.98)
+        top_margin = 0.92
+    else:
+        top_margin = 0.95
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout(rect=[0, 0, 1, top_margin])
+    fig.savefig(output_path, dpi=300, bbox_inches="tight", pad_inches=0.02)
+    plt.close(fig)

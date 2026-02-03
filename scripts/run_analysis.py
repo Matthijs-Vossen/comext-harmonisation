@@ -31,8 +31,10 @@ def main() -> None:
     from comext_harmonisation.analysis import (
         load_share_stability_config,
         load_stress_config,
+        load_chain_length_config,
         run_share_stability_analysis,
         run_stress_test_analysis,
+        run_chain_length_analysis,
     )
 
     if analysis_type == "share_stability":
@@ -44,6 +46,12 @@ def main() -> None:
     if analysis_type == "stress_test":
         config = load_stress_config(config_path)
         outputs = run_stress_test_analysis(config)
+        print("plot:", outputs["output_plot"])
+        print("summary:", outputs["summary_csv"])
+        return
+    if analysis_type == "chain_length":
+        config = load_chain_length_config(config_path)
+        outputs = run_chain_length_analysis(config)
         print("plot:", outputs["output_plot"])
         print("summary:", outputs["summary_csv"])
         return

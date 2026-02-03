@@ -44,7 +44,12 @@ def test_share_stability_panel_local_metrics(monkeypatch, tmp_path: Path) -> Non
         )
         return {2006: df, 2007: df, 2008: df}
 
-    monkeypatch.setattr(ss_runner, "build_year_shares", stub_year_shares)
+    monkeypatch.setattr(ss_runner, "build_year_shares_from_totals", stub_year_shares)
+    monkeypatch.setattr(
+        ss_runner,
+        "load_annual_totals",
+        lambda **_kwargs: pd.DataFrame({"PRODUCT_NC": ["A"], "value": [1.0]}),
+    )
     monkeypatch.setattr(ss_runner, "plot_share_panels", lambda **_kwargs: None)
 
     def stub_compute_step_metrics(**kwargs):

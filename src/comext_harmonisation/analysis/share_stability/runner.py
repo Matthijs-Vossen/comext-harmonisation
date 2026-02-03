@@ -9,14 +9,23 @@ import pandas as pd
 import numpy as np
 
 from ..config import ShareStabilityConfig
-from ..common.metrics import r2_45, weighted_mean
+from ..common.metrics import (
+    mae_weighted,
+    r2_45,
+    r2_45_weighted,
+    r2_45_weighted_symmetric,
+    weighted_mean,
+)
 from ..common.plotting import plot_share_panels
+from ..common.progress import progress
 from ..common.shares import (
     build_panel_pairs,
-    build_year_shares,
+    build_values_for_groups_from_totals,
+    build_year_shares_from_totals,
     normalize_codes,
 )
 from ..common.steps import compute_step_metrics
+from ..common.steps import load_annual_totals
 from ...estimation.chaining import build_chained_weights_for_range, build_code_universe_from_annual
 from ...estimation.runner import load_concordance_groups
 from ...mappings import get_ambiguous_group_summary
@@ -155,16 +164,30 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
             )
             group_ids_filtered = group_ids_filtered - unstable_groups
 
-    year_shares = build_year_shares(
+    totals_by_year: dict[int, pd.DataFrame] = {}
+    for year in range(years.start, years.end + 1):
+        totals_by_year[year] = load_annual_totals(
+            annual_base_dir=config.paths.annual_base_dir,
+            year=year,
+            measure=measures.analysis_measure,
+            exclude_reporters=config.sample.exclude_reporters,
+            exclude_partners=config.sample.exclude_partners,
+        )
+    if years.target not in totals_by_year:
+        totals_by_year[years.target] = load_annual_totals(
+            annual_base_dir=config.paths.annual_base_dir,
+            year=years.target,
+            measure=measures.analysis_measure,
+            exclude_reporters=config.sample.exclude_reporters,
+            exclude_partners=config.sample.exclude_partners,
+        )
+    year_shares = build_year_shares_from_totals(
         years=range(years.start, years.end + 1),
         target_year=years.target,
-        annual_base_dir=config.paths.annual_base_dir,
+        totals_by_year=totals_by_year,
         weights_by_year=weights_by_year,
-        measure=measures.analysis_measure,
         group_map=group_map,
         group_ids=group_ids,
-        exclude_reporters=config.sample.exclude_reporters,
-        exclude_partners=config.sample.exclude_partners,
     )
 
     pairs: list[tuple[int, pd.DataFrame]] = []
@@ -177,13 +200,26 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
         .astype(str)
         .tolist()
     )
+    values_by_year: dict[int, pd.DataFrame] = {}
+
+    def _values_for_year(year: int) -> pd.DataFrame:
+        if year not in values_by_year:
+            values_by_year[year] = build_values_for_groups_from_totals(
+                year=year,
+                target_year=years.target,
+                totals_by_year=totals_by_year,
+                weights_by_year=weights_by_year,
+                group_map=group_map,
+                group_ids=sample_group_ids,
+            )
+        return values_by_year[year]
     panel_pairs = build_panel_pairs(
         start_year=years.start,
         end_year=years.end,
         year_shares=year_shares,
         group_ids_filtered=group_ids_filtered if group_ids_filtered != group_ids else None,
     )
-    for pair in panel_pairs:
+    for pair in progress(panel_pairs, desc="share_stability panels", total=len(panel_pairs)):
         merged = pair.data
         if group_ids_filtered != group_ids:
             left = year_shares[pair.x_year].rename(columns={"share": "share_t"})
@@ -213,6 +249,8 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
     want_exposure = "exposure_weighted" in metrics_set
     want_diffuseness = "diffuseness_weighted" in metrics_set
     metrics_cache: dict[int, tuple[float, float]] = {}
+    step_weights_cache: dict[tuple[str, str, str], pd.DataFrame] = {}
+    feasible_map_cache: dict[tuple[str, str], dict[str, list[str]]] = {}
 
     def _metrics_for_year(year: int) -> tuple[float, float]:
         if year in metrics_cache:
@@ -234,6 +272,9 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
             exclude_partners=config.sample.exclude_partners,
             compute_exposure=want_exposure,
             compute_diffuseness=want_diffuseness,
+            totals_by_year=totals_by_year,
+            step_weights_cache=step_weights_cache,
+            feasible_map_cache=feasible_map_cache,
         )
         steps_df = pd.DataFrame(step_rows_chain)
         exposure_weighted = float("nan")
@@ -264,6 +305,49 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
             lines.append(rf"$R^2$ = {r2_val:.3f}")
         else:
             r2_val = float("nan")
+        r2_w = float("nan")
+        r2_sym = float("nan")
+        mae_w = float("nan")
+        need_weighted = {
+            "r2_45_weighted",
+            "r2_45_weighted_symmetric",
+            "mae_weighted",
+        } & metrics_set
+        if need_weighted:
+            values_y = _values_for_year(pair.y_year).rename(columns={"value": "value_y"})
+            weights_y = df.merge(
+                values_y, on=["group_id", "product_code"], how="left"
+            )
+            weights_y["value_y"] = weights_y["value_y"].fillna(0.0)
+            if "r2_45_weighted" in metrics_set:
+                r2_w = r2_45_weighted(
+                    weights_y["share_t"].to_numpy(),
+                    weights_y["share_t1"].to_numpy(),
+                    weights_y["value_y"].to_numpy(),
+                )
+                lines.append(rf"$R^2_w$ = {r2_w:.3f}")
+            if "r2_45_weighted_symmetric" in metrics_set or "mae_weighted" in metrics_set:
+                values_x = _values_for_year(pair.x_year).rename(columns={"value": "value_x"})
+                weights_xy = weights_y.merge(
+                    values_x, on=["group_id", "product_code"], how="left"
+                )
+                weights_xy["value_x"] = weights_xy["value_x"].fillna(0.0)
+                if "r2_45_weighted_symmetric" in metrics_set:
+                    r2_sym = r2_45_weighted_symmetric(
+                        weights_xy["share_t"].to_numpy(),
+                        weights_xy["share_t1"].to_numpy(),
+                        weights_xy["value_x"].to_numpy(),
+                        weights_xy["value_y"].to_numpy(),
+                    )
+                    lines.append(rf"$R^2_{{sym}}$ = {r2_sym:.3f}")
+                if "mae_weighted" in metrics_set:
+                    mae_w = mae_weighted(
+                        weights_xy["share_t"].to_numpy(),
+                        weights_xy["share_t1"].to_numpy(),
+                        weights_xy["value_x"].to_numpy(),
+                        weights_xy["value_y"].to_numpy(),
+                    )
+                    lines.append(rf"wMAE = {mae_w:.3f}")
         if want_exposure:
             lines.append(rf"$E_w$ = {exposure_weighted:.3f}")
         if want_diffuseness:
@@ -285,6 +369,9 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
                     diffuseness_weighted if want_diffuseness else float("nan")
                 ),
                 "n_codes_filtered": stats.get("n_codes_filtered", 0),
+                "r2_45_weighted": r2_w,
+                "r2_45_weighted_symmetric": r2_sym,
+                "mae_weighted": mae_w,
             }
         )
     summary = pd.DataFrame(summary_rows)

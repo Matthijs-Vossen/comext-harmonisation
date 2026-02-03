@@ -3,6 +3,9 @@ import pandas as pd
 
 from comext_harmonisation.analysis.common.metrics import (
     entropy_weighted,
+    mae_weighted,
+    r2_45_weighted,
+    r2_45_weighted_symmetric,
     trade_weighted_exposure,
 )
 
@@ -53,3 +56,30 @@ def test_entropy_weighted_basic():
 
     assert np.isclose(ambiguous_trade, 150.0)
     assert np.isclose(h_val, expected)
+
+
+def test_r2_45_weighted_basic():
+    x = np.array([0.0, 1.0], dtype=float)
+    y = np.array([0.0, 2.0], dtype=float)
+    weights = np.array([1.0, 1.0], dtype=float)
+    r2_w = r2_45_weighted(x, y, weights)
+    assert np.isclose(r2_w, 0.5)
+
+
+def test_r2_45_weighted_symmetric_basic():
+    x = np.array([0.0, 1.0], dtype=float)
+    y = np.array([0.0, 2.0], dtype=float)
+    w_initial = np.array([2.0, 0.0], dtype=float)
+    w_target = np.array([0.0, 2.0], dtype=float)
+    r2_sym = r2_45_weighted_symmetric(x, y, w_initial, w_target)
+    assert np.isclose(r2_sym, 0.5)
+
+
+def test_mae_weighted_basic():
+    x = np.array([0.0, 1.0], dtype=float)
+    y = np.array([0.0, 2.0], dtype=float)
+    w_initial = np.array([2.0, 0.0], dtype=float)
+    w_target = np.array([0.0, 2.0], dtype=float)
+    mae = mae_weighted(x, y, w_initial, w_target)
+    # symmetric weights -> [1,1], |y-x| -> [0,1]
+    assert np.isclose(mae, 0.5)

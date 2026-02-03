@@ -9,11 +9,22 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
-from ..common.metrics import r2_45, weighted_mean
+from ..common.metrics import (
+    mae_weighted,
+    r2_45,
+    r2_45_weighted,
+    r2_45_weighted_symmetric,
+    weighted_mean,
+)
 from ..common.plotting import plot_share_panels
-from ..common.shares import PanelPair, build_year_shares, normalize_codes
-from ..common.steps import compute_step_metrics, chain_steps
-from ..common.steps import compute_step_metrics
+from ..common.progress import progress
+from ..common.shares import (
+    PanelPair,
+    build_values_for_groups_from_totals,
+    build_year_shares_from_totals,
+    normalize_codes,
+)
+from ..common.steps import compute_step_metrics, chain_steps, load_annual_totals
 from ..config import StressConfig
 from ...estimation.chaining import build_chained_weights_for_range, build_code_universe_from_annual
 from ...estimation.runner import load_concordance_groups
@@ -195,12 +206,24 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
     for output in chained:
         weights_by_year[output.origin_year] = output.weights
 
+    totals_by_year: dict[int, pd.DataFrame] = {}
+    for year in range(min_year, max_year + 1):
+        totals_by_year[year] = load_annual_totals(
+            annual_base_dir=config.paths.annual_base_dir,
+            year=year,
+            measure=measures.analysis_measure,
+            exclude_reporters=config.sample.exclude_reporters,
+            exclude_partners=config.sample.exclude_partners,
+        )
+    step_weights_cache: dict[tuple[str, str, str], pd.DataFrame] = {}
+    feasible_map_cache: dict[tuple[str, str], dict[str, list[str]]] = {}
+
     panel_pairs: list[PanelPair] = []
     annotation_by_year: dict[int, str] = {}
     summary_rows: list[dict[str, object]] = []
     step_rows: list[dict[str, object]] = []
 
-    for chain in years.chains:
+    for chain in progress(years.chains, desc="stress_test chains", total=len(years.chains)):
         base_year = int(chain.base_year)
         compare_year = int(chain.compare_year)
         group_map, group_ids, sample_codes = _build_chain_group_map(
@@ -241,18 +264,18 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
             exclude_partners=config.sample.exclude_partners,
             compute_exposure=want_exposure,
             compute_diffuseness=want_diffuseness,
+            totals_by_year=totals_by_year,
+            step_weights_cache=step_weights_cache,
+            feasible_map_cache=feasible_map_cache,
         )
 
-        shares_by_year = build_year_shares(
+        shares_by_year = build_year_shares_from_totals(
             years=[base_year, compare_year],
             target_year=years.target,
-            annual_base_dir=config.paths.annual_base_dir,
+            totals_by_year=totals_by_year,
             weights_by_year=weights_by_year,
-            measure=measures.analysis_measure,
             group_map=group_map,
             group_ids=group_ids,
-            exclude_reporters=config.sample.exclude_reporters,
-            exclude_partners=config.sample.exclude_partners,
         )
 
         left = shares_by_year[base_year].rename(columns={"share": "share_t"})
@@ -264,6 +287,60 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
             if "r2_45" in metrics_set
             else float("nan")
         )
+        r2_w = float("nan")
+        r2_sym = float("nan")
+        mae_w = float("nan")
+        need_weighted = {
+            "r2_45_weighted",
+            "r2_45_weighted_symmetric",
+            "mae_weighted",
+        } & metrics_set
+        if need_weighted:
+            compare_values = build_values_for_groups_from_totals(
+                year=compare_year,
+                target_year=years.target,
+                totals_by_year=totals_by_year,
+                weights_by_year=weights_by_year,
+                group_map=group_map,
+                group_ids=group_ids,
+            ).rename(columns={"value": "value_y"})
+            weights_y = merged.merge(
+                compare_values, on=["group_id", "product_code"], how="left"
+            )
+            weights_y["value_y"] = weights_y["value_y"].fillna(0.0)
+            if "r2_45_weighted" in metrics_set:
+                r2_w = r2_45_weighted(
+                    weights_y["share_t"].to_numpy(),
+                    weights_y["share_t1"].to_numpy(),
+                    weights_y["value_y"].to_numpy(),
+                )
+            if "r2_45_weighted_symmetric" in metrics_set or "mae_weighted" in metrics_set:
+                base_values = build_values_for_groups_from_totals(
+                    year=base_year,
+                    target_year=years.target,
+                    totals_by_year=totals_by_year,
+                    weights_by_year=weights_by_year,
+                    group_map=group_map,
+                    group_ids=group_ids,
+                ).rename(columns={"value": "value_x"})
+                weights_xy = weights_y.merge(
+                    base_values, on=["group_id", "product_code"], how="left"
+                )
+                weights_xy["value_x"] = weights_xy["value_x"].fillna(0.0)
+                if "r2_45_weighted_symmetric" in metrics_set:
+                    r2_sym = r2_45_weighted_symmetric(
+                        weights_xy["share_t"].to_numpy(),
+                        weights_xy["share_t1"].to_numpy(),
+                        weights_xy["value_x"].to_numpy(),
+                        weights_xy["value_y"].to_numpy(),
+                    )
+                if "mae_weighted" in metrics_set:
+                    mae_w = mae_weighted(
+                        weights_xy["share_t"].to_numpy(),
+                        weights_xy["share_t1"].to_numpy(),
+                        weights_xy["value_x"].to_numpy(),
+                        weights_xy["value_y"].to_numpy(),
+                    )
         exposure_weighted = float("nan")
         diffuseness_weighted = float("nan")
         steps_df = pd.DataFrame(step_rows_chain)
@@ -279,6 +356,12 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
         lines = []
         if "r2_45" in metrics_set:
             lines.append(rf"$R^2$ = {r2_val:.3f}")
+        if "r2_45_weighted" in metrics_set:
+            lines.append(rf"$R^2_w$ = {r2_w:.3f}")
+        if "r2_45_weighted_symmetric" in metrics_set:
+            lines.append(rf"$R^2_{{sym}}$ = {r2_sym:.3f}")
+        if "mae_weighted" in metrics_set:
+            lines.append(rf"wMAE = {mae_w:.3f}")
         if "exposure_weighted" in metrics_set:
             lines.append(rf"$E_w$ = {exposure_weighted:.3f}")
         if "diffuseness_weighted" in metrics_set:
@@ -290,6 +373,9 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                 "compare_year": compare_year,
                 "n_points": int(len(merged)),
                 "r2_45": r2_val,
+                "r2_45_weighted": r2_w,
+                "r2_45_weighted_symmetric": r2_sym,
+                "mae_weighted": mae_w,
                 "ambiguity_exposure_weighted": (
                     exposure_weighted if "exposure_weighted" in metrics_set else float("nan")
                 ),

@@ -43,6 +43,58 @@ def r2_45(x: np.ndarray, y: np.ndarray) -> float:
     return 1.0 - sse / sst
 
 
+@register_metric("r2_45_weighted")
+def r2_45_weighted(x: np.ndarray, y: np.ndarray, weights: np.ndarray) -> float:
+    if len(x) == 0:
+        return float("nan")
+    mask = np.isfinite(x) & np.isfinite(y) & np.isfinite(weights) & (weights > 0)
+    if not mask.any():
+        return float("nan")
+    w = weights[mask]
+    x = x[mask]
+    y = y[mask]
+    w_sum = float(np.sum(w))
+    if w_sum == 0:
+        return float("nan")
+    y_bar = float(np.sum(w * y) / w_sum)
+    sse = float(np.sum(w * (y - x) ** 2))
+    sst = float(np.sum(w * (y - y_bar) ** 2))
+    if sst == 0:
+        return float("nan")
+    return 1.0 - sse / sst
+
+
+@register_metric("r2_45_weighted_symmetric")
+def r2_45_weighted_symmetric(
+    x: np.ndarray, y: np.ndarray, weights_initial: np.ndarray, weights_target: np.ndarray
+) -> float:
+    """Symmetric weighted R^2 using the average of initial/target weights."""
+    if len(x) == 0:
+        return float("nan")
+    weights = 0.5 * (np.asarray(weights_initial, dtype=float) + np.asarray(weights_target, dtype=float))
+    return r2_45_weighted(x, y, weights)
+
+
+@register_metric("mae_weighted")
+def mae_weighted(
+    x: np.ndarray, y: np.ndarray, weights_initial: np.ndarray, weights_target: np.ndarray
+) -> float:
+    """Symmetric weighted mean absolute error using the average of initial/target weights."""
+    if len(x) == 0:
+        return float("nan")
+    weights = 0.5 * (np.asarray(weights_initial, dtype=float) + np.asarray(weights_target, dtype=float))
+    mask = np.isfinite(x) & np.isfinite(y) & np.isfinite(weights) & (weights > 0)
+    if not mask.any():
+        return float("nan")
+    w = weights[mask]
+    x = x[mask]
+    y = y[mask]
+    denom = float(np.sum(w))
+    if denom == 0:
+        return float("nan")
+    return float(np.sum(w * np.abs(y - x)) / denom)
+
+
 def weighted_mean(values: np.ndarray, weights: np.ndarray) -> float:
     """Compute a weighted mean, ignoring non-finite entries and non-positive weights."""
     mask = np.isfinite(values) & np.isfinite(weights) & (weights > 0)

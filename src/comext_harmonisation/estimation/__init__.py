@@ -23,6 +23,7 @@ from .chaining import (
     ChainedWeightsOutput,
     chain_weights_for_year,
     build_chained_weights_for_range,
+    build_code_universe_from_annual,
     DEFAULT_CHAINED_WEIGHTS_DIR,
     DEFAULT_CHAINED_DIAGNOSTICS_DIR,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "ChainedWeightsOutput",
     "chain_weights_for_year",
     "build_chained_weights_for_range",
+    "build_code_universe_from_annual",
     "DEFAULT_CHAINED_WEIGHTS_DIR",
     "DEFAULT_CHAINED_DIAGNOSTICS_DIR",
 ]

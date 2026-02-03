@@ -139,6 +139,9 @@ def compute_step_metrics(
     exclude_partners: Iterable[str],
     compute_exposure: bool,
     compute_diffuseness: bool,
+    totals_by_year: dict[int, pd.DataFrame] | None = None,
+    step_weights_cache: dict[tuple[str, str, str], pd.DataFrame] | None = None,
+    feasible_map_cache: dict[tuple[str, str], dict[str, list[str]]] | None = None,
 ) -> list[dict[str, object]]:
     if not (compute_exposure or compute_diffuseness):
         return []
@@ -155,24 +158,46 @@ def compute_step_metrics(
             weights_to_target=weights_to_target,
         )
 
-        totals = load_annual_totals(
-            annual_base_dir=annual_base_dir,
-            year=source_year,
-            measure=measure,
-            exclude_reporters=exclude_reporters,
-            exclude_partners=exclude_partners,
-        )
+        if totals_by_year is not None:
+            if source_year not in totals_by_year:
+                raise KeyError(f"Missing totals for year {source_year}")
+            totals = totals_by_year[source_year]
+        else:
+            totals = load_annual_totals(
+                annual_base_dir=annual_base_dir,
+                year=source_year,
+                measure=measure,
+                exclude_reporters=exclude_reporters,
+                exclude_partners=exclude_partners,
+            )
         totals = totals.loc[totals["PRODUCT_NC"].isin(sample_source)]
         total_trade = float(totals["value"].sum())
 
-        step_weights = load_step_weights(
-            period=period,
-            direction=direction,
-            measure=weights_source,
-            weights_dir=weights_dir,
-        )
+        if step_weights_cache is not None:
+            cache_key = (period, direction, weights_source)
+            if cache_key not in step_weights_cache:
+                step_weights_cache[cache_key] = load_step_weights(
+                    period=period,
+                    direction=direction,
+                    measure=weights_source,
+                    weights_dir=weights_dir,
+                )
+            step_weights = step_weights_cache[cache_key]
+        else:
+            step_weights = load_step_weights(
+                period=period,
+                direction=direction,
+                measure=weights_source,
+                weights_dir=weights_dir,
+            )
         period_edges = groups.edges.loc[groups.edges["period"] == period]
-        feasible_map = feasible_target_map(period_edges, direction)
+        if feasible_map_cache is not None:
+            map_key = (period, direction)
+            if map_key not in feasible_map_cache:
+                feasible_map_cache[map_key] = feasible_target_map(period_edges, direction)
+            feasible_map = feasible_map_cache[map_key]
+        else:
+            feasible_map = feasible_target_map(period_edges, direction)
         ambiguous_sources = {
             code for code, targets in feasible_map.items() if len(targets) > 1
         }

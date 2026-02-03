@@ -18,7 +18,7 @@ measures:
   weights_source: VALUE_EUR
   analysis_measure: VALUE_EUR
 
-metrics: ["r2_45", "exposure_weighted", "diffuseness_weighted"]
+metrics: ["r2_45", "r2_45_weighted_symmetric", "exposure_weighted", "diffuseness_weighted"]
 
 paths:
   concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
