@@ -29,9 +29,14 @@ def _parse_args() -> argparse.Namespace:
         help="Output plot path",
     )
     parser.add_argument("--title", default=None, help="Optional figure title")
-    parser.add_argument("--point-color", default="gray", help="Line/marker color")
-    parser.add_argument("--point-size", type=float, default=6.0, help="Marker size")
-    parser.add_argument("--use-latex", action="store_true", help="Enable LaTeX rendering")
+    parser.add_argument("--point-color", default="black", help="Line/marker color")
+    parser.add_argument("--point-size", type=float, default=3.0, help="Marker size")
+    parser.add_argument(
+        "--use-latex",
+        action="store_true",
+        default=True,
+        help="Enable LaTeX rendering",
+    )
     parser.add_argument(
         "--latex-preamble",
         default=r"\usepackage{newtxtext,newtxmath}",
@@ -48,7 +53,10 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     _ensure_src_on_path()
-    from comext_harmonisation.analysis.common.plotting import plot_chain_length_panels
+    from comext_harmonisation.analysis.common.plotting import (
+        plot_chain_length_delta_panels,
+        plot_chain_length_panels,
+    )
     summary_path = Path(args.summary)
     if not summary_path.exists():
         raise FileNotFoundError(f"Missing summary CSV: {summary_path}")
@@ -64,7 +72,32 @@ def main() -> None:
         latex_preamble=args.latex_preamble,
         metrics=metrics,
     )
+    delta_output = Path(args.output).with_name(f"{Path(args.output).stem}_delta.png")
+    spearman_by_direction = {}
+    for direction in ["backward", "forward"]:
+        subset = data.loc[
+            data["direction"] == direction, ["mae_weighted_step", "diffuse_exposure"]
+        ].dropna()
+        subset = subset[subset["diffuse_exposure"] > 0]
+        if len(subset) < 2:
+            spearman_by_direction[direction] = float("nan")
+        else:
+            spearman_by_direction[direction] = float(
+                subset["mae_weighted_step"].corr(subset["diffuse_exposure"], method="spearman")
+            )
+
+    plot_chain_length_delta_panels(
+        data=data,
+        output_path=delta_output,
+        title=args.title,
+        point_color=args.point_color,
+        point_size=max(1.0, args.point_size - 1.0),
+        use_latex=args.use_latex,
+        latex_preamble=args.latex_preamble,
+        spearman_by_direction=spearman_by_direction,
+    )
     print("plot:", args.output)
+    print("plot:", delta_output)
 
 
 if __name__ == "__main__":

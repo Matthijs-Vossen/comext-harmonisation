@@ -10,7 +10,7 @@ import pandas as pd
 
 from ..config import ChainLengthConfig
 from ..common.metrics import mae_weighted, r2_45_weighted_symmetric, weighted_mean
-from ..common.plotting import plot_chain_length_panels
+from ..common.plotting import plot_chain_length_delta_panels, plot_chain_length_panels
 from ..common.progress import progress
 from ..common.shares import (
     build_values_for_groups_from_totals,
@@ -159,13 +159,21 @@ def _compute_chain_point(
     totals_by_year: dict[int, pd.DataFrame],
     step_weights_cache: dict[tuple[str, str, str], pd.DataFrame],
     feasible_map_cache: dict[tuple[str, str], dict[str, list[str]]],
-) -> tuple[float, float, float, float, int, list[dict[str, object]]]:
-    group_map, group_ids, sample_codes = _build_chain_group_map(
-        groups=groups,
-        base_year=base_year,
-        target_year=target_year,
-        weights_by_year=weights_by_year,
-    )
+    fixed_group_map: pd.DataFrame | None = None,
+    fixed_group_ids: set[str] | None = None,
+    fixed_sample_codes: set[str] | None = None,
+) -> tuple[float, float, float, float, float, float, int, list[dict[str, object]]]:
+    if fixed_group_map is not None and fixed_group_ids is not None and fixed_sample_codes is not None:
+        group_map = fixed_group_map
+        group_ids = fixed_group_ids
+        sample_codes = fixed_sample_codes
+    else:
+        group_map, group_ids, sample_codes = _build_chain_group_map(
+            groups=groups,
+            base_year=base_year,
+            target_year=target_year,
+            weights_by_year=weights_by_year,
+        )
     if not group_ids:
         raise ValueError(f"No sample groups for chain {base_year}->{target_year}")
 
@@ -218,6 +226,52 @@ def _compute_chain_point(
         weights_df["value_y"].to_numpy(),
     )
 
+    mae_step = float("nan")
+    if abs(base_year - target_year) >= 2:
+        adjacent_year = base_year - 1 if base_year > target_year else base_year + 1
+        step_shares = build_year_shares_from_totals(
+            years=[base_year, adjacent_year],
+            target_year=target_year,
+            totals_by_year=totals_by_year,
+            weights_by_year=weights_by_year,
+            group_map=group_map,
+            group_ids=group_ids,
+        )
+        step_left = step_shares[base_year].rename(columns={"share": "share_t"})
+        step_right = step_shares[adjacent_year].rename(columns={"share": "share_t1"})
+        step_merged = step_left.merge(step_right, on=["group_id", "product_code"], how="inner")
+        if not step_merged.empty:
+            step_values_base = build_values_for_groups_from_totals(
+                year=base_year,
+                target_year=target_year,
+                totals_by_year=totals_by_year,
+                weights_by_year=weights_by_year,
+                group_map=group_map,
+                group_ids=group_ids,
+            ).rename(columns={"value": "value_x"})
+            step_values_adj = build_values_for_groups_from_totals(
+                year=adjacent_year,
+                target_year=target_year,
+                totals_by_year=totals_by_year,
+                weights_by_year=weights_by_year,
+                group_map=group_map,
+                group_ids=group_ids,
+            ).rename(columns={"value": "value_y"})
+            step_weights_df = step_merged.merge(
+                step_values_base, on=["group_id", "product_code"], how="left"
+            )
+            step_weights_df = step_weights_df.merge(
+                step_values_adj, on=["group_id", "product_code"], how="left"
+            )
+            step_weights_df["value_x"] = step_weights_df["value_x"].fillna(0.0)
+            step_weights_df["value_y"] = step_weights_df["value_y"].fillna(0.0)
+            mae_step = mae_weighted(
+                step_weights_df["share_t"].to_numpy(),
+                step_weights_df["share_t1"].to_numpy(),
+                step_weights_df["value_x"].to_numpy(),
+                step_weights_df["value_y"].to_numpy(),
+            )
+
     step_rows = compute_step_metrics(
         base_year=base_year,
         target_year=target_year,
@@ -244,7 +298,8 @@ def _compute_chain_point(
         raise ValueError(f"No step_index=1 metrics for chain {base_year}->{target_year}")
     exposure = float(first_step.iloc[0]["ambiguity_exposure"])
     diffuseness = float(first_step.iloc[0]["diffuseness"])
-    return r2_sym, mae_w, exposure, diffuseness, len(merged), step_rows
+    diffuse_exposure = float(first_step.iloc[0]["diffuse_exposure"])
+    return r2_sym, mae_w, mae_step, exposure, diffuseness, diffuse_exposure, len(merged), step_rows
 
 
 def _chain_length_points(
@@ -363,13 +418,29 @@ def run_chain_length_analysis(config: ChainLengthConfig) -> dict[str, object]:
     rows: list[dict[str, object]] = []
     step_rows_all: list[dict[str, object]] = []
 
+    fixed_backward: tuple[pd.DataFrame, set[str], set[str]] | None = None
+    fixed_forward: tuple[pd.DataFrame, set[str], set[str]] | None = None
+    if config.sample.sample_mode == "max_chain":
+        fixed_backward = _build_chain_group_map(
+            groups=groups,
+            base_year=max_year,
+            target_year=years.backward_anchor,
+            weights_by_year=weights_backward,
+        )
+        fixed_forward = _build_chain_group_map(
+            groups=groups,
+            base_year=min_year,
+            target_year=years.forward_anchor,
+            weights_by_year=weights_forward,
+        )
+
     # backward: base_year > anchor
     for base_year in progress(
         range(years.backward_anchor + 1, max_year + 1),
         desc="chain_length backward",
         total=max(0, max_year - years.backward_anchor),
     ):
-        r2_sym, mae_w, exposure, diffuseness, n_points, step_rows = _compute_chain_point(
+        r2_sym, mae_w, mae_step, exposure, diffuseness, diffuse_exposure, n_points, step_rows = _compute_chain_point(
             base_year=base_year,
             target_year=years.backward_anchor,
             groups=groups,
@@ -378,6 +449,9 @@ def run_chain_length_analysis(config: ChainLengthConfig) -> dict[str, object]:
             totals_by_year=totals_by_year,
             step_weights_cache=step_weights_cache,
             feasible_map_cache=feasible_map_cache,
+            fixed_group_map=fixed_backward[0] if fixed_backward else None,
+            fixed_group_ids=fixed_backward[1] if fixed_backward else None,
+            fixed_sample_codes=fixed_backward[2] if fixed_backward else None,
         )
         length = base_year - years.backward_anchor
         rows.append(
@@ -389,8 +463,10 @@ def run_chain_length_analysis(config: ChainLengthConfig) -> dict[str, object]:
                 "one_minus_r2_sym": 1.0 - r2_sym,
                 "r2_sym": r2_sym,
                 "mae_weighted": mae_w,
+                "mae_weighted_step": mae_step,
                 "exposure_weighted": exposure,
                 "diffuseness_weighted": diffuseness,
+                "diffuse_exposure": diffuse_exposure,
                 "n_points": int(n_points),
             }
         )
@@ -406,7 +482,7 @@ def run_chain_length_analysis(config: ChainLengthConfig) -> dict[str, object]:
         desc="chain_length forward",
         total=max(0, years.forward_anchor - min_year),
     ):
-        r2_sym, mae_w, exposure, diffuseness, n_points, step_rows = _compute_chain_point(
+        r2_sym, mae_w, mae_step, exposure, diffuseness, diffuse_exposure, n_points, step_rows = _compute_chain_point(
             base_year=base_year,
             target_year=years.forward_anchor,
             groups=groups,
@@ -415,6 +491,9 @@ def run_chain_length_analysis(config: ChainLengthConfig) -> dict[str, object]:
             totals_by_year=totals_by_year,
             step_weights_cache=step_weights_cache,
             feasible_map_cache=feasible_map_cache,
+            fixed_group_map=fixed_forward[0] if fixed_forward else None,
+            fixed_group_ids=fixed_forward[1] if fixed_forward else None,
+            fixed_sample_codes=fixed_forward[2] if fixed_forward else None,
         )
         length = years.forward_anchor - base_year
         rows.append(
@@ -426,8 +505,10 @@ def run_chain_length_analysis(config: ChainLengthConfig) -> dict[str, object]:
                 "one_minus_r2_sym": 1.0 - r2_sym,
                 "r2_sym": r2_sym,
                 "mae_weighted": mae_w,
+                "mae_weighted_step": mae_step,
                 "exposure_weighted": exposure,
                 "diffuseness_weighted": diffuseness,
+                "diffuse_exposure": diffuse_exposure,
                 "n_points": int(n_points),
             }
         )
@@ -438,6 +519,12 @@ def run_chain_length_analysis(config: ChainLengthConfig) -> dict[str, object]:
         step_rows_all.extend(step_rows)
 
     summary = pd.DataFrame(rows).sort_values(["direction", "chain_length"])
+    summary["delta_one_minus_r2_sym"] = summary.groupby("direction")[
+        "one_minus_r2_sym"
+    ].diff()
+    summary["delta_mae_weighted"] = summary.groupby("direction")[
+        "mae_weighted"
+    ].diff()
     output_dir = config.paths.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     summary_path = output_dir / "summary.csv"
@@ -457,10 +544,36 @@ def run_chain_length_analysis(config: ChainLengthConfig) -> dict[str, object]:
         latex_preamble=config.plot.latex_preamble,
         metrics=config.metrics,
     )
+    delta_plot_path = plot_path.with_name(f"{plot_path.stem}_delta.png")
+    spearman_by_direction: dict[str, float] = {}
+    for direction in ["backward", "forward"]:
+        subset = summary.loc[
+            summary["direction"] == direction, ["mae_weighted_step", "diffuse_exposure"]
+        ].dropna()
+        subset = subset[subset["diffuse_exposure"] > 0]
+        if len(subset) < 2:
+            spearman_by_direction[direction] = float("nan")
+        else:
+            spearman_by_direction[direction] = float(
+                subset["mae_weighted_step"].corr(subset["diffuse_exposure"], method="spearman")
+            )
+
+    plot_chain_length_delta_panels(
+        data=summary,
+        output_path=delta_plot_path,
+        title=config.plot.title,
+        point_color=config.plot.point_color,
+        point_size=max(1.0, config.plot.point_size - 1.0),
+        use_latex=config.plot.use_latex,
+        latex_preamble=config.plot.latex_preamble,
+        spearman_by_direction=spearman_by_direction,
+    )
 
     return {
         "summary_csv": summary_path,
         "step_metrics_csv": step_metrics_path if step_rows_all else "",
         "output_plot": plot_path,
+        "output_plot_delta": delta_plot_path,
+        "spearman_by_direction": spearman_by_direction,
         "config": config,
     }

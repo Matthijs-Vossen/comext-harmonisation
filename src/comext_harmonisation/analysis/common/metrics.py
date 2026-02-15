@@ -135,12 +135,12 @@ def entropy_weighted(
     estimable_sources = set(estimable_sources)
     entropy_sources = ambiguous_sources & estimable_sources
     if not entropy_sources:
-        return float("nan"), 0.0
+        return 0.0, 0.0
     ambiguous_trade = float(
         totals.loc[totals["PRODUCT_NC"].isin(entropy_sources), "value"].sum()
     )
     if ambiguous_trade <= 0:
-        return float("nan"), 0.0
+        return 0.0, 0.0
 
     entropy_rows: list[tuple[float, float]] = []
     for code in entropy_sources:

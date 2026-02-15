@@ -184,6 +184,7 @@ class ChainLengthChainingConfig:
 class ChainLengthSampleConfig:
     exclude_reporters: Sequence[str]
     exclude_partners: Sequence[str]
+    sample_mode: str
 
 
 @dataclass(frozen=True)
@@ -241,6 +242,7 @@ def load_share_stability_config(path: Path) -> ShareStabilityConfig:
         {
             "exclude_reporters": [],
             "exclude_partners": [],
+            "sample_mode": "per_chain",
         },
         data.get("sample"),
     )
@@ -338,8 +340,7 @@ def load_stress_config(path: Path) -> StressConfig:
     if not metric_names:
         metric_names = [
             "r2_45",
-            "exposure_weighted",
-            "diffuseness_weighted",
+            "diffuse_exposure",
         ]
 
     paths = _merge(
@@ -490,7 +491,7 @@ def load_chain_length_config(path: Path) -> ChainLengthConfig:
             "point_size": 8.0,
             "axis_padding": 0.02,
             "point_color": "gray",
-            "use_latex": False,
+            "use_latex": True,
             "latex_preamble": r"\\usepackage{newtxtext,newtxmath}",
         },
         data.get("plot"),
@@ -524,6 +525,7 @@ def load_chain_length_config(path: Path) -> ChainLengthConfig:
         sample=ChainLengthSampleConfig(
             exclude_reporters=_normalize_list(sample.get("exclude_reporters")),
             exclude_partners=_normalize_list(sample.get("exclude_partners")),
+            sample_mode=str(sample.get("sample_mode", "per_chain")).lower(),
         ),
         plot=AnalysisPlotConfig(
             output_path=Path(plot["output_path"]),

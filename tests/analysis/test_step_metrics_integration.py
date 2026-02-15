@@ -113,7 +113,7 @@ def test_compute_step_metrics_two_step_chain(tmp_path: Path) -> None:
 
     step1_entropy = steps_df.loc[steps_df["step_index"] == 1, "diffuseness"].iloc[0]
     step2_entropy = steps_df.loc[steps_df["step_index"] == 2, "diffuseness"].iloc[0]
-    assert np.isnan(step2_entropy)
+    assert np.isclose(step2_entropy, 0.0)
 
     h_a = -((0.25 * np.log(0.25)) + (0.75 * np.log(0.75))) / np.log(2.0)
     assert np.isclose(step1_entropy, h_a)

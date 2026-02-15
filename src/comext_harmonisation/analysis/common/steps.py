@@ -212,6 +212,7 @@ def compute_step_metrics(
             )
 
         step_entropy = float("nan")
+        diffuse_exposure = float("nan")
         if compute_diffuseness:
             step_entropy, ambiguous_trade_entropy = entropy_weighted(
                 totals=totals,
@@ -222,6 +223,8 @@ def compute_step_metrics(
             )
             if np.isnan(ambiguous_trade):
                 ambiguous_trade = ambiguous_trade_entropy
+            if total_trade > 0 and np.isfinite(step_entropy) and np.isfinite(ambiguous_trade):
+                diffuse_exposure = step_entropy * (ambiguous_trade / total_trade)
 
         step_rows_chain.append(
             {
@@ -236,6 +239,7 @@ def compute_step_metrics(
                 "ambiguous_trade": ambiguous_trade,
                 "ambiguity_exposure": exposure,
                 "diffuseness": step_entropy,
+                "diffuse_exposure": diffuse_exposure,
                 "n_ambiguous_sources": int(len(ambiguous_sources)),
             }
         )

@@ -169,7 +169,8 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
     measures = config.measures
     metrics_set = {name.lower() for name in config.metrics}
     want_exposure = "exposure_weighted" in metrics_set
-    want_diffuseness = "diffuseness_weighted" in metrics_set
+    want_diffuse_exposure = "diffuse_exposure" in metrics_set
+    want_diffuseness = ("diffuseness_weighted" in metrics_set) or want_diffuse_exposure
 
     groups = load_concordance_groups(
         concordance_path=config.paths.concordance_path,
@@ -287,11 +288,9 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
             if "r2_45" in metrics_set
             else float("nan")
         )
-        r2_w = float("nan")
         r2_sym = float("nan")
         mae_w = float("nan")
         need_weighted = {
-            "r2_45_weighted",
             "r2_45_weighted_symmetric",
             "mae_weighted",
         } & metrics_set
@@ -308,12 +307,6 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                 compare_values, on=["group_id", "product_code"], how="left"
             )
             weights_y["value_y"] = weights_y["value_y"].fillna(0.0)
-            if "r2_45_weighted" in metrics_set:
-                r2_w = r2_45_weighted(
-                    weights_y["share_t"].to_numpy(),
-                    weights_y["share_t1"].to_numpy(),
-                    weights_y["value_y"].to_numpy(),
-                )
             if "r2_45_weighted_symmetric" in metrics_set or "mae_weighted" in metrics_set:
                 base_values = build_values_for_groups_from_totals(
                     year=base_year,
@@ -343,6 +336,7 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                     )
         exposure_weighted = float("nan")
         diffuseness_weighted = float("nan")
+        diffuse_exposure_weighted = float("nan")
         steps_df = pd.DataFrame(step_rows_chain)
         if not steps_df.empty:
             if "exposure_weighted" in metrics_set:
@@ -353,19 +347,23 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                 diff_vals = steps_df["diffuseness"].to_numpy(dtype=float)
                 diff_w = steps_df["ambiguous_trade"].to_numpy(dtype=float)
                 diffuseness_weighted = weighted_mean(diff_vals, diff_w)
+            if "diffuse_exposure" in metrics_set:
+                d_vals = steps_df["diffuse_exposure"].to_numpy(dtype=float)
+                d_w = steps_df["total_trade_sample"].to_numpy(dtype=float)
+                diffuse_exposure_weighted = weighted_mean(d_vals, d_w)
         lines = []
         if "r2_45" in metrics_set:
             lines.append(rf"$R^2$ = {r2_val:.3f}")
-        if "r2_45_weighted" in metrics_set:
-            lines.append(rf"$R^2_w$ = {r2_w:.3f}")
         if "r2_45_weighted_symmetric" in metrics_set:
-            lines.append(rf"$R^2_{{sym}}$ = {r2_sym:.3f}")
+            lines.append(rf"$R^2_w$ = {r2_sym:.3f}")
         if "mae_weighted" in metrics_set:
             lines.append(rf"wMAE = {mae_w:.3f}")
         if "exposure_weighted" in metrics_set:
             lines.append(rf"$E_w$ = {exposure_weighted:.3f}")
         if "diffuseness_weighted" in metrics_set:
             lines.append(rf"$H_w$ = {diffuseness_weighted:.3f}")
+        if "diffuse_exposure" in metrics_set:
+            lines.append(rf"$D_w$ = {diffuse_exposure_weighted:.3f}")
         annotation_by_year[base_year] = "\n".join(lines)
         summary_rows.append(
             {
@@ -373,7 +371,6 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                 "compare_year": compare_year,
                 "n_points": int(len(merged)),
                 "r2_45": r2_val,
-                "r2_45_weighted": r2_w,
                 "r2_45_weighted_symmetric": r2_sym,
                 "mae_weighted": mae_w,
                 "ambiguity_exposure_weighted": (
@@ -381,6 +378,11 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                 ),
                 "diffuseness_weighted": (
                     diffuseness_weighted if "diffuseness_weighted" in metrics_set else float("nan")
+                ),
+                "diffuse_exposure_weighted": (
+                    diffuse_exposure_weighted
+                    if "diffuse_exposure" in metrics_set
+                    else float("nan")
                 ),
             }
         )
