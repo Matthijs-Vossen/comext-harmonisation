@@ -1,8 +1,7 @@
-"""Chain-length sensitivity analysis (R^2_sym, E_w, H_w vs chain length)."""
+"""Chain-length sensitivity analysis with delta-style plotting output."""
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -10,7 +9,7 @@ import pandas as pd
 
 from ..config import ChainLengthConfig
 from ..common.metrics import mae_weighted, r2_45_weighted_symmetric, weighted_mean
-from ..common.plotting import plot_chain_length_delta_panels, plot_chain_length_panels
+from ..common.plotting import plot_chain_length_delta_panels
 from ..common.progress import progress
 from ..common.shares import (
     build_values_for_groups_from_totals,
@@ -534,17 +533,6 @@ def run_chain_length_analysis(config: ChainLengthConfig) -> dict[str, object]:
         pd.DataFrame(step_rows_all).to_csv(step_metrics_path, index=False)
 
     plot_path = config.plot.output_path
-    plot_chain_length_panels(
-        data=summary,
-        output_path=plot_path,
-        title=config.plot.title,
-        point_color=config.plot.point_color,
-        point_size=config.plot.point_size,
-        use_latex=config.plot.use_latex,
-        latex_preamble=config.plot.latex_preamble,
-        metrics=config.metrics,
-    )
-    delta_plot_path = plot_path.with_name(f"{plot_path.stem}_delta.png")
     spearman_by_direction: dict[str, float] = {}
     for direction in ["backward", "forward"]:
         subset = summary.loc[
@@ -560,20 +548,21 @@ def run_chain_length_analysis(config: ChainLengthConfig) -> dict[str, object]:
 
     plot_chain_length_delta_panels(
         data=summary,
-        output_path=delta_plot_path,
+        output_path=plot_path,
         title=config.plot.title,
         point_color=config.plot.point_color,
         point_size=max(1.0, config.plot.point_size - 1.0),
         use_latex=config.plot.use_latex,
         latex_preamble=config.plot.latex_preamble,
         spearman_by_direction=spearman_by_direction,
+        metrics=config.metrics,
     )
 
     return {
         "summary_csv": summary_path,
         "step_metrics_csv": step_metrics_path if step_rows_all else "",
         "output_plot": plot_path,
-        "output_plot_delta": delta_plot_path,
+        "output_plot_delta": plot_path,
         "spearman_by_direction": spearman_by_direction,
         "config": config,
     }

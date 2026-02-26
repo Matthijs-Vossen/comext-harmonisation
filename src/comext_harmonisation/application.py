@@ -123,6 +123,136 @@ def _normalize_codes(series: pd.Series) -> pd.Series:
     return codes
 
 
+def _normalize_revised_index(
+    revised_codes_by_step: Mapping[tuple[str, str], Iterable[str]] | None,
+) -> dict[tuple[str, str], set[str]]:
+    if revised_codes_by_step is None:
+        return {}
+    normalized: dict[tuple[str, str], set[str]] = {}
+    for key, codes in revised_codes_by_step.items():
+        if len(key) != 2:
+            raise ValueError(
+                "revised_codes_by_step keys must be (period, direction) tuples"
+            )
+        period, direction = key
+        if direction not in {"a_to_b", "b_to_a"}:
+            raise ValueError(
+                "revised_codes_by_step direction must be 'a_to_b' or 'b_to_a'"
+            )
+        normalized[(str(period), direction)] = set(
+            _normalize_codes(pd.Series(list(codes))).tolist()
+        )
+    return normalized
+
+
+def _chain_periods(origin_year: str | int, target_year: str | int) -> tuple[list[str], str]:
+    origin = int(origin_year)
+    target = int(target_year)
+    if origin == target:
+        return [], "identity"
+    if origin < target:
+        return [f"{year}{year + 1}" for year in range(origin, target)], "a_to_b"
+    return [f"{year}{year + 1}" for year in range(origin - 1, target - 1, -1)], "b_to_a"
+
+
+def _write_unresolved_details(rows: list[dict[str, object]], *, path: Path) -> None:
+    if not rows:
+        return
+    details = pd.DataFrame(
+        rows,
+        columns=[
+            "origin_year",
+            "target_year",
+            "direction",
+            "measure",
+            "period",
+            "step_index",
+            "code",
+            "reason",
+            "count",
+            "source",
+        ],
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not path.exists()
+    details.to_csv(path, mode="a", index=False, header=write_header)
+
+
+def _validate_chained_outputs_for_apply(
+    *,
+    chained_outputs: Sequence[ChainedWeightsOutput],
+    target_year: int,
+    measures: Sequence[str],
+    strict_revised_link_validation: bool,
+    revised_codes_by_step: Mapping[tuple[str, str], set[str]],
+) -> list[dict[str, object]]:
+    unresolved_rows: list[dict[str, object]] = []
+    measure_set = {str(m).strip().upper() for m in measures}
+    for output in chained_outputs:
+        if output.origin_year == str(target_year):
+            continue
+        if output.measure not in measure_set:
+            continue
+
+        diagnostics = output.diagnostics if isinstance(output.diagnostics, pd.DataFrame) else pd.DataFrame()
+        unresolved_total = 0
+        if not diagnostics.empty and "n_unresolved_revised_total" in diagnostics.columns:
+            unresolved_total = int(
+                pd.to_numeric(
+                    diagnostics["n_unresolved_revised_total"],
+                    errors="coerce",
+                )
+                .fillna(0)
+                .sum()
+            )
+        if unresolved_total > 0:
+            unresolved_rows.append(
+                {
+                    "origin_year": output.origin_year,
+                    "target_year": str(target_year),
+                    "direction": output.direction,
+                    "measure": output.measure,
+                    "period": "",
+                    "step_index": -1,
+                    "code": "",
+                    "reason": "chain_diagnostics_unresolved_revised_total",
+                    "count": unresolved_total,
+                    "source": "chained_output_diagnostics",
+                }
+            )
+
+        if not strict_revised_link_validation:
+            continue
+        periods, direction = _chain_periods(output.origin_year, target_year)
+        if not periods:
+            continue
+        first_period = periods[0]
+        revised_origin_codes = set(revised_codes_by_step.get((first_period, direction), set()))
+        if not revised_origin_codes:
+            continue
+        if output.weights.empty:
+            missing_revised = revised_origin_codes
+        else:
+            from_codes = set(_normalize_codes(output.weights["from_code"]).tolist())
+            missing_revised = revised_origin_codes - from_codes
+        for code in sorted(missing_revised):
+            unresolved_rows.append(
+                {
+                    "origin_year": output.origin_year,
+                    "target_year": str(target_year),
+                    "direction": direction,
+                    "measure": output.measure,
+                    "period": first_period,
+                    "step_index": 0,
+                    "code": code,
+                    "reason": "missing_revised_from_code_in_final_chain",
+                    "count": 1,
+                    "source": "final_chain_coverage",
+                }
+            )
+    return unresolved_rows
+
+
 def _load_weights(
     *,
     period: str,
@@ -266,6 +396,12 @@ def _apply_weights_wide(
     return merged, missing_value, missing_quantity
 
 
+def _sum_or_zero(frame: pd.DataFrame, column: str) -> float:
+    if column not in frame.columns:
+        return 0.0
+    return float(frame[column].sum())
+
+
 def apply_chained_weights_wide_for_range(
     *,
     start_year: int,
@@ -285,12 +421,16 @@ def apply_chained_weights_wide_for_range(
     row_sum_tol: float = 1e-6,
     assume_identity_for_missing: bool = True,
     fail_on_missing: bool = True,
+    revised_codes_by_step: Mapping[tuple[str, str], Iterable[str]] | None = None,
+    strict_revised_link_validation: bool = False,
+    write_unresolved_details: bool = False,
     skip_existing: bool = True,
     max_workers: int | None = None,
     show_progress: bool = False,
     progress_desc: str | None = None,
 ) -> pd.DataFrame:
     measures = [str(measure).strip().upper() for measure in measures]
+    revised_index = _normalize_revised_index(revised_codes_by_step)
     if chained_outputs is None:
         code_universe = build_code_universe_from_annual(
             annual_base_dir=annual_base_dir,
@@ -310,11 +450,37 @@ def apply_chained_weights_wide_for_range(
             pos_tol=pos_tol,
             row_sum_tol=row_sum_tol,
             fail_on_missing=fail_on_missing,
+            revised_codes_by_step=revised_index,
+            strict_revised_link_validation=strict_revised_link_validation,
+            write_unresolved_details=write_unresolved_details,
+        )
+
+    unresolved_path = output_base_dir / f"CN{target_year}" / "diagnostics" / "unresolved_details.csv"
+    unresolved_rows = _validate_chained_outputs_for_apply(
+        chained_outputs=chained_outputs,
+        target_year=target_year,
+        measures=measures,
+        strict_revised_link_validation=strict_revised_link_validation,
+        revised_codes_by_step=revised_index,
+    )
+    if unresolved_rows and write_unresolved_details:
+        _write_unresolved_details(unresolved_rows, path=unresolved_path)
+    if unresolved_rows and fail_on_missing:
+        sample = [row["code"] for row in unresolved_rows if row.get("code")][:10]
+        raise ValueError(
+            "Unresolved revised links detected in chained outputs for apply; "
+            f"sample codes: {sample}"
         )
 
     weights_by_year: dict[str, dict[str, pd.DataFrame]] = {}
     for output in chained_outputs:
-        weights_by_year.setdefault(output.origin_year, {})[output.measure] = output.weights
+        finalized = finalize_weights_table(
+            output.weights[["from_code", "to_code", "weight"]],
+            neg_tol=neg_tol,
+            pos_tol=pos_tol,
+            row_sum_tol=row_sum_tol,
+        )
+        weights_by_year.setdefault(output.origin_year, {})[output.measure] = finalized
 
     existing_summary = pd.DataFrame()
     if output_summary_path is None:
@@ -400,14 +566,10 @@ def apply_chained_weights_wide_for_range(
             "n_missing_quantity": missing_quantity,
             "sum_value_eur_input": float(data["VALUE_EUR"].sum()),
             "sum_quantity_kg_input": float(data["QUANTITY_KG"].sum()),
-            "sum_value_eur_w_value": float(output.get("VALUE_EUR_w_value", 0.0).sum()),
-            "sum_quantity_kg_w_value": float(output.get("QUANTITY_KG_w_value", 0.0).sum()),
-            "sum_value_eur_w_quantity": float(
-                output.get("VALUE_EUR_w_quantity", 0.0).sum()
-            ),
-            "sum_quantity_kg_w_quantity": float(
-                output.get("QUANTITY_KG_w_quantity", 0.0).sum()
-            ),
+            "sum_value_eur_w_value": _sum_or_zero(output, "VALUE_EUR_w_value"),
+            "sum_quantity_kg_w_value": _sum_or_zero(output, "QUANTITY_KG_w_value"),
+            "sum_value_eur_w_quantity": _sum_or_zero(output, "VALUE_EUR_w_quantity"),
+            "sum_quantity_kg_w_quantity": _sum_or_zero(output, "QUANTITY_KG_w_quantity"),
         }
 
     show_progress = bool(show_progress and years_to_process)
@@ -473,12 +635,16 @@ def apply_chained_weights_wide_for_month_range(
     row_sum_tol: float = 1e-6,
     assume_identity_for_missing: bool = True,
     fail_on_missing: bool = True,
+    revised_codes_by_step: Mapping[tuple[str, str], Iterable[str]] | None = None,
+    strict_revised_link_validation: bool = False,
+    write_unresolved_details: bool = False,
     skip_existing: bool = True,
     max_workers: int | None = None,
     show_progress: bool = False,
     progress_desc: str | None = None,
 ) -> pd.DataFrame:
     measures = [str(measure).strip().upper() for measure in measures]
+    revised_index = _normalize_revised_index(revised_codes_by_step)
     if chained_outputs is None:
         code_universe = build_code_universe_from_annual(
             annual_base_dir=annual_base_dir,
@@ -498,11 +664,37 @@ def apply_chained_weights_wide_for_month_range(
             pos_tol=pos_tol,
             row_sum_tol=row_sum_tol,
             fail_on_missing=fail_on_missing,
+            revised_codes_by_step=revised_index,
+            strict_revised_link_validation=strict_revised_link_validation,
+            write_unresolved_details=write_unresolved_details,
+        )
+
+    unresolved_path = output_base_dir / f"CN{target_year}" / "diagnostics" / "unresolved_details.csv"
+    unresolved_rows = _validate_chained_outputs_for_apply(
+        chained_outputs=chained_outputs,
+        target_year=target_year,
+        measures=measures,
+        strict_revised_link_validation=strict_revised_link_validation,
+        revised_codes_by_step=revised_index,
+    )
+    if unresolved_rows and write_unresolved_details:
+        _write_unresolved_details(unresolved_rows, path=unresolved_path)
+    if unresolved_rows and fail_on_missing:
+        sample = [row["code"] for row in unresolved_rows if row.get("code")][:10]
+        raise ValueError(
+            "Unresolved revised links detected in chained outputs for apply; "
+            f"sample codes: {sample}"
         )
 
     weights_by_year: dict[str, dict[str, pd.DataFrame]] = {}
     for output in chained_outputs:
-        weights_by_year.setdefault(output.origin_year, {})[output.measure] = output.weights
+        finalized = finalize_weights_table(
+            output.weights[["from_code", "to_code", "weight"]],
+            neg_tol=neg_tol,
+            pos_tol=pos_tol,
+            row_sum_tol=row_sum_tol,
+        )
+        weights_by_year.setdefault(output.origin_year, {})[output.measure] = finalized
 
     existing_summary = pd.DataFrame()
     if output_summary_path is None:
@@ -596,14 +788,10 @@ def apply_chained_weights_wide_for_month_range(
             "n_missing_quantity": missing_quantity,
             "sum_value_eur_input": float(data["VALUE_EUR"].sum()),
             "sum_quantity_kg_input": float(data["QUANTITY_KG"].sum()),
-            "sum_value_eur_w_value": float(output.get("VALUE_EUR_w_value", 0.0).sum()),
-            "sum_quantity_kg_w_value": float(output.get("QUANTITY_KG_w_value", 0.0).sum()),
-            "sum_value_eur_w_quantity": float(
-                output.get("VALUE_EUR_w_quantity", 0.0).sum()
-            ),
-            "sum_quantity_kg_w_quantity": float(
-                output.get("QUANTITY_KG_w_quantity", 0.0).sum()
-            ),
+            "sum_value_eur_w_value": _sum_or_zero(output, "VALUE_EUR_w_value"),
+            "sum_quantity_kg_w_value": _sum_or_zero(output, "QUANTITY_KG_w_value"),
+            "sum_value_eur_w_quantity": _sum_or_zero(output, "VALUE_EUR_w_quantity"),
+            "sum_quantity_kg_w_quantity": _sum_or_zero(output, "QUANTITY_KG_w_quantity"),
         }
 
     show_progress = bool(show_progress and periods_to_process)
@@ -741,12 +929,11 @@ def apply_weights_to_annual_period(
             direction=direction,
             measure=value_weight_measure,
             weights_dir=weights_dir,
-            validate=not finalize_weights,
+            validate=False,
         )
-        if finalize_weights:
-            weights = finalize_weights_table(
-                weights, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
-            )
+        weights = finalize_weights_table(
+            weights, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
+        )
         missing_codes = data_codes - set(weights["from_code"])
         if missing_codes and assume_identity_for_missing:
             identity = pd.DataFrame(
@@ -774,22 +961,21 @@ def apply_weights_to_annual_period(
             direction=direction,
             measure=value_weight_measure,
             weights_dir=weights_dir,
-            validate=not finalize_weights,
+            validate=False,
         )
         weights_quantity = _load_weights(
             period=period,
             direction=direction,
             measure=quantity_weight_measure,
             weights_dir=weights_dir,
-            validate=not finalize_weights,
+            validate=False,
         )
-        if finalize_weights:
-            weights_value = finalize_weights_table(
-                weights_value, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
-            )
-            weights_quantity = finalize_weights_table(
-                weights_quantity, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
-            )
+        weights_value = finalize_weights_table(
+            weights_value, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
+        )
+        weights_quantity = finalize_weights_table(
+            weights_quantity, neg_tol=neg_tol, pos_tol=pos_tol, row_sum_tol=row_sum_tol
+        )
         missing_value = data_codes - set(weights_value["from_code"])
         missing_quantity = data_codes - set(weights_quantity["from_code"])
         if assume_identity_for_missing:

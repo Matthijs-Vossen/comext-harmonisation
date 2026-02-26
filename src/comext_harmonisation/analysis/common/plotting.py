@@ -240,6 +240,7 @@ def plot_chain_length_delta_panels(
     use_latex: bool,
     latex_preamble: str,
     spearman_by_direction: dict[str, float] | None = None,
+    metrics: Sequence[str] | None = None,
 ) -> None:
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
@@ -250,11 +251,22 @@ def plot_chain_length_delta_panels(
         rcParams["font.family"] = "serif"
         rcParams["text.latex.preamble"] = latex_preamble
 
-    metric_rows = [
-        ("mae_weighted", "wMAE"),
-        ("mae_weighted_step", "$\\mathrm{wMAE}_\\ell$"),
-        ("diffuse_exposure", "$D_\\ell$"),
-    ]
+    metric_map = {
+        "mae_weighted": ("mae_weighted", "wMAE"),
+        "mae_weighted_step": ("mae_weighted_step", "$\\mathrm{wMAE}_\\ell$"),
+        "diffuse_exposure": ("diffuse_exposure", "$\\mathrm{w}D_\\ell$"),
+    }
+    if metrics is None:
+        metrics = ["mae_weighted", "mae_weighted_step", "diffuse_exposure"]
+    selected = [name.lower() for name in metrics]
+    invalid = [name for name in selected if name not in metric_map]
+    if invalid:
+        raise ValueError(
+            f"Unknown chain-length delta metric(s): {invalid}. Allowed: {sorted(metric_map)}"
+        )
+    metric_rows = [metric_map[name] for name in selected]
+    if not metric_rows:
+        raise ValueError("No metrics selected for chain-length delta plot.")
     directions = ["backward", "forward"]
     fig, axes = plt.subplots(
         nrows=len(metric_rows),
@@ -340,7 +352,7 @@ def plot_chain_length_delta_panels(
                     if np.isfinite(rho_val):
                         header = (
                             f"{header}\n"
-                            + r"$\rho_S(\mathrm{wMAE}_\ell, D_\ell)$"
+                            + r"$\rho_S(\mathrm{wMAE}_\ell, \mathrm{w}D_\ell)$"
                             + f" = {rho_val:.2f}"
                         )
                 ax.set_title(header)

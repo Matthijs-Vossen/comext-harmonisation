@@ -41,6 +41,7 @@ def _build_groups():
     return build_concordance_groups(edges)
 
 
+# LT_REF: Sec3 Eq1 (constrained least squares inputs)
 def test_build_group_matrices_union_pairs_and_values():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -86,6 +87,7 @@ def test_build_group_matrices_union_pairs_and_values():
     assert np.isclose(dense_b.loc[("NL", "FR"), "00000012"], 0.0)
 
 
+# LT_REF: Sec3 Eq1 (constrained least squares inputs)
 def test_build_group_matrices_multiple_groups():
     edges = pd.DataFrame(
         [
@@ -121,6 +123,7 @@ def test_build_group_matrices_multiple_groups():
     assert set(matrices.keys()) == {"20002001_g000001"}
 
 
+# LT_REF: Sec3 Eq1 (constrained least squares inputs)
 def test_build_group_matrices_skips_groups_with_skip_reason():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -144,6 +147,7 @@ def test_build_group_matrices_skips_groups_with_skip_reason():
     assert matrices == {}
 
 
+# LT_REF: Sec3 Eq1 (constrained least squares inputs)
 def test_build_group_matrices_empty_shares_returns_empty():
     groups = _build_groups()
     data = pd.DataFrame(columns=TRADE_COLS)
@@ -158,6 +162,7 @@ def test_build_group_matrices_empty_shares_returns_empty():
     assert matrices == {}
 
 
+# LT_REF: Sec3 Eq1 (constrained least squares inputs)
 def test_build_group_matrices_ordering_is_stable():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -186,6 +191,7 @@ def test_build_group_matrices_ordering_is_stable():
     assert group.codes_b == ["00000011", "00000012"]
 
 
+# LT_REF: Sec3 Eq1 (constrained least squares inputs)
 def test_build_group_matrices_includes_zero_columns_for_missing_codes():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -211,6 +217,7 @@ def test_build_group_matrices_includes_zero_columns_for_missing_codes():
     assert np.isclose(group.dense_b["00000012"].sum(), 0.0)
 
 
+# LT_REF: Sec3 Eq1 (constrained least squares inputs)
 def test_build_group_matrices_sparse_matches_dense():
     groups = _build_groups()
     data_a = pd.DataFrame(

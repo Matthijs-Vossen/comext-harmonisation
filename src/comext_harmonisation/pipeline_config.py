@@ -69,6 +69,8 @@ class ChainingConfig:
     pos_tol: float
     row_sum_tol: float
     fail_on_missing: bool
+    strict_revised_link_validation: bool
+    write_unresolved_details: bool
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,8 @@ class ApplyConfig:
     skip_existing: bool
     assume_identity_for_missing: bool
     fail_on_missing: bool
+    strict_revised_link_validation: bool
+    write_unresolved_details: bool
 
 
 @dataclass(frozen=True)
@@ -143,6 +147,8 @@ def load_pipeline_config(path: Path) -> PipelineConfig:
             "pos_tol": 1e-10,
             "row_sum_tol": 1e-6,
             "fail_on_missing": True,
+            "strict_revised_link_validation": True,
+            "write_unresolved_details": True,
         },
         data.get("chaining"),
     )
@@ -151,6 +157,8 @@ def load_pipeline_config(path: Path) -> PipelineConfig:
             "skip_existing": True,
             "assume_identity_for_missing": True,
             "fail_on_missing": True,
+            "strict_revised_link_validation": True,
+            "write_unresolved_details": True,
         },
         data.get("apply"),
     )
@@ -199,11 +207,15 @@ def load_pipeline_config(path: Path) -> PipelineConfig:
             pos_tol=float(chaining["pos_tol"]),
             row_sum_tol=float(chaining["row_sum_tol"]),
             fail_on_missing=bool(chaining["fail_on_missing"]),
+            strict_revised_link_validation=bool(chaining["strict_revised_link_validation"]),
+            write_unresolved_details=bool(chaining["write_unresolved_details"]),
         ),
         apply=ApplyConfig(
             skip_existing=bool(apply["skip_existing"]),
             assume_identity_for_missing=bool(apply["assume_identity_for_missing"]),
             fail_on_missing=bool(apply["fail_on_missing"]),
+            strict_revised_link_validation=bool(apply["strict_revised_link_validation"]),
+            write_unresolved_details=bool(apply["write_unresolved_details"]),
         ),
         parallel=ParallelConfig(
             max_workers_matrices=parallel["max_workers_matrices"],

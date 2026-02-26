@@ -28,6 +28,43 @@ def _trade_row(product, value, reporter="NL", partner="BE", trade_type="I", flow
     }
 
 
+def _assert_lt_feasibility(
+    weights: pd.DataFrame,
+    edges: pd.DataFrame,
+    *,
+    tol: float = 1e-6,
+) -> None:
+    assert not weights.empty
+
+    # LT constraints: non-negativity and row-sum-to-one per from_code.
+    assert (weights["weight"] >= -tol).all()
+    row_sums = weights.groupby("from_code")["weight"].sum()
+    assert np.allclose(row_sums.values, np.ones_like(row_sums.values), atol=tol)
+
+    # Allowed links only: no (from_code, to_code) outside concordance edges.
+    allowed = set(zip(edges["vintage_a_code"], edges["vintage_b_code"]))
+    actual = set(zip(weights["from_code"], weights["to_code"]))
+    assert actual.issubset(allowed)
+
+
+def _objective_value(
+    *,
+    matrix_a: np.ndarray,
+    matrix_b: np.ndarray,
+    weights: pd.DataFrame,
+    codes_a: list[str],
+    codes_b: list[str],
+) -> float:
+    code_a_idx = {code: i for i, code in enumerate(codes_a)}
+    code_b_idx = {code: i for i, code in enumerate(codes_b)}
+    beta = np.zeros((len(codes_a), len(codes_b)), dtype=float)
+    for row in weights.itertuples(index=False):
+        beta[code_a_idx[row.from_code], code_b_idx[row.to_code]] = float(row.weight)
+    residual = matrix_b - (matrix_a @ beta)
+    return float(np.sum(residual**2))
+
+
+# LT_REF: Sec3 Eq1 (objective + constraints)
 def test_estimate_weights_simple_split():
     edges = pd.DataFrame(
         [
@@ -70,11 +107,13 @@ def test_estimate_weights_simple_split():
     weights = weights.sort_values("to_code").reset_index(drop=True)
     assert np.isclose(weights.loc[0, "weight"], 1.0, atol=1e-6)
     assert np.isclose(weights.loc[1, "weight"], 0.0, atol=1e-6)
+    _assert_lt_feasibility(weights, edges)
 
     assert diagnostics.loc[0, "status"].lower().startswith("solved")
     assert diagnostics.loc[0, "max_row_sum_dev"] < 1e-6
 
 
+# LT_REF: Sec3 Eq1 (objective + constraints)
 def test_estimate_weights_merge_b_to_a():
     edges = pd.DataFrame(
         [
@@ -118,9 +157,14 @@ def test_estimate_weights_merge_b_to_a():
     weights = weights.sort_values("to_code").reset_index(drop=True)
     assert np.isclose(weights.loc[0, "weight"], 0.25, atol=1e-5)
     assert np.isclose(weights.loc[1, "weight"], 0.75, atol=1e-5)
+    edges_b_to_a = edges.rename(
+        columns={"vintage_b_code": "vintage_a_code", "vintage_a_code": "vintage_b_code"}
+    )
+    _assert_lt_feasibility(weights, edges_b_to_a)
     assert diagnostics.loc[0, "status"].lower().startswith("solved")
 
 
+# LT_REF: Sec3 Eq1 (objective + constraints)
 def test_estimate_weights_mixed_allowed_links():
     edges = pd.DataFrame(
         [
@@ -166,9 +210,11 @@ def test_estimate_weights_mixed_allowed_links():
     assert np.isclose(weights.loc[0, "weight"], 0.6, atol=1e-5)
     assert np.isclose(weights.loc[1, "weight"], 0.4, atol=1e-5)
     assert np.isclose(weights.loc[2, "weight"], 1.0, atol=1e-5)
+    _assert_lt_feasibility(weights, edges)
     assert diagnostics.loc[0, "status"].lower().startswith("solved")
 
 
+# LT_REF: Sec3 Eq1 (objective + constraints)
 def test_estimate_weights_complex_two_groups_no_deterministic_in_one():
     edges = pd.DataFrame(
         [
@@ -259,5 +305,93 @@ def test_estimate_weights_complex_two_groups_no_deterministic_in_one():
     for row in weights.itertuples(index=False):
         key = (row.from_code, row.to_code)
         assert np.isclose(row.weight, expected[key], atol=1e-5)
+    _assert_lt_feasibility(weights, edges)
 
     assert diagnostics["status"].str.lower().str.startswith("solved").all()
+
+
+# LT_REF: Sec3 Eq1 (objective + constraints)
+def test_estimate_weights_noisy_non_exact_case_matches_grid_optimum():
+    edges = pd.DataFrame(
+        [
+            _edge("00000001", "00000011"),
+            _edge("00000001", "00000012"),
+            _edge("00000002", "00000011"),
+            _edge("00000002", "00000012"),
+        ]
+    )
+    groups = build_concordance_groups(edges)
+
+    # Construct a deliberately non-exact system: pair totals differ across vintages.
+    data_a = pd.DataFrame(
+        [
+            _trade_row("00000001", 80.0, partner="BE"),
+            _trade_row("00000002", 20.0, partner="BE"),
+            _trade_row("00000001", 20.0, partner="FR"),
+            _trade_row("00000002", 80.0, partner="FR"),
+        ]
+    )
+    data_b = pd.DataFrame(
+        [
+            _trade_row("00000011", 70.0, partner="BE"),
+            _trade_row("00000012", 20.0, partner="BE"),
+            _trade_row("00000011", 10.0, partner="FR"),
+            _trade_row("00000012", 100.0, partner="FR"),
+        ]
+    )
+
+    shares = prepare_estimation_shares_from_frames(
+        period="20002001",
+        groups=groups,
+        direction="a_to_b",
+        data_a=data_a,
+        data_b=data_b,
+    )
+    matrices = build_group_matrices(shares, groups=groups, dense=True)
+    group = matrices["20002001_g000001"]
+
+    weights, diagnostics = estimate_weights(
+        estimation=shares,
+        matrices=matrices,
+        groups=groups,
+        direction="a_to_b",
+    )
+    weights = weights.sort_values(["from_code", "to_code"]).reset_index(drop=True)
+    _assert_lt_feasibility(weights, edges)
+    assert diagnostics.loc[0, "status"].lower().startswith("solved")
+
+    solver_obj = _objective_value(
+        matrix_a=group.matrix_a.toarray(),
+        matrix_b=group.matrix_b.toarray(),
+        weights=weights,
+        codes_a=group.codes_a,
+        codes_b=group.codes_b,
+    )
+    assert solver_obj > 0.0
+
+    # Independent coarse grid search over feasible rows:
+    # beta[00000001,00000011]=a, beta[00000002,00000011]=b,
+    # with row sums forcing complements on to_code 00000012.
+    code_a_idx = {code: i for i, code in enumerate(group.codes_a)}
+    code_b_idx = {code: i for i, code in enumerate(group.codes_b)}
+    i_a1 = code_a_idx["00000001"]
+    i_a2 = code_a_idx["00000002"]
+    j_b1 = code_b_idx["00000011"]
+    j_b2 = code_b_idx["00000012"]
+
+    x = group.matrix_a.toarray()
+    y = group.matrix_b.toarray()
+    best_grid_obj = float("inf")
+    grid = np.linspace(0.0, 1.0, 401)
+    for a in grid:
+        for b in grid:
+            beta = np.zeros((2, 2), dtype=float)
+            beta[i_a1, j_b1] = a
+            beta[i_a1, j_b2] = 1.0 - a
+            beta[i_a2, j_b1] = b
+            beta[i_a2, j_b2] = 1.0 - b
+            obj = float(np.sum((y - (x @ beta)) ** 2))
+            if obj < best_grid_obj:
+                best_grid_obj = obj
+
+    assert solver_obj <= best_grid_obj + 1e-5

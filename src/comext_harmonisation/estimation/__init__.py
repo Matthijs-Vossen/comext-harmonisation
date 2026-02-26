@@ -24,6 +24,7 @@ from .chaining import (
     chain_weights_for_year,
     build_chained_weights_for_range,
     build_code_universe_from_annual,
+    build_revised_code_index_from_concordance,
     DEFAULT_CHAINED_WEIGHTS_DIR,
     DEFAULT_CHAINED_DIAGNOSTICS_DIR,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "chain_weights_for_year",
     "build_chained_weights_for_range",
     "build_code_universe_from_annual",
+    "build_revised_code_index_from_concordance",
     "DEFAULT_CHAINED_WEIGHTS_DIR",
     "DEFAULT_CHAINED_DIAGNOSTICS_DIR",
 ]

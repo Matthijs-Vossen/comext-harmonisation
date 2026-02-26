@@ -109,6 +109,8 @@ def main() -> None:
         build_code_universe_from_annual,
         apply_chained_weights_wide_for_range,
         apply_chained_weights_wide_for_month_range,
+        read_concordance_xls,
+        build_revised_code_index_from_concordance,
     )
     from comext_harmonisation.pipeline_config import load_pipeline_config
 
@@ -158,6 +160,17 @@ def main() -> None:
     apply_output_dir = run_dir / "apply"
 
     stage_stats: dict[str, int | str] = {}
+    revised_codes_by_step = None
+    strict_revised_validation = (
+        config.chaining.strict_revised_link_validation
+        or config.apply.strict_revised_link_validation
+    )
+    if strict_revised_validation:
+        concordance_edges = read_concordance_xls(
+            str(config.paths.concordance_path),
+            sheet_name=config.paths.concordance_sheet,
+        )
+        revised_codes_by_step = build_revised_code_index_from_concordance(concordance_edges)
 
     if config.stages.estimate:
         periods = _estimate_periods(start_year, end_year, target_year)
@@ -234,6 +247,9 @@ def main() -> None:
                     pos_tol=config.chaining.pos_tol,
                     row_sum_tol=config.chaining.row_sum_tol,
                     fail_on_missing=config.chaining.fail_on_missing,
+                    revised_codes_by_step=revised_codes_by_step,
+                    strict_revised_link_validation=config.chaining.strict_revised_link_validation,
+                    write_unresolved_details=config.chaining.write_unresolved_details,
                 )
                 diag_paths.append(diag_dir / f"CN{target_year}" / "diagnostics.csv")
                 return outputs
@@ -277,6 +293,9 @@ def main() -> None:
                         pos_tol=config.chaining.pos_tol,
                         row_sum_tol=config.chaining.row_sum_tol,
                         fail_on_missing=config.chaining.fail_on_missing,
+                        revised_codes_by_step=revised_codes_by_step,
+                        strict_revised_link_validation=config.chaining.strict_revised_link_validation,
+                        write_unresolved_details=config.chaining.write_unresolved_details,
                     )
                 )
             _log_section(
@@ -324,6 +343,9 @@ def main() -> None:
             row_sum_tol=config.chaining.row_sum_tol,
             assume_identity_for_missing=config.apply.assume_identity_for_missing,
             fail_on_missing=config.apply.fail_on_missing,
+            revised_codes_by_step=revised_codes_by_step,
+            strict_revised_link_validation=config.apply.strict_revised_link_validation,
+            write_unresolved_details=config.apply.write_unresolved_details,
             skip_existing=config.apply.skip_existing,
             max_workers=config.parallel.max_workers_apply,
             show_progress=True,
@@ -379,6 +401,9 @@ def main() -> None:
             row_sum_tol=config.chaining.row_sum_tol,
             assume_identity_for_missing=config.apply.assume_identity_for_missing,
             fail_on_missing=config.apply.fail_on_missing,
+            revised_codes_by_step=revised_codes_by_step,
+            strict_revised_link_validation=config.apply.strict_revised_link_validation,
+            write_unresolved_details=config.apply.write_unresolved_details,
             skip_existing=config.apply.skip_existing,
             max_workers=config.parallel.max_workers_apply,
             show_progress=True,

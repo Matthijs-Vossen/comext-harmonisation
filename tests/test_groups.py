@@ -3,6 +3,7 @@ import pandas as pd
 from comext_harmonisation.groups import build_concordance_groups
 
 
+# LT_REF: Sec3 correspondence graph/group structure
 def test_build_concordance_groups_flags():
     df = pd.DataFrame(
         [
@@ -105,6 +106,7 @@ def test_build_concordance_groups_flags():
     assert row_edge["group_id"] == "20002001_g000002"
 
 
+# LT_REF: Sec3 correspondence graph/group structure
 def test_group_flags_pure_split_a_to_b_only():
     df = pd.DataFrame(
         [
@@ -130,6 +132,7 @@ def test_group_flags_pure_split_a_to_b_only():
     assert bool(group["b_to_a_ambiguous"]) is False
 
 
+# LT_REF: Sec3 correspondence graph/group structure
 def test_group_flags_pure_merge_b_to_a_only():
     df = pd.DataFrame(
         [
@@ -155,6 +158,7 @@ def test_group_flags_pure_merge_b_to_a_only():
     assert bool(group["b_to_a_ambiguous"]) is True
 
 
+# LT_REF: Sec3 correspondence graph/group structure
 def test_group_id_stable_under_edge_ordering():
     base = [
         {
@@ -188,6 +192,7 @@ def test_group_id_stable_under_edge_ordering():
     assert edges_a["group_id"].tolist() == edges_b["group_id"].tolist()
 
 
+# LT_REF: Sec3 correspondence graph/group structure
 def test_group_edge_counts_include_duplicates():
     df = pd.DataFrame(
         [

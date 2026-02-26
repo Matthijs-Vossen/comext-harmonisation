@@ -25,7 +25,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output",
-        default="outputs/analysis/chain_length/chain_length.png",
+        default="outputs/analysis/chain_length/chain_length_delta.png",
         help="Output plot path",
     )
     parser.add_argument("--title", default=None, help="Optional figure title")
@@ -42,37 +42,17 @@ def _parse_args() -> argparse.Namespace:
         default=r"\usepackage{newtxtext,newtxmath}",
         help="LaTeX preamble when --use-latex is set",
     )
-    parser.add_argument(
-        "--metrics",
-        default="r2_45_weighted_symmetric,exposure_weighted,diffuseness_weighted",
-        help="Comma-separated metrics to plot (e.g. r2_45_weighted_symmetric,mae_weighted,exposure_weighted)",
-    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
     _ensure_src_on_path()
-    from comext_harmonisation.analysis.common.plotting import (
-        plot_chain_length_delta_panels,
-        plot_chain_length_panels,
-    )
+    from comext_harmonisation.analysis.common.plotting import plot_chain_length_delta_panels
     summary_path = Path(args.summary)
     if not summary_path.exists():
         raise FileNotFoundError(f"Missing summary CSV: {summary_path}")
     data = pd.read_csv(summary_path)
-    metrics = [item.strip() for item in str(args.metrics).split(",") if item.strip()]
-    plot_chain_length_panels(
-        data=data,
-        output_path=Path(args.output),
-        title=args.title,
-        point_color=args.point_color,
-        point_size=args.point_size,
-        use_latex=args.use_latex,
-        latex_preamble=args.latex_preamble,
-        metrics=metrics,
-    )
-    delta_output = Path(args.output).with_name(f"{Path(args.output).stem}_delta.png")
     spearman_by_direction = {}
     for direction in ["backward", "forward"]:
         subset = data.loc[
@@ -88,7 +68,7 @@ def main() -> None:
 
     plot_chain_length_delta_panels(
         data=data,
-        output_path=delta_output,
+        output_path=Path(args.output),
         title=args.title,
         point_color=args.point_color,
         point_size=max(1.0, args.point_size - 1.0),
@@ -97,7 +77,6 @@ def main() -> None:
         spearman_by_direction=spearman_by_direction,
     )
     print("plot:", args.output)
-    print("plot:", delta_output)
 
 
 if __name__ == "__main__":

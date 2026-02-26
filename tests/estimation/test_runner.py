@@ -102,6 +102,7 @@ def _make_matrices(period: str, group_id: str) -> dict[str, GroupMatrices]:
     }
 
 
+# LT_REF: Sec3 Eq1 (estimation stage orchestration)
 def test_run_weight_estimation_for_period_writes_outputs(tmp_path, monkeypatch):
     period = "20092010"
     groups, group_id = _make_groups(period)
@@ -188,6 +189,7 @@ def test_run_weight_estimation_for_period_writes_outputs(tmp_path, monkeypatch):
     assert group_diag.loc[0, "n_codes_b"] == 2
 
 
+# LT_REF: Sec3 Eq1 (estimation stage orchestration)
 def test_run_weight_estimation_for_period_fail_fast(tmp_path, monkeypatch):
     period = "20092010"
     groups, group_id = _make_groups(period)
@@ -228,6 +230,7 @@ def test_run_weight_estimation_for_period_fail_fast(tmp_path, monkeypatch):
         )
 
 
+# LT_REF: Sec3 Eq1 (estimation stage orchestration)
 def test_run_weight_estimation_for_period_multi_writes_combined_summary(tmp_path, monkeypatch):
     period = "20092010"
     direction = "a_to_b"

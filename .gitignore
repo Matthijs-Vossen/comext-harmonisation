@@ -7,6 +7,8 @@ outputs/
 run_estimation.py
 EXPERIMENT.md
 PAPER_CONTEXT.md
+*.pdf
+docs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

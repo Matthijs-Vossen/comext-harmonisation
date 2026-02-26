@@ -8,6 +8,7 @@ from comext_harmonisation.mappings import (
 )
 
 
+# LT_REF: Sec3 known deterministic 0/1 links
 def test_get_ambiguous_edges_by_direction():
     df = pd.DataFrame(
         [
@@ -50,6 +51,7 @@ def test_get_ambiguous_edges_by_direction():
     assert set(b_edges["vintage_b_code"].unique()) == {"00000013"}
 
 
+# LT_REF: Sec3 known deterministic 0/1 links
 def test_build_deterministic_mappings_both_directions():
     df = pd.DataFrame(
         [
@@ -93,6 +95,7 @@ def test_build_deterministic_mappings_both_directions():
     assert row["weight"] == 1.0
 
 
+# LT_REF: Sec3 known deterministic 0/1 links
 def test_get_ambiguous_edges_none():
     df = pd.DataFrame(
         [
@@ -120,6 +123,7 @@ def test_get_ambiguous_edges_none():
     assert b_edges.empty
 
 
+# LT_REF: Sec3 known deterministic 0/1 links
 def test_build_deterministic_mappings_all_ambiguous():
     df = pd.DataFrame(
         [
@@ -161,6 +165,7 @@ def test_build_deterministic_mappings_all_ambiguous():
     assert b_to_a.empty
 
 
+# LT_REF: Sec3 known deterministic 0/1 links
 def test_build_deterministic_mappings_dedup_edges():
     df = pd.DataFrame(
         [
@@ -185,6 +190,7 @@ def test_build_deterministic_mappings_dedup_edges():
     assert len(mappings) == 1
 
 
+# LT_REF: Sec3 known deterministic 0/1 links
 def test_get_ambiguous_edges_multiple_periods():
     df = pd.DataFrame(
         [
@@ -227,6 +233,7 @@ def test_get_ambiguous_edges_multiple_periods():
     assert set(b_edges["period"].unique()) == {"20012002"}
 
 
+# LT_REF: Sec3 known deterministic 0/1 links
 def test_invalid_direction_raises():
     df = pd.DataFrame(
         [
@@ -246,6 +253,7 @@ def test_invalid_direction_raises():
         build_deterministic_mappings(groups, "b_to_c")
 
 
+# LT_REF: Sec3 known deterministic 0/1 links
 def test_deterministic_mappings_from_ambiguous_group():
     df = pd.DataFrame(
         [

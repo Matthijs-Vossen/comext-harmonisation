@@ -1,7 +1,12 @@
 import pandas as pd
 import pytest
 
-from comext_harmonisation.application import apply_weights_to_annual_period, finalize_weights_table
+from comext_harmonisation.application import (
+    apply_chained_weights_wide_for_range,
+    apply_weights_to_annual_period,
+    finalize_weights_table,
+)
+from comext_harmonisation.estimation.chaining import ChainedWeightsOutput
 from comext_harmonisation.weights import WEIGHT_COLUMNS
 
 
@@ -25,6 +30,7 @@ def _write_annual(tmp_path, year, rows):
     return annual_dir
 
 
+# LT_REF: Sec3 application equation x_hat = sum_k x * beta
 def test_apply_weights_annual_value_strategy(tmp_path):
     period = "20092010"
     direction = "a_to_b"
@@ -115,6 +121,7 @@ def test_apply_weights_annual_value_strategy(tmp_path):
     assert result.loc[2, "QUANTITY_KG"] == 2.0
 
 
+# LT_REF: Sec3 application equation x_hat = sum_k x * beta
 def test_apply_weights_annual_split_strategy(tmp_path):
     period = "20092010"
     direction = "a_to_b"
@@ -206,6 +213,7 @@ def test_apply_weights_annual_split_strategy(tmp_path):
     assert result.loc[1, "QUANTITY_KG"] == 4.0
 
 
+# LT_REF: Sec3 application equation x_hat = sum_k x * beta
 def test_apply_weights_annual_missing_weights_raises(tmp_path):
     period = "20092010"
     direction = "a_to_b"
@@ -256,6 +264,7 @@ def test_apply_weights_annual_missing_weights_raises(tmp_path):
         )
 
 
+# LT_REF: Sec3 application equation x_hat = sum_k x * beta
 def test_apply_weights_annual_missing_weights_identity_default(tmp_path):
     period = "20092010"
     direction = "a_to_b"
@@ -321,6 +330,7 @@ def test_apply_weights_annual_missing_weights_identity_default(tmp_path):
     assert result.loc[0, "QUANTITY_KG"] == 5.0
 
 
+# LT_REF: Sec3 application equation x_hat = sum_k x * beta
 def test_finalize_weights_table_clamps_and_renormalizes():
     weights = pd.DataFrame(
         [
@@ -341,6 +351,7 @@ def test_finalize_weights_table_clamps_and_renormalizes():
     assert ("00000023" not in finalized["to_code"].tolist())
 
 
+# LT_REF: Sec3 application equation x_hat = sum_k x * beta
 def test_finalize_weights_table_raises_on_large_negative():
     weights = pd.DataFrame(
         [
@@ -354,6 +365,7 @@ def test_finalize_weights_table_raises_on_large_negative():
         finalize_weights_table(weights, neg_tol=1e-6, pos_tol=0.0, row_sum_tol=1e-9)
 
 
+# LT_REF: Sec3 application equation x_hat = sum_k x * beta
 def test_finalize_weights_table_clamps_small_negative():
     weights = pd.DataFrame(
         [
@@ -368,3 +380,196 @@ def test_finalize_weights_table_clamps_small_negative():
     assert pytest.approx(sums.loc["00000001"], abs=1e-12) == 1.0
     assert (finalized["weight"] >= 0).all()
     assert ("00000013" not in finalized["to_code"].tolist())
+
+
+# LT_REF: Sec3 application equation x_hat = sum_k x * beta
+def test_apply_chained_wide_finalizes_before_use(tmp_path):
+    annual_dir = _write_annual(
+        tmp_path,
+        "2009",
+        [
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000001",
+                "FLOW": "1",
+                "PERIOD": 2009,
+                "VALUE_EUR": 100.0,
+                "QUANTITY_KG": 10.0,
+            },
+        ],
+    )
+
+    weights = pd.DataFrame(
+        [
+            {"from_code": "00000001", "to_code": "00000011", "weight": 0.99999999995},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 5e-11},
+        ]
+    )
+    diagnostics = pd.DataFrame(
+        [
+            {
+                "origin_year": "2009",
+                "target_year": "2010",
+                "direction": "a_to_b",
+                "measure": "VALUE_EUR",
+                "n_unresolved_revised_step_missing": 0,
+                "n_unresolved_revised_missing_mid": 0,
+                "n_unresolved_revised_total": 0,
+            }
+        ]
+    )
+    chained_outputs = [
+        ChainedWeightsOutput(
+            origin_year="2009",
+            target_year="2010",
+            direction="a_to_b",
+            measure="VALUE_EUR",
+            weights=weights,
+            diagnostics=diagnostics,
+            weights_path=tmp_path / "chain" / "weights.csv",
+            diagnostics_path=tmp_path / "chain" / "diagnostics.csv",
+        )
+    ]
+
+    apply_chained_weights_wide_for_range(
+        start_year=2009,
+        end_year=2009,
+        target_year=2010,
+        measures=["VALUE_EUR"],
+        annual_base_dir=annual_dir,
+        output_base_dir=tmp_path / "out",
+        chained_outputs=chained_outputs,
+        fail_on_missing=True,
+        strict_revised_link_validation=True,
+    )
+
+    output_path = tmp_path / "out" / "CN2010" / "annual" / "comext_2009_wide.parquet"
+    result = pd.read_parquet(output_path).sort_values("PRODUCT_NC").reset_index(drop=True)
+    assert len(result) == 1
+    assert result.loc[0, "PRODUCT_NC"] == "00000011"
+    assert result.loc[0, "VALUE_EUR_w_value"] == 100.0
+    assert result.loc[0, "QUANTITY_KG_w_value"] == 10.0
+
+
+# LT_REF: Sec3 application equation x_hat = sum_k x * beta
+def test_apply_chained_wide_external_unresolved_raises_and_writes_details(tmp_path):
+    annual_dir = _write_annual(
+        tmp_path,
+        "2009",
+        [
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000001",
+                "FLOW": "1",
+                "PERIOD": 2009,
+                "VALUE_EUR": 100.0,
+                "QUANTITY_KG": 10.0,
+            },
+        ],
+    )
+
+    weights = pd.DataFrame([{"from_code": "00000001", "to_code": "00000011", "weight": 1.0}])
+    diagnostics = pd.DataFrame(
+        [
+            {
+                "origin_year": "2009",
+                "target_year": "2010",
+                "direction": "a_to_b",
+                "measure": "VALUE_EUR",
+                "n_unresolved_revised_step_missing": 1,
+                "n_unresolved_revised_missing_mid": 0,
+                "n_unresolved_revised_total": 1,
+            }
+        ]
+    )
+    chained_outputs = [
+        ChainedWeightsOutput(
+            origin_year="2009",
+            target_year="2010",
+            direction="a_to_b",
+            measure="VALUE_EUR",
+            weights=weights,
+            diagnostics=diagnostics,
+            weights_path=tmp_path / "chain" / "weights.csv",
+            diagnostics_path=tmp_path / "chain" / "diagnostics.csv",
+        )
+    ]
+
+    with pytest.raises(ValueError, match="Unresolved revised links detected"):
+        apply_chained_weights_wide_for_range(
+            start_year=2009,
+            end_year=2009,
+            target_year=2010,
+            measures=["VALUE_EUR"],
+            annual_base_dir=annual_dir,
+            output_base_dir=tmp_path / "out",
+            chained_outputs=chained_outputs,
+            fail_on_missing=True,
+            strict_revised_link_validation=True,
+            write_unresolved_details=True,
+        )
+
+    unresolved_path = tmp_path / "out" / "CN2010" / "diagnostics" / "unresolved_details.csv"
+    details = pd.read_csv(unresolved_path)
+    assert "reason" in details.columns
+    assert (details["reason"] == "chain_diagnostics_unresolved_revised_total").any()
+
+
+# LT_REF: Sec3 application equation x_hat = sum_k x * beta
+def test_apply_weights_annual_finalizes_even_without_flag(tmp_path):
+    period = "20092010"
+    direction = "a_to_b"
+    annual_dir = _write_annual(
+        tmp_path,
+        "2009",
+        [
+            {
+                "REPORTER": "NL",
+                "PARTNER": "BE",
+                "TRADE_TYPE": "I",
+                "PRODUCT_NC": "00000002",
+                "FLOW": "1",
+                "PERIOD": 2009,
+                "VALUE_EUR": 50.0,
+                "QUANTITY_KG": 5.0,
+            },
+        ],
+    )
+    weights_dir = _write_weights(
+        tmp_path,
+        period=period,
+        direction=direction,
+        measure_tag="value_eur",
+        rows=[
+            {
+                "period": period,
+                "from_vintage_year": "2009",
+                "to_vintage_year": "2010",
+                "from_code": "00000002",
+                "to_code": "00000021",
+                "group_id": "g2",
+                "weight": 1.00000000005,
+            },
+        ],
+    )
+
+    diagnostics = apply_weights_to_annual_period(
+        period=period,
+        direction=direction,
+        strategy="weights_value",
+        annual_base_dir=annual_dir,
+        weights_dir=weights_dir,
+        output_base_dir=tmp_path / "out",
+        finalize_weights=False,
+        assume_identity_for_missing=False,
+    )
+
+    output_path = tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_value.parquet"
+    result = pd.read_parquet(output_path)
+    assert diagnostics.n_rows_output == 1
+    assert result.loc[0, "PRODUCT_NC"] == "00000021"
+    assert result.loc[0, "VALUE_EUR"] == 50.0

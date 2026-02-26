@@ -4,19 +4,23 @@ import pytest
 from comext_harmonisation.concordance import parse_concordance_df, _normalize_code, _normalize_period
 
 
+# LT_REF: Sec3 WCO correspondence table semantics
 def test_normalize_code_numeric():
     assert _normalize_code(2012011) == "02012011"
 
 
+# LT_REF: Sec3 WCO correspondence table semantics
 def test_normalize_code_string_with_leading_zeros():
     assert _normalize_code("00123456") == "00123456"
 
 
+# LT_REF: Sec3 WCO correspondence table semantics
 def test_normalize_code_non_integer_float_raises():
     with pytest.raises(ValueError):
         _normalize_code(1234.56)
 
 
+# LT_REF: Sec3 WCO correspondence table semantics
 def test_normalize_period_valid():
     period = _normalize_period("19881989")
     assert period.period == "19881989"
@@ -24,6 +28,7 @@ def test_normalize_period_valid():
     assert period.vintage_b_year == "1989"
 
 
+# LT_REF: Sec3 WCO correspondence table semantics
 def test_parse_concordance_df_dedup_and_format():
     df = pd.DataFrame(
         {

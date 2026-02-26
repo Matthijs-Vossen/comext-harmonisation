@@ -10,7 +10,7 @@ measures:
   weights_source: VALUE_EUR
   analysis_measure: VALUE_EUR
 
-metrics: ["r2_45_weighted_symmetric", "mae_weighted", "exposure_weighted", "diffuseness_weighted", "diffuse_exposure"]
+metrics: ["mae_weighted", "mae_weighted_step", "diffuse_exposure"]
 
 sample:
   exclude_reporters: []
@@ -20,10 +20,10 @@ sample:
 paths:
   annual_base_dir: data/extracted_annual_no_confidential/products_like
   weights_dir: outputs/weights/adjacent
-  output_dir: outputs/analysis/chain_length_new
+  output_dir: outputs/analysis/chain_length
 
 plot:
-  output_path: outputs/analysis/chain_length_new/chain_length.png
+  output_path: outputs/analysis/chain_length/chain_length_delta.png
   title: null
   point_color: black
   point_size: 3.0

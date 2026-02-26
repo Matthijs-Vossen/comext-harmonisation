@@ -95,6 +95,7 @@ def _build_multi_groups():
     return build_concordance_groups(edges)
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_zero_group_skipped():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -144,6 +145,7 @@ def test_prepare_estimation_shares_zero_group_skipped():
     assert result.skipped_groups.iloc[0]["skip_reason"] == "zero_total_b"
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_excludes_codes():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -199,6 +201,7 @@ def test_prepare_estimation_shares_excludes_codes():
     assert set(result.shares_b["REPORTER"].unique()) == {"NL"}
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_direction_filtering():
     groups = _build_merge_groups()
     data_a = pd.DataFrame(
@@ -255,6 +258,7 @@ def test_prepare_estimation_shares_direction_filtering():
     assert not result_b_to_a.shares_b.empty
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_excludes_aggregate_codes_toggle():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -321,6 +325,7 @@ def test_prepare_estimation_shares_excludes_aggregate_codes_toggle():
     assert set(drop_aggregates.shares_a["REPORTER"].unique()) == {"NL"}
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_flow_filtering():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -377,6 +382,7 @@ def test_prepare_estimation_shares_flow_filtering():
     assert totals["total_value_eur_a"] == 10.0
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_quantity_kg_measure():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -418,6 +424,7 @@ def test_prepare_estimation_shares_quantity_kg_measure():
     assert totals["total_quantity_kg_b"] == 7.0
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_share_sums_to_one():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -475,6 +482,7 @@ def test_prepare_estimation_shares_share_sums_to_one():
     assert all(abs(val - 1.0) < 1e-9 for val in sums_b)
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_values_match_expected():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -535,6 +543,7 @@ def test_prepare_estimation_shares_values_match_expected():
     assert abs(shares_b.loc[("NL", "FR", "00000012")] - (1.0 / 3.0)) < 1e-9
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_filters_to_ambiguous_groups():
     groups = _build_multi_groups()
     data_a = pd.DataFrame(
@@ -597,6 +606,7 @@ def test_prepare_estimation_shares_filters_to_ambiguous_groups():
     assert set(result.shares_a["group_id"].unique()) == {"20002001_g000001"}
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_invalid_period_raises():
     groups = _build_groups()
     data = pd.DataFrame(
@@ -621,6 +631,7 @@ def test_prepare_estimation_shares_invalid_period_raises():
         )
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_missing_columns_raises():
     groups = _build_groups()
     data_a = pd.DataFrame(
@@ -656,6 +667,7 @@ def test_prepare_estimation_shares_missing_columns_raises():
         )
 
 
+# LT_REF: Sec3 scaling of bilateral product shares
 def test_prepare_estimation_shares_for_period_reads_parquet(tmp_path):
     groups = _build_groups()
     data_a = pd.DataFrame(

@@ -198,6 +198,13 @@ class ChainLengthConfig:
     plot: AnalysisPlotConfig
 
 
+CHAIN_LENGTH_DELTA_METRICS = (
+    "mae_weighted",
+    "mae_weighted_step",
+    "diffuse_exposure",
+)
+
+
 def load_share_stability_config(path: Path) -> ShareStabilityConfig:
     data = yaml.safe_load(path.read_text()) or {}
 
@@ -449,11 +456,14 @@ def load_chain_length_config(path: Path) -> ChainLengthConfig:
     )
     metric_names = _normalize_list(data.get("metrics"))
     if not metric_names:
-        metric_names = [
-            "r2_45_weighted_symmetric",
-            "exposure_weighted",
-            "diffuseness_weighted",
-        ]
+        metric_names = list(CHAIN_LENGTH_DELTA_METRICS)
+    metrics = [name.lower() for name in metric_names]
+    invalid_metrics = sorted(set(metrics) - set(CHAIN_LENGTH_DELTA_METRICS))
+    if invalid_metrics:
+        raise ValueError(
+            "Invalid chain_length metrics: "
+            f"{invalid_metrics}. Allowed: {list(CHAIN_LENGTH_DELTA_METRICS)}"
+        )
 
     paths = _merge(
         {
@@ -485,7 +495,7 @@ def load_chain_length_config(path: Path) -> ChainLengthConfig:
     )
     plot = _merge(
         {
-            "output_path": "outputs/analysis/chain_length/chain_length.png",
+            "output_path": "outputs/analysis/chain_length/chain_length_delta.png",
             "title": None,
             "point_alpha": 0.5,
             "point_size": 8.0,
@@ -508,7 +518,7 @@ def load_chain_length_config(path: Path) -> ChainLengthConfig:
             weights_source=str(measures["weights_source"]).upper(),
             analysis_measure=str(measures["analysis_measure"]).upper(),
         ),
-        metrics=[name.lower() for name in metric_names],
+        metrics=metrics,
         paths=ChainLengthPathsConfig(
             concordance_path=Path(paths["concordance_path"]),
             concordance_sheet=paths["concordance_sheet"],

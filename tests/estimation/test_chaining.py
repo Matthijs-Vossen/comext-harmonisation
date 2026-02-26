@@ -48,6 +48,14 @@ def _universe(mapping):
     return {int(year): set(codes) for year, codes in mapping.items()}
 
 
+def _revised(mapping):
+    return {
+        (str(period), str(direction)): set(codes)
+        for (period, direction), codes in mapping.items()
+    }
+
+
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
 def test_chain_weights_forward(tmp_path):
     _write_weights(
         tmp_path,
@@ -101,6 +109,7 @@ def test_chain_weights_forward(tmp_path):
     assert not diagnostics.empty
 
 
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
 def test_chain_weights_missing_step_identity_preserved(tmp_path):
     _write_weights(
         tmp_path,
@@ -151,6 +160,98 @@ def test_chain_weights_missing_step_identity_preserved(tmp_path):
     pd.testing.assert_frame_equal(weights, expected)
 
 
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
+def test_chain_weights_revised_step_missing_raises(tmp_path):
+    _write_weights(
+        tmp_path,
+        period="20092010",
+        direction="a_to_b",
+        measure="VALUE_EUR",
+        rows=[
+            {"from_code": "00000001", "to_code": "00000011", "weight": 0.6},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 0.4},
+            {"from_code": "00000002", "to_code": "00000012", "weight": 1.0},
+        ],
+    )
+    _write_weights(
+        tmp_path,
+        period="20102011",
+        direction="a_to_b",
+        measure="VALUE_EUR",
+        rows=[
+            {"from_code": "00000011", "to_code": "00000021", "weight": 1.0},
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Unresolved revised step links"):
+        chain_weights_for_year(
+            origin_year="2009",
+            target_year="2011",
+            measure="VALUE_EUR",
+            code_universe=_universe(
+                {
+                    2009: ["00000001", "00000002"],
+                    2010: ["00000011", "00000012"],
+                }
+            ),
+            weights_dir=tmp_path,
+            finalize_weights=False,
+            fail_on_missing=True,
+            revised_codes_by_step=_revised(
+                {
+                    ("20102011", "a_to_b"): {"00000012"},
+                }
+            ),
+            strict_revised_link_validation=True,
+        )
+
+
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
+def test_chain_weights_revised_missing_mid_raises(tmp_path):
+    _write_weights(
+        tmp_path,
+        period="20042005",
+        direction="a_to_b",
+        measure="VALUE_EUR",
+        rows=[
+            {"from_code": "00000001", "to_code": "00000011", "weight": 0.5},
+            {"from_code": "00000001", "to_code": "00000012", "weight": 0.5},
+        ],
+    )
+    _write_weights(
+        tmp_path,
+        period="20052006",
+        direction="a_to_b",
+        measure="VALUE_EUR",
+        rows=[
+            {"from_code": "00000011", "to_code": "00000021", "weight": 1.0},
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Unresolved revised intermediate links"):
+        chain_weights_for_year(
+            origin_year="2004",
+            target_year="2006",
+            measure="VALUE_EUR",
+            code_universe=_universe(
+                {
+                    2004: ["00000001"],
+                    2005: ["00000011"],
+                }
+            ),
+            weights_dir=tmp_path,
+            finalize_weights=False,
+            fail_on_missing=True,
+            revised_codes_by_step=_revised(
+                {
+                    ("20052006", "a_to_b"): {"00000012"},
+                }
+            ),
+            strict_revised_link_validation=True,
+        )
+
+
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
 def test_chain_weights_backward(tmp_path):
     _write_weights(
         tmp_path,
@@ -201,6 +302,7 @@ def test_chain_weights_backward(tmp_path):
     pd.testing.assert_frame_equal(weights, expected)
 
 
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
 def test_chain_identity_injection(tmp_path):
     _write_weights(
         tmp_path,
@@ -251,6 +353,7 @@ def test_chain_identity_injection(tmp_path):
     pd.testing.assert_frame_equal(weights[["from_code", "to_code", "weight"]], expected)
 
 
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
 def test_chain_caching_consistency(tmp_path):
     _write_weights(
         tmp_path,
@@ -308,6 +411,7 @@ def test_chain_caching_consistency(tmp_path):
     pd.testing.assert_frame_equal(chain_2010.reset_index(drop=True), expected.reset_index(drop=True))
 
 
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
 def test_chain_finalization(tmp_path):
     _write_weights(
         tmp_path,
@@ -345,6 +449,7 @@ def test_chain_finalization(tmp_path):
     pd.testing.assert_frame_equal(weights[["from_code", "to_code", "weight"]], expected)
 
 
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
 def test_chain_multi_step_both_directions(tmp_path):
     _write_weights(
         tmp_path,
@@ -398,6 +503,7 @@ def test_chain_multi_step_both_directions(tmp_path):
     pd.testing.assert_frame_equal(weights_2013, expected)
 
 
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
 def test_chain_missing_identity_drops_forward_codes(tmp_path):
     _write_weights(
         tmp_path,
@@ -455,6 +561,7 @@ def test_chain_missing_identity_drops_forward_codes(tmp_path):
     )
 
 
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
 def test_chain_missing_identity_drops_backward_codes(tmp_path):
     _write_weights(
         tmp_path,
@@ -513,6 +620,7 @@ def test_chain_missing_identity_drops_backward_codes(tmp_path):
     )
 
 
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
 def test_chain_missing_step_identity_preserves_universe_code(tmp_path):
     _write_weights(
         tmp_path,
@@ -565,3 +673,66 @@ def test_chain_missing_step_identity_preserves_universe_code(tmp_path):
         weights.reset_index(drop=True),
         expected.reset_index(drop=True),
     )
+
+
+# LT_REF: Sec3 chaining (non-adjacent weight composition)
+def test_chain_unresolved_diagnostics_and_details_written(tmp_path):
+    _write_weights(
+        tmp_path,
+        period="20092010",
+        direction="a_to_b",
+        measure="VALUE_EUR",
+        rows=[{"from_code": "00000001", "to_code": "00000011", "weight": 1.0}],
+    )
+    _write_weights(
+        tmp_path,
+        period="20102011",
+        direction="a_to_b",
+        measure="VALUE_EUR",
+        rows=[{"from_code": "00000011", "to_code": "00000021", "weight": 1.0}],
+    )
+
+    outputs = build_chained_weights_for_range(
+        start_year=2009,
+        end_year=2011,
+        target_year=2011,
+        measures=["VALUE_EUR"],
+        code_universe=_universe(
+            {
+                2009: ["00000001"],
+                2010: ["00000011", "00000012"],
+                2011: ["00000021"],
+            }
+        ),
+        weights_dir=tmp_path,
+        output_weights_dir=tmp_path / "outw",
+        output_diagnostics_dir=tmp_path / "outd",
+        finalize_weights=False,
+        fail_on_missing=False,
+        revised_codes_by_step=_revised(
+            {
+                ("20102011", "a_to_b"): {"00000012"},
+            }
+        ),
+        strict_revised_link_validation=True,
+        write_unresolved_details=True,
+    )
+
+    diag_2010 = None
+    for output in outputs:
+        if output.origin_year == "2010":
+            diag_2010 = output.diagnostics.iloc[0]
+            break
+    assert diag_2010 is not None
+    assert "n_unresolved_revised_step_missing" in diag_2010.index
+    assert "n_unresolved_revised_missing_mid" in diag_2010.index
+    assert "n_unresolved_revised_total" in diag_2010.index
+    assert int(diag_2010["n_unresolved_revised_step_missing"]) == 1
+    assert int(diag_2010["n_unresolved_revised_total"]) == 1
+
+    unresolved_path = tmp_path / "outd" / "CN2011" / "unresolved_details.csv"
+    unresolved = pd.read_csv(unresolved_path, dtype={"code": str})
+    unresolved["code"] = unresolved["code"].str.zfill(8)
+    assert "code" in unresolved.columns
+    assert "reason" in unresolved.columns
+    assert ((unresolved["code"] == "00000012") & (unresolved["reason"] == "step_missing_revised")).any()
