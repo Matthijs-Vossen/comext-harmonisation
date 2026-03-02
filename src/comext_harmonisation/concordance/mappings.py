@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from .groups import ConcordanceGroups
-from .weights import WEIGHT_COLUMNS
+from ..weights.schema import WEIGHT_COLUMNS
 
 
 def _validate_direction(direction: str) -> str:

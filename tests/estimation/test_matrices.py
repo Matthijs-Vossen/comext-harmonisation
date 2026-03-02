@@ -3,7 +3,7 @@ import pandas as pd
 
 from comext_harmonisation.estimation.matrices import build_group_matrices
 from comext_harmonisation.estimation.shares import prepare_estimation_shares_from_frames
-from comext_harmonisation.groups import build_concordance_groups
+from comext_harmonisation.concordance.groups import build_concordance_groups
 
 
 TRADE_COLS = ["REPORTER", "PARTNER", "TRADE_TYPE", "PRODUCT_NC", "FLOW", "VALUE_EUR"]

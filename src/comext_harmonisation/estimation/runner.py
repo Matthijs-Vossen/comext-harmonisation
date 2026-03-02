@@ -9,13 +9,13 @@ from typing import Iterable, Optional
 
 import pandas as pd
 
-from ..concordance import read_concordance_xls
+from ..concordance.io import read_concordance_xls
 from .matrices import GroupMatrices, build_group_matrices
 from .shares import ANNUAL_DATA_DIR, EstimationShares, prepare_estimation_shares_for_period
 from .solver import estimate_weights
-from ..groups import ConcordanceGroups, build_concordance_groups
-from ..mappings import build_deterministic_mappings, get_ambiguous_group_summary
-from ..weights import DEFAULT_WEIGHTS_DIR, empty_weight_table
+from ..concordance.groups import ConcordanceGroups, build_concordance_groups
+from ..concordance.mappings import build_deterministic_mappings, get_ambiguous_group_summary
+from ..weights.schema import DEFAULT_WEIGHTS_DIR, empty_weight_table
 
 
 DEFAULT_CONCORDANCE_PATH = Path("data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls")

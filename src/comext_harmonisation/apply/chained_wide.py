@@ -7,11 +7,11 @@ from typing import Callable, Iterable, Mapping, Sequence
 
 import pandas as pd
 
-from .._core.codes import chain_periods, normalize_codes
-from .._core.diagnostics import append_detail_rows
-from .._core.revised_links import normalize_revised_index
-from .._core.weights_finalize import finalize_weights_table_impl
-from ..estimation.chaining import (
+from ..core.codes import chain_periods, normalize_codes
+from ..core.diagnostics import append_detail_rows
+from ..core.revised_links import normalize_revised_index
+from ..weights.finalize import finalize_weights_table_impl
+from ..chaining.engine import (
     ChainedWeightsOutput,
     DEFAULT_CHAINED_DIAGNOSTICS_DIR,
     DEFAULT_CHAINED_WEIGHTS_DIR,
@@ -19,7 +19,7 @@ from ..estimation.chaining import (
     build_code_universe_from_annual,
 )
 from ..estimation.shares import ANNUAL_DATA_DIR
-from ..weights import DEFAULT_WEIGHTS_DIR
+from ..weights.schema import DEFAULT_WEIGHTS_DIR
 
 
 MEASURE_COLUMNS = ("VALUE_EUR", "QUANTITY_KG")

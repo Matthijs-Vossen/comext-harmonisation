@@ -1,6 +1,6 @@
 import pandas as pd
 
-from comext_harmonisation.groups import build_concordance_groups
+from comext_harmonisation.concordance.groups import build_concordance_groups
 
 
 # LT_REF: Sec3 correspondence graph/group structure

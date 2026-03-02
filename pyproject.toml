@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comext-harmonisation"
+version = "0.1.0"
+description = "LT-style harmonisation of Comext CN8 trade data across code-vintage revisions"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "Comext Harmonisation Contributors" }
+]
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=1.5",
+  "pyarrow>=10",
+  "PyYAML>=6",
+  "scipy>=1.10",
+  "osqp>=0.6",
+  "tqdm>=4.66",
+  "matplotlib>=3.7",
+  "xlrd>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+]
+
+[project.scripts]
+comext-run-pipeline = "comext_harmonisation.cli.run_pipeline:main"
+comext-run-estimation = "comext_harmonisation.cli.run_estimation:main"
+comext-run-analysis = "comext_harmonisation.cli.run_analysis:main"
+comext-plot-chain-length = "comext_harmonisation.cli.plot_chain_length_from_summary:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

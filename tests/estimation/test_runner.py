@@ -8,8 +8,8 @@ from comext_harmonisation.estimation.runner import (
     run_weight_estimation_for_period_multi,
 )
 from comext_harmonisation.estimation.shares import EstimationShares
-from comext_harmonisation.groups import build_concordance_groups
-from comext_harmonisation.weights import WEIGHT_COLUMNS
+from comext_harmonisation.concordance.groups import build_concordance_groups
+from comext_harmonisation.weights.schema import WEIGHT_COLUMNS
 
 
 def _make_groups(period: str) -> tuple:

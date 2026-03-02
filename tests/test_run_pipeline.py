@@ -9,7 +9,10 @@ import types
 import pandas as pd
 import yaml
 
-import comext_harmonisation as ch
+from comext_harmonisation import apply as apply_module
+from comext_harmonisation.chaining import engine as chaining_engine
+from comext_harmonisation.concordance import io as concordance_io
+from comext_harmonisation.estimation import runner as estimation_runner
 
 
 def _load_script_module(path: Path):
@@ -129,12 +132,32 @@ def test_run_pipeline_stage_gating_estimate_only(tmp_path: Path, monkeypatch) ->
         estimation_calls.append(kwargs)
         return []
 
-    monkeypatch.setattr(ch, "run_weight_estimation_for_period_multi", _stub_estimation)
-    monkeypatch.setattr(ch, "build_chained_weights_for_range", lambda **_kwargs: (_ for _ in ()).throw(AssertionError("chain should not run")))
-    monkeypatch.setattr(ch, "apply_chained_weights_wide_for_range", lambda **_kwargs: (_ for _ in ()).throw(AssertionError("annual apply should not run")))
-    monkeypatch.setattr(ch, "apply_chained_weights_wide_for_month_range", lambda **_kwargs: (_ for _ in ()).throw(AssertionError("monthly apply should not run")))
-    monkeypatch.setattr(ch, "read_concordance_xls", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("concordance read should not run")))
-    monkeypatch.setattr(ch, "build_revised_code_index_from_concordance", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("revised index build should not run")))
+    monkeypatch.setattr(estimation_runner, "run_weight_estimation_for_period_multi", _stub_estimation)
+    monkeypatch.setattr(
+        chaining_engine,
+        "build_chained_weights_for_range",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("chain should not run")),
+    )
+    monkeypatch.setattr(
+        apply_module,
+        "apply_chained_weights_wide_for_range",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("annual apply should not run")),
+    )
+    monkeypatch.setattr(
+        apply_module,
+        "apply_chained_weights_wide_for_month_range",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("monthly apply should not run")),
+    )
+    monkeypatch.setattr(
+        concordance_io,
+        "read_concordance_xls",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("concordance read should not run")),
+    )
+    monkeypatch.setattr(
+        chaining_engine,
+        "build_revised_code_index_from_concordance",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("revised index build should not run")),
+    )
 
     module.main()
 
@@ -171,10 +194,24 @@ def test_run_pipeline_estimation_skip_existing(tmp_path: Path, monkeypatch) -> N
     monkeypatch.setattr(module, "_parse_args", lambda: argparse.Namespace(config=str(cfg_path)))
 
     estimation_calls: list[dict] = []
-    monkeypatch.setattr(ch, "run_weight_estimation_for_period_multi", lambda **kwargs: estimation_calls.append(kwargs))
-    monkeypatch.setattr(ch, "build_chained_weights_for_range", lambda **_kwargs: (_ for _ in ()).throw(AssertionError("chain should not run")))
-    monkeypatch.setattr(ch, "apply_chained_weights_wide_for_range", lambda **_kwargs: (_ for _ in ()).throw(AssertionError("annual apply should not run")))
-    monkeypatch.setattr(ch, "apply_chained_weights_wide_for_month_range", lambda **_kwargs: (_ for _ in ()).throw(AssertionError("monthly apply should not run")))
+    monkeypatch.setattr(
+        estimation_runner, "run_weight_estimation_for_period_multi", lambda **kwargs: estimation_calls.append(kwargs)
+    )
+    monkeypatch.setattr(
+        chaining_engine,
+        "build_chained_weights_for_range",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("chain should not run")),
+    )
+    monkeypatch.setattr(
+        apply_module,
+        "apply_chained_weights_wide_for_range",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("annual apply should not run")),
+    )
+    monkeypatch.setattr(
+        apply_module,
+        "apply_chained_weights_wide_for_month_range",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("monthly apply should not run")),
+    )
 
     module.main()
 
@@ -235,13 +272,21 @@ def test_run_pipeline_strict_revised_validation_wiring(tmp_path: Path, monkeypat
         calls["apply_annual"].append(kwargs)
         return pd.DataFrame()
 
-    monkeypatch.setattr(ch, "read_concordance_xls", _stub_read_concordance)
-    monkeypatch.setattr(ch, "build_revised_code_index_from_concordance", _stub_build_revised_index)
-    monkeypatch.setattr(ch, "run_weight_estimation_for_period_multi", lambda **_kwargs: (_ for _ in ()).throw(AssertionError("estimate should not run")))
-    monkeypatch.setattr(ch, "build_code_universe_from_annual", lambda **_kwargs: {})
-    monkeypatch.setattr(ch, "build_chained_weights_for_range", _stub_chain)
-    monkeypatch.setattr(ch, "apply_chained_weights_wide_for_range", _stub_apply_annual)
-    monkeypatch.setattr(ch, "apply_chained_weights_wide_for_month_range", lambda **_kwargs: (_ for _ in ()).throw(AssertionError("monthly apply should not run")))
+    monkeypatch.setattr(concordance_io, "read_concordance_xls", _stub_read_concordance)
+    monkeypatch.setattr(chaining_engine, "build_revised_code_index_from_concordance", _stub_build_revised_index)
+    monkeypatch.setattr(
+        estimation_runner,
+        "run_weight_estimation_for_period_multi",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("estimate should not run")),
+    )
+    monkeypatch.setattr(chaining_engine, "build_code_universe_from_annual", lambda **_kwargs: {})
+    monkeypatch.setattr(chaining_engine, "build_chained_weights_for_range", _stub_chain)
+    monkeypatch.setattr(apply_module, "apply_chained_weights_wide_for_range", _stub_apply_annual)
+    monkeypatch.setattr(
+        apply_module,
+        "apply_chained_weights_wide_for_month_range",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("monthly apply should not run")),
+    )
 
     module.main()
 

@@ -13,8 +13,8 @@ from scipy import sparse
 
 from .matrices import GroupMatrices
 from .shares import EstimationShares
-from ..groups import ConcordanceGroups
-from ..weights import WEIGHT_COLUMNS
+from ..concordance.groups import ConcordanceGroups
+from ..weights.schema import WEIGHT_COLUMNS
 
 @dataclass(frozen=True)
 class SolverDiagnostics:

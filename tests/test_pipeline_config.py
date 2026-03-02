@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from comext_harmonisation.pipeline_config import load_pipeline_config
+from comext_harmonisation.pipeline.config import load_pipeline_config
 
 
 def _write_yaml(path: Path, data: dict) -> None:

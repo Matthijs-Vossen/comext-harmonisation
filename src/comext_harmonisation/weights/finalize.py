@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ..weights import validate_weight_table
-from .codes import normalize_codes
+from .schema import validate_weight_table
+from ..core.codes import normalize_codes
 
 
 def finalize_weights_table_impl(
@@ -60,4 +60,3 @@ def finalize_weights_table_impl(
     df = df[df["weight"] > 0].reset_index(drop=True)
     validate_weight_table(df, schema="minimal", check_bounds=True, check_row_sums=True)
     return df
-

@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from comext_harmonisation.estimation.chaining import (
+from comext_harmonisation.chaining.engine import (
     build_chained_weights_for_range,
     chain_weights_for_year,
 )

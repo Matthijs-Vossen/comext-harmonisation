@@ -7,11 +7,11 @@ from typing import Mapping, Sequence
 
 import pandas as pd
 
-from .._core.codes import normalize_codes
-from .._core.weights_finalize import finalize_weights_table_impl
-from .._core.weights_io import read_adjacent_weights
+from ..core.codes import normalize_codes
+from ..weights.finalize import finalize_weights_table_impl
+from ..weights.io import read_adjacent_weights
 from ..estimation.shares import ANNUAL_DATA_DIR
-from ..weights import DEFAULT_WEIGHTS_DIR
+from ..weights.schema import DEFAULT_WEIGHTS_DIR
 
 
 WEIGHT_STRATEGIES: Mapping[str, Mapping[str, str]] = {

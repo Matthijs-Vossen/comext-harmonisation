@@ -7,24 +7,23 @@ from pathlib import Path
 from typing import Callable, Iterable, Mapping, Sequence
 
 import pandas as pd
-from .._core.codes import (
+from ..core.codes import (
     chain_periods,
-    normalize_code_set,
     normalize_codes,
     normalize_year,
 )
-from .._core.chaining_ops import (
-    check_weight_bounds as _check_weight_bounds_impl,
-    compose_weights as _compose_weights_impl,
-    inject_step_identity_strict as _inject_step_identity_strict_impl,
-    max_row_sum_dev as _max_row_sum_dev_impl,
+from ..core.diagnostics import append_csv, append_detail_rows
+from ..core.revised_links import normalize_revised_index
+from ..weights.finalize import finalize_weights_table_impl
+from ..weights.io import read_adjacent_weights
+from ..concordance.groups import build_concordance_groups
+from ..weights.schema import DEFAULT_WEIGHTS_DIR
+from .composition import (
+    check_weight_bounds,
+    compose_weights,
+    inject_step_identity_strict,
+    max_row_sum_dev,
 )
-from .._core.diagnostics import append_csv, append_detail_rows
-from .._core.revised_links import normalize_revised_index
-from .._core.weights_finalize import finalize_weights_table_impl
-from .._core.weights_io import read_adjacent_weights
-from ..groups import build_concordance_groups
-from ..weights import DEFAULT_WEIGHTS_DIR
 
 
 DEFAULT_CHAINED_WEIGHTS_DIR = Path("outputs/chain")
@@ -70,10 +69,6 @@ def build_code_universe_from_annual(
         codes = _normalize_codes(data["PRODUCT_NC"]).dropna().unique().tolist()
         universe[int(year)] = set(codes)
     return universe
-
-
-def _normalize_code_set(codes: Iterable[str]) -> set[str]:
-    return normalize_code_set(codes)
 
 
 def _normalize_revised_index(
@@ -221,52 +216,6 @@ def _load_weights(
     )
 
 
-def _max_row_sum_dev(weights: pd.DataFrame) -> float:
-    return _max_row_sum_dev_impl(weights)
-
-
-def _compose_weights(
-    left: pd.DataFrame,
-    right: pd.DataFrame,
-    *,
-    revised_mid_codes: set[str] | None = None,
-) -> tuple[pd.DataFrame, set[str]]:
-    return _compose_weights_impl(
-        left,
-        right,
-        revised_mid_codes=revised_mid_codes,
-    )
-
-
-def _inject_step_identity(
-    step_weights: pd.DataFrame,
-    *,
-    universe_codes: set[str],
-) -> tuple[pd.DataFrame, set[str]]:
-    return _inject_step_identity_strict(
-        step_weights=step_weights,
-        universe_codes=universe_codes,
-        revised_from_codes=None,
-    )
-
-
-def _inject_step_identity_strict(
-    *,
-    step_weights: pd.DataFrame,
-    universe_codes: set[str],
-    revised_from_codes: set[str] | None,
-) -> tuple[pd.DataFrame, set[str]]:
-    return _inject_step_identity_strict_impl(
-        step_weights=step_weights,
-        universe_codes=universe_codes,
-        revised_from_codes=revised_from_codes,
-    )
-
-
-def _check_weight_bounds(weights: pd.DataFrame, *, bound_tol: float, context: str) -> None:
-    _check_weight_bounds_impl(weights, bound_tol=bound_tol, context=context)
-
-
 def _append_csv(df: pd.DataFrame, path: Path) -> None:
     append_csv(df, path)
 
@@ -335,7 +284,7 @@ def chain_weights_for_year(
             strict_revised_link_validation=strict_revised_link_validation,
             revised_codes_by_step=revised_index,
         )
-        step_weights, unresolved_step_missing = _inject_step_identity_strict(
+        step_weights, unresolved_step_missing = inject_step_identity_strict(
             step_weights=step_weights,
             universe_codes=code_universe[step_year],
             revised_from_codes=revised_step_codes,
@@ -346,7 +295,7 @@ def chain_weights_for_year(
                 "Unresolved revised step links after identity injection "
                 f"for {period} ({direction}, {measure}): {sample}"
             )
-        _check_weight_bounds(
+        check_weight_bounds(
             step_weights,
             bound_tol=row_sum_tol,
             context=f"{period} {direction} {measure}",
@@ -368,12 +317,12 @@ def chain_weights_for_year(
                     "n_unresolved_revised_step_missing": len(unresolved_step_missing),
                     "n_unresolved_revised_missing_mid": 0,
                     "n_unresolved_revised_total": len(unresolved_step_missing),
-                    "max_row_sum_dev": _max_row_sum_dev(current),
+                    "max_row_sum_dev": max_row_sum_dev(current),
                 }
             )
             continue
 
-        chained, unresolved_missing_mid = _compose_weights(
+        chained, unresolved_missing_mid = compose_weights(
             current,
             step_weights,
             revised_mid_codes=revised_step_codes,
@@ -394,7 +343,7 @@ def chain_weights_for_year(
                     f"Missing chained weights for {len(missing_from)} codes after {period}: {sample}"
                 )
 
-        max_dev = _max_row_sum_dev(chained)
+        max_dev = max_row_sum_dev(chained)
         if max_dev > row_sum_tol and fail_on_missing:
             raise ValueError(
                 f"Row sums deviate from 1 by {max_dev} after {period} (tol {row_sum_tol})"
@@ -530,7 +479,7 @@ def _build_directional_chains(
             strict_revised_link_validation=strict_revised_link_validation,
             revised_codes_by_step=revised_codes_by_step,
         )
-        step_weights, unresolved_step_missing = _inject_step_identity_strict(
+        step_weights, unresolved_step_missing = inject_step_identity_strict(
             step_weights=step_weights,
             universe_codes=code_universe[year],
             revised_from_codes=revised_step_codes,
@@ -553,7 +502,7 @@ def _build_directional_chains(
                 f"for {period} ({direction}, {measure}): {sample}",
                 step_unresolved_rows,
             )
-        _check_weight_bounds(
+        check_weight_bounds(
             step_weights,
             bound_tol=row_sum_tol,
             context=f"{period} {direction} {measure}",
@@ -570,7 +519,7 @@ def _build_directional_chains(
                 strict_revised_link_validation=strict_revised_link_validation,
                 revised_codes_by_step=revised_codes_by_step,
             )
-            current, unresolved_missing_mid = _compose_weights(
+            current, unresolved_missing_mid = compose_weights(
                 step_weights,
                 cumulative_next,
                 revised_mid_codes=revised_mid_codes,
@@ -594,7 +543,7 @@ def _build_directional_chains(
                     mid_unresolved_rows,
                 )
         missing_from = expected_from - set(current["from_code"])
-        max_dev = _max_row_sum_dev(current)
+        max_dev = max_row_sum_dev(current)
 
         if missing_from and fail_on_missing:
             sample = sorted(list(missing_from))[:10]
@@ -724,7 +673,7 @@ def build_chained_weights_for_range(
                     "n_rows_final": len(weights),
                     "n_from_codes_final": weights["from_code"].nunique(),
                     "n_to_codes_final": weights["to_code"].nunique(),
-                    "max_row_sum_dev": _max_row_sum_dev(weights),
+                    "max_row_sum_dev": max_row_sum_dev(weights),
                     "finalize_weights": finalize_weights,
                     "neg_tol": neg_tol,
                     "pos_tol": pos_tol,

@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
 
-from comext_harmonisation.groups import build_concordance_groups
-from comext_harmonisation.mappings import (
+from comext_harmonisation.concordance.groups import build_concordance_groups
+from comext_harmonisation.concordance.mappings import (
     build_deterministic_mappings,
     get_ambiguous_edges,
 )

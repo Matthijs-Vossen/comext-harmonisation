@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse as sp
 
-from .codes import normalize_code_set
+from ..core.codes import normalize_code_set
 
 
 def max_row_sum_dev(weights: pd.DataFrame) -> float:
@@ -136,4 +136,3 @@ def check_weight_bounds(weights: pd.DataFrame, *, bound_tol: float, context: str
             "Weights outside [0, 1] tolerance in "
             f"{context}: min={min_weight}, max={max_weight}, tol={bound_tol}"
         )
-

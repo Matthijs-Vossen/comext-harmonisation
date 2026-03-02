@@ -6,7 +6,7 @@ from typing import Iterable
 
 import pandas as pd
 
-from ...mappings import get_ambiguous_group_summary
+from ...concordance.mappings import get_ambiguous_group_summary
 from .shares import normalize_codes
 from .steps import chain_steps
 

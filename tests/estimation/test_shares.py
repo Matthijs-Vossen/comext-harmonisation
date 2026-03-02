@@ -5,7 +5,7 @@ from comext_harmonisation.estimation.shares import (
     prepare_estimation_shares_for_period,
     prepare_estimation_shares_from_frames,
 )
-from comext_harmonisation.groups import build_concordance_groups
+from comext_harmonisation.concordance.groups import build_concordance_groups
 
 
 def _build_groups():

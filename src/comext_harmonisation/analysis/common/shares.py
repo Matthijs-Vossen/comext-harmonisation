@@ -8,7 +8,7 @@ from typing import Iterable, Sequence
 
 import pandas as pd
 
-from ..._core.codes import normalize_codes as _normalize_codes_core
+from ...core.codes import normalize_codes as _normalize_codes_core
 
 
 @dataclass(frozen=True)

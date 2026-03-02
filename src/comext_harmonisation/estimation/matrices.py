@@ -10,7 +10,7 @@ import pandas as pd
 from scipy import sparse
 
 from .shares import EstimationShares
-from ..groups import ConcordanceGroups
+from ..concordance.groups import ConcordanceGroups
 
 
 @dataclass(frozen=True)

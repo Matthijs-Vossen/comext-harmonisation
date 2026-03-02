@@ -18,7 +18,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    from comext_harmonisation.pipeline.runner import run_pipeline_from_config_path
+    from ..pipeline.runner import run_pipeline_from_config_path
 
     run_pipeline_from_config_path(Path(args.config))
 

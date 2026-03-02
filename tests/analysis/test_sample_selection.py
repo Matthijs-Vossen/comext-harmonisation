@@ -1,7 +1,7 @@
 import pandas as pd
 
-from comext_harmonisation.groups import build_concordance_groups
-from comext_harmonisation.mappings import get_ambiguous_group_summary
+from comext_harmonisation.concordance.groups import build_concordance_groups
+from comext_harmonisation.concordance.mappings import get_ambiguous_group_summary
 from comext_harmonisation.analysis.share_stability import runner as ss_runner
 from comext_harmonisation.analysis.stress_test import runner as st_runner
 

@@ -1,13 +1,13 @@
 import pandas as pd
 import pytest
 
-from comext_harmonisation.application import (
+from comext_harmonisation.apply import (
     apply_chained_weights_wide_for_range,
     apply_weights_to_annual_period,
     finalize_weights_table,
 )
-from comext_harmonisation.estimation.chaining import ChainedWeightsOutput
-from comext_harmonisation.weights import WEIGHT_COLUMNS
+from comext_harmonisation.chaining.engine import ChainedWeightsOutput
+from comext_harmonisation.weights.schema import WEIGHT_COLUMNS
 
 
 def _write_weights(tmp_path, *, period, direction, measure_tag, rows):

@@ -19,7 +19,7 @@ from .runner import (
     DEFAULT_DIAGNOSTICS_DIR,
     DEFAULT_SUMMARY_PATH,
 )
-from .chaining import (
+from ..chaining.engine import (
     ChainedWeightsOutput,
     chain_weights_for_year,
     build_chained_weights_for_range,

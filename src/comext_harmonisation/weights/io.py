@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..weights import validate_weight_table
-from .codes import normalize_codes
+from .schema import validate_weight_table
+from ..core.codes import normalize_codes
 
 
 def read_adjacent_weights(
@@ -58,4 +58,3 @@ def read_adjacent_weights(
             check_row_sums=True,
         )
     return weights
-

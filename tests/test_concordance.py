@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from comext_harmonisation.concordance import parse_concordance_df, _normalize_code, _normalize_period
+from comext_harmonisation.concordance.io import parse_concordance_df, _normalize_code, _normalize_period
 
 
 # LT_REF: Sec3 WCO correspondence table semantics

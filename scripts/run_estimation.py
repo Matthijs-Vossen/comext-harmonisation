@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Compatibility wrapper for analysis CLI."""
+"""Compatibility wrapper for estimation CLI."""
 
 from __future__ import annotations
 
 def main() -> None:
-    from comext_harmonisation.cli.run_analysis import main as cli_main
+    from comext_harmonisation.cli.run_estimation import main as cli_main
 
     cli_main()
 

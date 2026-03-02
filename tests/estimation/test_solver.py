@@ -4,7 +4,7 @@ import pandas as pd
 from comext_harmonisation.estimation.matrices import build_group_matrices
 from comext_harmonisation.estimation.shares import prepare_estimation_shares_from_frames
 from comext_harmonisation.estimation.solver import estimate_weights
-from comext_harmonisation.groups import build_concordance_groups
+from comext_harmonisation.concordance.groups import build_concordance_groups
 
 
 def _edge(vintage_a_code, vintage_b_code, period="20002001", vintage_a_year="2000", vintage_b_year="2001"):

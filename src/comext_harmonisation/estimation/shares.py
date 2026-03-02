@@ -8,8 +8,8 @@ from typing import Iterable, Optional, Sequence, Set, Tuple
 
 import pandas as pd
 
-from ..groups import ConcordanceGroups
-from ..mappings import get_ambiguous_group_summary
+from ..concordance.groups import ConcordanceGroups
+from ..concordance.mappings import get_ambiguous_group_summary
 
 
 ANNUAL_DATA_DIR = Path("data/extracted_annual_no_confidential/products_like")

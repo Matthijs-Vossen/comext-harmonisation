@@ -1,4 +1,4 @@
-"""Apply estimated conversion weights to trade data."""
+"""Public apply-stage entrypoints."""
 
 from __future__ import annotations
 
@@ -8,24 +8,21 @@ from typing import Iterable, Sequence
 
 import pandas as pd
 
-from ._apply.annual import (
-    WEIGHT_STRATEGIES,
-    apply_weights_to_annual_period_impl,
-)
-from ._apply.chained_wide import (
+from .annual import WEIGHT_STRATEGIES, apply_weights_to_annual_period_impl
+from .chained_wide import (
     MEASURE_COLUMNS,
     MONTHLY_DATA_DIR,
     apply_chained_weights_wide_for_month_range as _apply_chained_weights_wide_for_month_range_impl,
     apply_chained_weights_wide_for_range as _apply_chained_weights_wide_for_range_impl,
 )
-from ._core.weights_finalize import finalize_weights_table_impl
-from .estimation.chaining import (
+from ..weights.finalize import finalize_weights_table_impl
+from ..chaining.engine import (
     ChainedWeightsOutput,
     DEFAULT_CHAINED_DIAGNOSTICS_DIR,
     DEFAULT_CHAINED_WEIGHTS_DIR,
 )
-from .estimation.shares import ANNUAL_DATA_DIR
-from .weights import DEFAULT_WEIGHTS_DIR
+from ..estimation.shares import ANNUAL_DATA_DIR
+from ..weights.schema import DEFAULT_WEIGHTS_DIR
 
 
 @dataclass(frozen=True)
@@ -224,3 +221,14 @@ def apply_weights_to_annual_period(
         n_codes_weighted=int(row["n_codes_weighted"]),
         n_codes_missing=int(row["n_codes_missing"]),
     )
+
+
+__all__ = [
+    "ApplyDiagnostics",
+    "ChainedApplySummary",
+    "WEIGHT_STRATEGIES",
+    "apply_weights_to_annual_period",
+    "apply_chained_weights_wide_for_range",
+    "apply_chained_weights_wide_for_month_range",
+    "finalize_weights_table",
+]

@@ -24,7 +24,7 @@ from ..common.shares import (
 )
 from ..common.steps import compute_step_metrics, load_annual_totals
 from ..config import StressConfig
-from ...estimation.chaining import build_chained_weights_for_range, build_code_universe_from_annual
+from ...chaining.engine import build_chained_weights_for_range, build_code_universe_from_annual
 from ...estimation.runner import load_concordance_groups
 
 

@@ -15,21 +15,29 @@ LT-style harmonisation of Comext CN8 trade data across code-vintage revisions.
 ## Pipeline Entrypoints
 - CLI runner: `python3 scripts/run_pipeline.py --config configs/pipeline/example.yaml`
 - Programmatic orchestrator:
-  - `comext_harmonisation.pipeline_runner.run_pipeline_from_config_path`
-  - `comext_harmonisation.pipeline_runner.run_pipeline_with_config`
-- Config loader: `comext_harmonisation.load_pipeline_config`
+  - `comext_harmonisation.pipeline.runner.run_pipeline_from_config_path`
+  - `comext_harmonisation.pipeline.runner.run_pipeline_with_config`
+- Config loader: `comext_harmonisation.pipeline.config.load_pipeline_config`
 
 Pipeline stage order:
 1. Estimate adjacent weights
 2. Chain weights to target vintage
 3. Apply chained weights to annual/monthly data
 
-## Public API Stability
-Primary public functions preserved:
-- Estimation: `run_weight_estimation_for_period`, `run_weight_estimation_for_period_multi`
-- Chaining: `chain_weights_for_year`, `build_chained_weights_for_range`
-- Apply: `apply_weights_to_annual_period`, `apply_chained_weights_wide_for_range`, `apply_chained_weights_wide_for_month_range`
-- Config: `load_pipeline_config`
+## Namespace Layout
+- Concordance parsing/grouping/mapping: `comext_harmonisation.concordance.*`
+- Estimation: `comext_harmonisation.estimation.*`
+- Chaining: `comext_harmonisation.chaining.*`
+- Apply: `comext_harmonisation.apply.*`
+- Pipeline config/orchestration: `comext_harmonisation.pipeline.*`
+- Weight schema/finalization/I/O: `comext_harmonisation.weights.*`
+- Shared low-level primitives: `comext_harmonisation.core.*`
+
+Representative entrypoints:
+- Estimation: `comext_harmonisation.estimation.run_weight_estimation_for_period`, `run_weight_estimation_for_period_multi`
+- Chaining: `comext_harmonisation.chaining.chain_weights_for_year`, `build_chained_weights_for_range`
+- Apply: `comext_harmonisation.apply.apply_weights_to_annual_period`, `apply_chained_weights_wide_for_range`, `apply_chained_weights_wide_for_month_range`
+- Config: `comext_harmonisation.pipeline.config.load_pipeline_config`
 
 ## Method Invariants (Intentional Behavior)
 1. Estimation sample uses imports flow (`FLOW="1"`); estimated weights are then applicable to both flows.
@@ -39,10 +47,15 @@ Primary public functions preserved:
 5. Chaining universe checks use observed annual code universes.
 
 ## Internal Architecture
-See [docs/architecture.md](docs/architecture.md) for layer boundaries and extension rules.
+- Root package is minimal (`comext_harmonisation.__init__` exports namespaces only).
+- Domain namespaces are explicit: `core/`, `concordance/`, `weights/`, `estimation/`, `chaining/`, `apply/`, `pipeline/`, `analysis/`, `cli/`.
+- Breaking-path migration (old -> new): `application -> apply`, `estimation.chaining -> chaining.engine`, `pipeline_config -> pipeline.config`, `pipeline_runner -> pipeline.runner`, and concordance/weights module moves into namespace packages.
 
 ## Development
+Install in editable mode:
+- `python3 -m pip install -e .[dev]`
+
 Run tests:
 - `python3 -m pytest -q`
 
-Current suite baseline in this refactor wave: `97 passed`.
+Current suite baseline after namespace restructure: `99 passed`.

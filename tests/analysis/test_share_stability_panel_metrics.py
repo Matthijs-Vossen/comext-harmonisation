@@ -15,7 +15,7 @@ from comext_harmonisation.analysis.config import (
     ShareStabilitySampleConfig,
     ShareStabilityYearsConfig,
 )
-from comext_harmonisation.groups import build_concordance_groups
+from comext_harmonisation.concordance.groups import build_concordance_groups
 
 
 def test_share_stability_panel_local_metrics(monkeypatch, tmp_path: Path) -> None:

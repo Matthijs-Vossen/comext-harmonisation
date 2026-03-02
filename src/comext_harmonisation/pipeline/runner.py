@@ -9,7 +9,19 @@ import shutil
 from typing import Any, Callable, Iterable, Sequence
 
 import pandas as pd
-from tqdm import tqdm
+
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover - exercised via environments without tqdm
+    class _TqdmStub:
+        @staticmethod
+        def write(message: str) -> None:
+            print(message)
+
+        def __call__(self, iterable=None, **_kwargs):
+            return iterable
+
+    tqdm = _TqdmStub()
 
 
 def _estimate_periods(start_year: int, end_year: int, target_year: int) -> list[tuple[str, str]]:
@@ -234,15 +246,17 @@ def _print_config_summary(config, write_line, run_dir: Path, chain_dir: Path, ap
 
 
 def run_pipeline_with_config(config, *, config_path: Path | None = None) -> Path:
-    from comext_harmonisation import (
-        run_weight_estimation_for_period_multi,
+    from ..apply import (
+        apply_chained_weights_wide_for_month_range,
+        apply_chained_weights_wide_for_range,
+    )
+    from ..chaining.engine import (
         build_chained_weights_for_range,
         build_code_universe_from_annual,
-        apply_chained_weights_wide_for_range,
-        apply_chained_weights_wide_for_month_range,
-        read_concordance_xls,
         build_revised_code_index_from_concordance,
     )
+    from ..concordance.io import read_concordance_xls
+    from ..estimation.runner import run_weight_estimation_for_period_multi
 
     measures = config.measures
     start_year = config.years.start
@@ -574,7 +588,7 @@ def run_pipeline_with_config(config, *, config_path: Path | None = None) -> Path
 
 
 def run_pipeline_from_config_path(config_path: Path) -> Path:
-    from .pipeline_config import load_pipeline_config
+    from .config import load_pipeline_config
 
     config = load_pipeline_config(config_path)
     return run_pipeline_with_config(config, config_path=config_path)
