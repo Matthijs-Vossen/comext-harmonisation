@@ -64,6 +64,8 @@ chaining:
   pos_tol: 0.0000000001
   row_sum_tol: 0.000001
   fail_on_missing: true
+  strict_revised_link_validation: false
+  write_unresolved_details: false
 
 # Apply settings.
 # - skip_existing:                  skip apply if output exists
@@ -73,6 +75,8 @@ apply:
   skip_existing: true
   assume_identity_for_missing: true
   fail_on_missing: true
+  strict_revised_link_validation: false
+  write_unresolved_details: false
 
 # Parallelism caps per stage (null = sequential).
 # - max_workers_matrices:            group matrix builds

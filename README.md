@@ -13,7 +13,7 @@ LT-style harmonisation of Comext CN8 trade data across code-vintage revisions.
 - Schema and processed-data notes: `data/metadata/PROCESSED.txt`
 
 ## Pipeline Entrypoints
-- CLI runner: `python3 scripts/run_pipeline.py --config configs/pipeline/example.yaml`
+- CLI runner: `python -m comext_harmonisation.cli.run_pipeline --config configs/pipeline/example.yaml`
 - Programmatic orchestrator:
   - `comext_harmonisation.pipeline.runner.run_pipeline_from_config_path`
   - `comext_harmonisation.pipeline.runner.run_pipeline_with_config`

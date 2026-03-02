@@ -1,0 +1,8 @@
+exclude *.pdf
+prune docs
+prune data
+prune outputs
+prune scripts
+global-exclude __pycache__/*
+global-exclude *.py[cod]
+global-exclude .DS_Store

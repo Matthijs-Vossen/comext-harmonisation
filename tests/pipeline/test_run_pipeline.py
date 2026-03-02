@@ -1,41 +1,16 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 from pathlib import Path
-import sys
-import types
 
 import pandas as pd
 import yaml
 
 from comext_harmonisation import apply as apply_module
+from comext_harmonisation.cli import run_pipeline as run_pipeline_cli
 from comext_harmonisation.chaining import engine as chaining_engine
 from comext_harmonisation.concordance import io as concordance_io
 from comext_harmonisation.estimation import runner as estimation_runner
-
-
-def _load_script_module(path: Path):
-    if "tqdm" not in sys.modules:
-        tqdm_module = types.ModuleType("tqdm")
-
-        class _TqdmStub:
-            @staticmethod
-            def write(_message: str) -> None:
-                return None
-
-            def __call__(self, iterable=None, **_kwargs):
-                return iterable
-
-        tqdm_module.tqdm = _TqdmStub()
-        sys.modules["tqdm"] = tqdm_module
-
-    spec = importlib.util.spec_from_file_location("run_pipeline", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Failed to load module spec from {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def _write_pipeline_config(
@@ -122,8 +97,7 @@ def test_run_pipeline_stage_gating_estimate_only(tmp_path: Path, monkeypatch) ->
         apply={"strict_revised_link_validation": False},
     )
 
-    script_path = Path(__file__).resolve().parents[1] / "scripts" / "run_pipeline.py"
-    module = _load_script_module(script_path)
+    module = run_pipeline_cli
     monkeypatch.setattr(module, "_parse_args", lambda: argparse.Namespace(config=str(cfg_path)))
 
     estimation_calls: list[dict] = []
@@ -189,8 +163,7 @@ def test_run_pipeline_estimation_skip_existing(tmp_path: Path, monkeypatch) -> N
         (base / "weights_ambiguous.csv").write_text("from_code,to_code,weight\n")
         (base / "weights_deterministic.csv").write_text("from_code,to_code,weight\n")
 
-    script_path = Path(__file__).resolve().parents[1] / "scripts" / "run_pipeline.py"
-    module = _load_script_module(script_path)
+    module = run_pipeline_cli
     monkeypatch.setattr(module, "_parse_args", lambda: argparse.Namespace(config=str(cfg_path)))
 
     estimation_calls: list[dict] = []
@@ -232,8 +205,7 @@ def test_run_pipeline_strict_revised_validation_wiring(tmp_path: Path, monkeypat
         apply={"strict_revised_link_validation": True, "write_unresolved_details": True, "skip_existing": True},
     )
 
-    script_path = Path(__file__).resolve().parents[1] / "scripts" / "run_pipeline.py"
-    module = _load_script_module(script_path)
+    module = run_pipeline_cli
     monkeypatch.setattr(module, "_parse_args", lambda: argparse.Namespace(config=str(cfg_path)))
 
     calls: dict[str, list[dict]] = {

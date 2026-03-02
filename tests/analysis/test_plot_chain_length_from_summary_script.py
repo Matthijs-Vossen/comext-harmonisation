@@ -1,19 +1,9 @@
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pandas as pd
-
-
-def _load_script_module(path: Path):
-    spec = importlib.util.spec_from_file_location("plot_chain_length_from_summary", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Failed to load module spec from {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def test_plot_chain_length_from_summary_script_delta_only(
@@ -61,8 +51,8 @@ def test_plot_chain_length_from_summary_script_delta_only(
         raising=False,
     )
 
-    script_path = Path(__file__).resolve().parents[2] / "scripts" / "plot_chain_length_from_summary.py"
-    module = _load_script_module(script_path)
+    from comext_harmonisation.cli import plot_chain_length_from_summary as plot_chain_length_cli
+
     monkeypatch.setattr(
         sys,
         "argv",
@@ -79,7 +69,7 @@ def test_plot_chain_length_from_summary_script_delta_only(
         ],
     )
 
-    module.main()
+    plot_chain_length_cli.main()
     captured = capsys.readouterr().out.strip().splitlines()
 
     assert len(calls) == 1
