@@ -3,10 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from pathlib import Path
-from typing import Iterable
-
-import numpy as np
 import pandas as pd
 
 from ..common.metrics import (
@@ -18,78 +14,18 @@ from ..common.metrics import (
 )
 from ..common.plotting import plot_share_panels
 from ..common.progress import progress
+from ..common.chain_sampling import (
+    build_chain_group_map as _build_chain_group_map_common,
+)
 from ..common.shares import (
     PanelPair,
     build_values_for_groups_from_totals,
     build_year_shares_from_totals,
-    normalize_codes,
 )
-from ..common.steps import compute_step_metrics, chain_steps, load_annual_totals
+from ..common.steps import compute_step_metrics, load_annual_totals
 from ..config import StressConfig
 from ...estimation.chaining import build_chained_weights_for_range, build_code_universe_from_annual
 from ...estimation.runner import load_concordance_groups
-from ...mappings import get_ambiguous_group_summary
-
-
-class _UnionFind:
-    def __init__(self) -> None:
-        self._parent: dict[str, str] = {}
-        self._size: dict[str, int] = {}
-
-    def add(self, item: str) -> None:
-        if item not in self._parent:
-            self._parent[item] = item
-            self._size[item] = 1
-
-    def find(self, item: str) -> str:
-        self.add(item)
-        parent = self._parent[item]
-        if parent != item:
-            self._parent[item] = self.find(parent)
-        return self._parent[item]
-
-    def union(self, left: str, right: str) -> None:
-        root_left = self.find(left)
-        root_right = self.find(right)
-        if root_left == root_right:
-            return
-        if self._size[root_left] < self._size[root_right]:
-            root_left, root_right = root_right, root_left
-        self._parent[root_right] = root_left
-        self._size[root_left] += self._size[root_right]
-
-
-def _map_codes_to_target(codes: Iterable[str], weights: pd.DataFrame | None) -> set[str]:
-    codes_list = [str(code) for code in codes]
-    if not codes_list:
-        return set()
-    codes_series = normalize_codes(pd.Series(codes_list))
-    if weights is None:
-        return set(codes_series.tolist())
-
-    weights = weights[["from_code", "to_code"]].copy()
-    weights["from_code"] = normalize_codes(weights["from_code"])
-    weights["to_code"] = normalize_codes(weights["to_code"])
-
-    mapped = weights[weights["from_code"].isin(codes_series)]["to_code"].unique().tolist()
-    mapped_set = set(mapped)
-    missing = set(codes_series.tolist()) - set(weights["from_code"].unique())
-    if missing:
-        mapped_set |= missing
-    return mapped_set
-
-
-def _ambiguous_edges_for_step(
-    *,
-    groups,
-    period: str,
-    direction: str,
-) -> pd.DataFrame:
-    summary = get_ambiguous_group_summary(groups, direction)
-    summary_period = summary.loc[summary["period"] == period]
-    if summary_period.empty:
-        return groups.edges.iloc[0:0].copy()
-    return groups.edges.merge(summary_period[["period", "group_id"]], on=["period", "group_id"], how="inner")
 
 
 def _build_chain_group_map(
@@ -99,69 +35,147 @@ def _build_chain_group_map(
     target_year: int,
     weights_by_year: dict[str, pd.DataFrame],
 ) -> tuple[pd.DataFrame, set[str], set[str]]:
-    uf = _UnionFind()
-    sample_codes: set[str] = set()
-
-    for step in chain_steps(base_year, target_year):
-        period = str(step["period"])
-        direction = str(step["direction"])
-        step_edges = _ambiguous_edges_for_step(groups=groups, period=period, direction=direction)
-        if step_edges.empty:
-            continue
-
-        year_a = int(step_edges["vintage_a_year"].iloc[0])
-        year_b = int(step_edges["vintage_b_year"].iloc[0])
-        weights_a = weights_by_year.get(str(year_a)) if year_a != target_year else None
-        weights_b = weights_by_year.get(str(year_b)) if year_b != target_year else None
-
-        for group_id, edges in step_edges.groupby("group_id", sort=False):
-            codes_a = set(edges["vintage_a_code"].tolist())
-            codes_b = set(edges["vintage_b_code"].tolist())
-            mapped = set()
-            mapped |= _map_codes_to_target(codes_a, weights_a)
-            mapped |= _map_codes_to_target(codes_b, weights_b)
-            mapped = set(normalize_codes(pd.Series(list(mapped))).tolist())
-            if not mapped:
-                continue
-            sample_codes |= mapped
-            mapped_list = list(mapped)
-            for code in mapped_list:
-                uf.add(code)
-            anchor = mapped_list[0]
-            for code in mapped_list[1:]:
-                uf.union(anchor, code)
-
-    if not sample_codes:
-        return (
-            pd.DataFrame(columns=["target_code", "group_id"]),
-            set(),
-            set(),
-        )
-
-    components: dict[str, list[str]] = {}
-    for code in sample_codes:
-        root = uf.find(code)
-        components.setdefault(root, []).append(code)
-
-    component_rows: list[tuple[str, str]] = []
-    for codes in components.values():
-        codes_sorted = sorted(codes)
-        component_rows.append((codes_sorted[0], codes_sorted))
-    component_rows.sort(key=lambda item: item[0])
-
-    group_map_rows: list[dict[str, str]] = []
-    group_ids: set[str] = set()
-    for idx, (_, codes) in enumerate(component_rows, start=1):
-        group_id = f"{base_year}to{target_year}_g{idx:06d}"
-        group_ids.add(group_id)
-        for code in codes:
-            group_map_rows.append({"target_code": code, "group_id": group_id})
-
-    return pd.DataFrame(group_map_rows), group_ids, sample_codes
+    return _build_chain_group_map_common(
+        groups=groups,
+        base_year=base_year,
+        target_year=target_year,
+        weights_by_year=weights_by_year,
+        preserve_unmapped=True,
+    )
 
 
 def _merge_shares(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
     return left.merge(right, on=["group_id", "product_code"], how="inner")
+
+
+def _build_share_pair(
+    *,
+    year_x: int,
+    year_y: int,
+    target_year: int,
+    totals_by_year: dict[int, pd.DataFrame],
+    weights_by_year: dict[str, pd.DataFrame],
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+) -> pd.DataFrame:
+    shares_by_year = build_year_shares_from_totals(
+        years=[year_x, year_y],
+        target_year=target_year,
+        totals_by_year=totals_by_year,
+        weights_by_year=weights_by_year,
+        group_map=group_map,
+        group_ids=group_ids,
+    )
+    left = shares_by_year[year_x].rename(columns={"share": "share_t"})
+    right = shares_by_year[year_y].rename(columns={"share": "share_t1"})
+    return _merge_shares(left, right)
+
+
+def _build_weighted_pair_frame(
+    *,
+    merged: pd.DataFrame,
+    year_x: int,
+    year_y: int,
+    target_year: int,
+    totals_by_year: dict[int, pd.DataFrame],
+    weights_by_year: dict[str, pd.DataFrame],
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+) -> pd.DataFrame:
+    values_y = build_values_for_groups_from_totals(
+        year=year_y,
+        target_year=target_year,
+        totals_by_year=totals_by_year,
+        weights_by_year=weights_by_year,
+        group_map=group_map,
+        group_ids=group_ids,
+    ).rename(columns={"value": "value_y"})
+    weighted = merged.merge(values_y, on=["group_id", "product_code"], how="left")
+    weighted["value_y"] = weighted["value_y"].fillna(0.0)
+
+    values_x = build_values_for_groups_from_totals(
+        year=year_x,
+        target_year=target_year,
+        totals_by_year=totals_by_year,
+        weights_by_year=weights_by_year,
+        group_map=group_map,
+        group_ids=group_ids,
+    ).rename(columns={"value": "value_x"})
+    weighted = weighted.merge(values_x, on=["group_id", "product_code"], how="left")
+    weighted["value_x"] = weighted["value_x"].fillna(0.0)
+    return weighted
+
+
+def _compute_weighted_pair_metrics(
+    *,
+    merged: pd.DataFrame,
+    base_year: int,
+    compare_year: int,
+    target_year: int,
+    totals_by_year: dict[int, pd.DataFrame],
+    weights_by_year: dict[str, pd.DataFrame],
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+    metrics_set: set[str],
+) -> tuple[float, float]:
+    r2_sym = float("nan")
+    mae_w = float("nan")
+    need_weighted = {"r2_45_weighted_symmetric", "mae_weighted"} & metrics_set
+    if not need_weighted:
+        return r2_sym, mae_w
+
+    weighted = _build_weighted_pair_frame(
+        merged=merged,
+        year_x=base_year,
+        year_y=compare_year,
+        target_year=target_year,
+        totals_by_year=totals_by_year,
+        weights_by_year=weights_by_year,
+        group_map=group_map,
+        group_ids=group_ids,
+    )
+    if "r2_45_weighted_symmetric" in metrics_set:
+        r2_sym = r2_45_weighted_symmetric(
+            weighted["share_t"].to_numpy(),
+            weighted["share_t1"].to_numpy(),
+            weighted["value_x"].to_numpy(),
+            weighted["value_y"].to_numpy(),
+        )
+    if "mae_weighted" in metrics_set:
+        mae_w = mae_weighted(
+            weighted["share_t"].to_numpy(),
+            weighted["share_t1"].to_numpy(),
+            weighted["value_x"].to_numpy(),
+            weighted["value_y"].to_numpy(),
+        )
+    return r2_sym, mae_w
+
+
+def _compute_step_aggregates(
+    *,
+    step_rows_chain: list[dict[str, object]],
+    metrics_set: set[str],
+) -> tuple[float, float, float]:
+    exposure_weighted = float("nan")
+    diffuseness_weighted = float("nan")
+    diffuse_exposure_weighted = float("nan")
+    steps_df = pd.DataFrame(step_rows_chain)
+    if steps_df.empty:
+        return exposure_weighted, diffuseness_weighted, diffuse_exposure_weighted
+
+    if "exposure_weighted" in metrics_set:
+        exp_vals = steps_df["ambiguity_exposure"].to_numpy(dtype=float)
+        exp_w = steps_df["total_trade_sample"].to_numpy(dtype=float)
+        exposure_weighted = weighted_mean(exp_vals, exp_w)
+    if "diffuseness_weighted" in metrics_set:
+        diff_vals = steps_df["diffuseness"].to_numpy(dtype=float)
+        diff_w = steps_df["ambiguous_trade"].to_numpy(dtype=float)
+        diffuseness_weighted = weighted_mean(diff_vals, diff_w)
+    if "diffuse_exposure" in metrics_set:
+        d_vals = steps_df["diffuse_exposure"].to_numpy(dtype=float)
+        d_w = steps_df["total_trade_sample"].to_numpy(dtype=float)
+        diffuse_exposure_weighted = weighted_mean(d_vals, d_w)
+    return exposure_weighted, diffuseness_weighted, diffuse_exposure_weighted
 
 
 def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
@@ -270,87 +284,36 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
             feasible_map_cache=feasible_map_cache,
         )
 
-        shares_by_year = build_year_shares_from_totals(
-            years=[base_year, compare_year],
+        merged = _build_share_pair(
+            year_x=base_year,
+            year_y=compare_year,
             target_year=years.target,
             totals_by_year=totals_by_year,
             weights_by_year=weights_by_year,
             group_map=group_map,
             group_ids=group_ids,
         )
-
-        left = shares_by_year[base_year].rename(columns={"share": "share_t"})
-        right = shares_by_year[compare_year].rename(columns={"share": "share_t1"})
-        merged = _merge_shares(left, right)
         panel_pairs.append(PanelPair(x_year=base_year, y_year=compare_year, data=merged))
         r2_val = (
             r2_45(merged["share_t"].to_numpy(), merged["share_t1"].to_numpy())
             if "r2_45" in metrics_set
             else float("nan")
         )
-        r2_sym = float("nan")
-        mae_w = float("nan")
-        need_weighted = {
-            "r2_45_weighted_symmetric",
-            "mae_weighted",
-        } & metrics_set
-        if need_weighted:
-            compare_values = build_values_for_groups_from_totals(
-                year=compare_year,
-                target_year=years.target,
-                totals_by_year=totals_by_year,
-                weights_by_year=weights_by_year,
-                group_map=group_map,
-                group_ids=group_ids,
-            ).rename(columns={"value": "value_y"})
-            weights_y = merged.merge(
-                compare_values, on=["group_id", "product_code"], how="left"
-            )
-            weights_y["value_y"] = weights_y["value_y"].fillna(0.0)
-            if "r2_45_weighted_symmetric" in metrics_set or "mae_weighted" in metrics_set:
-                base_values = build_values_for_groups_from_totals(
-                    year=base_year,
-                    target_year=years.target,
-                    totals_by_year=totals_by_year,
-                    weights_by_year=weights_by_year,
-                    group_map=group_map,
-                    group_ids=group_ids,
-                ).rename(columns={"value": "value_x"})
-                weights_xy = weights_y.merge(
-                    base_values, on=["group_id", "product_code"], how="left"
-                )
-                weights_xy["value_x"] = weights_xy["value_x"].fillna(0.0)
-                if "r2_45_weighted_symmetric" in metrics_set:
-                    r2_sym = r2_45_weighted_symmetric(
-                        weights_xy["share_t"].to_numpy(),
-                        weights_xy["share_t1"].to_numpy(),
-                        weights_xy["value_x"].to_numpy(),
-                        weights_xy["value_y"].to_numpy(),
-                    )
-                if "mae_weighted" in metrics_set:
-                    mae_w = mae_weighted(
-                        weights_xy["share_t"].to_numpy(),
-                        weights_xy["share_t1"].to_numpy(),
-                        weights_xy["value_x"].to_numpy(),
-                        weights_xy["value_y"].to_numpy(),
-                    )
-        exposure_weighted = float("nan")
-        diffuseness_weighted = float("nan")
-        diffuse_exposure_weighted = float("nan")
-        steps_df = pd.DataFrame(step_rows_chain)
-        if not steps_df.empty:
-            if "exposure_weighted" in metrics_set:
-                exp_vals = steps_df["ambiguity_exposure"].to_numpy(dtype=float)
-                exp_w = steps_df["total_trade_sample"].to_numpy(dtype=float)
-                exposure_weighted = weighted_mean(exp_vals, exp_w)
-            if "diffuseness_weighted" in metrics_set:
-                diff_vals = steps_df["diffuseness"].to_numpy(dtype=float)
-                diff_w = steps_df["ambiguous_trade"].to_numpy(dtype=float)
-                diffuseness_weighted = weighted_mean(diff_vals, diff_w)
-            if "diffuse_exposure" in metrics_set:
-                d_vals = steps_df["diffuse_exposure"].to_numpy(dtype=float)
-                d_w = steps_df["total_trade_sample"].to_numpy(dtype=float)
-                diffuse_exposure_weighted = weighted_mean(d_vals, d_w)
+        r2_sym, mae_w = _compute_weighted_pair_metrics(
+            merged=merged,
+            base_year=base_year,
+            compare_year=compare_year,
+            target_year=years.target,
+            totals_by_year=totals_by_year,
+            weights_by_year=weights_by_year,
+            group_map=group_map,
+            group_ids=group_ids,
+            metrics_set=metrics_set,
+        )
+        exposure_weighted, diffuseness_weighted, diffuse_exposure_weighted = _compute_step_aggregates(
+            step_rows_chain=step_rows_chain,
+            metrics_set=metrics_set,
+        )
         lines = []
         if "r2_45" in metrics_set:
             lines.append(rf"$R^2$ = {r2_val:.3f}")

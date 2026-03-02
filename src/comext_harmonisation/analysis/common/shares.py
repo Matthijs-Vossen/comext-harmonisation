@@ -8,6 +8,8 @@ from typing import Iterable, Sequence
 
 import pandas as pd
 
+from ..._core.codes import normalize_codes as _normalize_codes_core
+
 
 @dataclass(frozen=True)
 class PanelPair:
@@ -17,10 +19,30 @@ class PanelPair:
 
 
 def normalize_codes(series: pd.Series) -> pd.Series:
-    codes = series.astype(str).str.strip().str.replace(" ", "", regex=False)
-    mask = codes.str.isdigit()
-    codes = codes.where(~mask, codes.str.zfill(8))
-    return codes
+    return _normalize_codes_core(series)
+
+
+def _normalize_years(years: Iterable[int]) -> list[int]:
+    return [int(year) for year in years]
+
+
+def _weights_for_year(
+    *,
+    year: int,
+    target_year: int,
+    weights_by_year: dict[str, pd.DataFrame],
+) -> pd.DataFrame | None:
+    return weights_by_year.get(str(year)) if year != target_year else None
+
+
+def _validate_annual_files_exist(*, years: Sequence[int], annual_base_dir: Path) -> None:
+    missing = [
+        annual_base_dir / f"comext_{year}.parquet"
+        for year in years
+        if not (annual_base_dir / f"comext_{year}.parquet").exists()
+    ]
+    if missing:
+        raise FileNotFoundError(f"Missing annual data file: {missing[0]}")
 
 
 def filter_partners(
@@ -86,6 +108,82 @@ def compute_group_shares(
     return df[["group_id", "target_code", "share"]]
 
 
+def _load_year_totals(
+    *,
+    year: int,
+    annual_base_dir: Path,
+    measure: str,
+    exclude_reporters: Sequence[str],
+    exclude_partners: Sequence[str],
+) -> pd.DataFrame:
+    data_path = annual_base_dir / f"comext_{year}.parquet"
+    if not data_path.exists():
+        raise FileNotFoundError(f"Missing annual data file: {data_path}")
+    data = pd.read_parquet(data_path, columns=["REPORTER", "PARTNER", "PRODUCT_NC", measure])
+    data = filter_partners(
+        data,
+        exclude_reporters=exclude_reporters,
+        exclude_partners=exclude_partners,
+    )
+    return (
+        data.groupby("PRODUCT_NC", as_index=False, sort=False)[measure]
+        .sum()
+        .rename(columns={measure: "value"})
+    )
+
+
+def _build_values_for_groups_from_totals_impl(
+    *,
+    totals: pd.DataFrame,
+    year: int,
+    target_year: int,
+    weights_by_year: dict[str, pd.DataFrame],
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+) -> pd.DataFrame:
+    converted = convert_totals_to_target(
+        totals=totals,
+        weights=_weights_for_year(
+            year=year,
+            target_year=target_year,
+            weights_by_year=weights_by_year,
+        ),
+        assume_identity_for_missing=True,
+    )
+    df = converted.merge(group_map, on="target_code", how="inner")
+    df = df[df["group_id"].isin(group_ids)]
+    df = df.rename(columns={"target_code": "product_code"})
+    return df[["group_id", "product_code", "value"]]
+
+
+def _build_year_share_frame_from_totals(
+    *,
+    totals: pd.DataFrame,
+    year: int,
+    target_year: int,
+    weights_by_year: dict[str, pd.DataFrame],
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+) -> pd.DataFrame:
+    converted = convert_totals_to_target(
+        totals=totals,
+        weights=_weights_for_year(
+            year=year,
+            target_year=target_year,
+            weights_by_year=weights_by_year,
+        ),
+        assume_identity_for_missing=True,
+    )
+    shares = compute_group_shares(
+        totals=converted,
+        group_map=group_map,
+        group_ids=group_ids,
+    )
+    shares = shares.rename(columns={"target_code": "product_code"})
+    shares["year"] = year
+    return shares
+
+
 def build_year_shares(
     *,
     years: Iterable[int],
@@ -98,41 +196,25 @@ def build_year_shares(
     exclude_reporters: Sequence[str],
     exclude_partners: Sequence[str],
 ) -> dict[int, pd.DataFrame]:
+    year_list = _normalize_years(years)
+    _validate_annual_files_exist(years=year_list, annual_base_dir=annual_base_dir)
     shares_by_year: dict[int, pd.DataFrame] = {}
-    for year in years:
-        data_path = annual_base_dir / f"comext_{year}.parquet"
-        if not data_path.exists():
-            for missing_year in years:
-                if (annual_base_dir / f"comext_{missing_year}.parquet").exists() is False:
-                    raise FileNotFoundError(
-                        f"Missing annual data file: {annual_base_dir / f'comext_{missing_year}.parquet'}"
-                    )
-            raise FileNotFoundError(f"Missing annual data file: {data_path}")
-        data = pd.read_parquet(data_path, columns=["REPORTER", "PARTNER", "PRODUCT_NC", measure])
-        data = filter_partners(
-            data,
+    for year in year_list:
+        totals = _load_year_totals(
+            year=year,
+            annual_base_dir=annual_base_dir,
+            measure=measure,
             exclude_reporters=exclude_reporters,
             exclude_partners=exclude_partners,
         )
-        totals = (
-            data.groupby("PRODUCT_NC", as_index=False, sort=False)[measure]
-            .sum()
-            .rename(columns={measure: "value"})
-        )
-        weights = weights_by_year.get(str(year)) if year != target_year else None
-        converted = convert_totals_to_target(
+        shares_by_year[year] = _build_year_share_frame_from_totals(
             totals=totals,
-            weights=weights,
-            assume_identity_for_missing=True,
-        )
-        shares = compute_group_shares(
-            totals=converted,
+            year=year,
+            target_year=target_year,
+            weights_by_year=weights_by_year,
             group_map=group_map,
             group_ids=group_ids,
         )
-        shares = shares.rename(columns={"target_code": "product_code"})
-        shares["year"] = year
-        shares_by_year[year] = shares
     return shares_by_year
 
 
@@ -145,25 +227,19 @@ def build_year_shares_from_totals(
     group_map: pd.DataFrame,
     group_ids: set[str],
 ) -> dict[int, pd.DataFrame]:
+    year_list = _normalize_years(years)
     shares_by_year: dict[int, pd.DataFrame] = {}
-    for year in years:
+    for year in year_list:
         if year not in totals_by_year:
             raise KeyError(f"Missing totals for year {year}")
-        totals = totals_by_year[year]
-        weights = weights_by_year.get(str(year)) if year != target_year else None
-        converted = convert_totals_to_target(
-            totals=totals,
-            weights=weights,
-            assume_identity_for_missing=True,
-        )
-        shares = compute_group_shares(
-            totals=converted,
+        shares_by_year[year] = _build_year_share_frame_from_totals(
+            totals=totals_by_year[year],
+            year=year,
+            target_year=target_year,
+            weights_by_year=weights_by_year,
             group_map=group_map,
             group_ids=group_ids,
         )
-        shares = shares.rename(columns={"target_code": "product_code"})
-        shares["year"] = year
-        shares_by_year[year] = shares
     return shares_by_year
 
 
@@ -177,29 +253,21 @@ def build_target_values_for_groups(
     exclude_reporters: Sequence[str],
     exclude_partners: Sequence[str],
 ) -> pd.DataFrame:
-    data_path = annual_base_dir / f"comext_{target_year}.parquet"
-    if not data_path.exists():
-        raise FileNotFoundError(f"Missing annual data file: {data_path}")
-    data = pd.read_parquet(data_path, columns=["REPORTER", "PARTNER", "PRODUCT_NC", measure])
-    data = filter_partners(
-        data,
+    totals = _load_year_totals(
+        year=target_year,
+        annual_base_dir=annual_base_dir,
+        measure=measure,
         exclude_reporters=exclude_reporters,
         exclude_partners=exclude_partners,
     )
-    totals = (
-        data.groupby("PRODUCT_NC", as_index=False, sort=False)[measure]
-        .sum()
-        .rename(columns={measure: "value"})
-    )
-    converted = convert_totals_to_target(
+    return _build_values_for_groups_from_totals_impl(
         totals=totals,
-        weights=None,
-        assume_identity_for_missing=True,
+        year=target_year,
+        target_year=target_year,
+        weights_by_year={},
+        group_map=group_map,
+        group_ids=group_ids,
     )
-    df = converted.merge(group_map, on="target_code", how="inner")
-    df = df[df["group_id"].isin(group_ids)]
-    df = df.rename(columns={"target_code": "product_code"})
-    return df[["group_id", "product_code", "value"]]
 
 
 def build_values_for_groups(
@@ -214,30 +282,21 @@ def build_values_for_groups(
     exclude_reporters: Sequence[str],
     exclude_partners: Sequence[str],
 ) -> pd.DataFrame:
-    data_path = annual_base_dir / f"comext_{year}.parquet"
-    if not data_path.exists():
-        raise FileNotFoundError(f"Missing annual data file: {data_path}")
-    data = pd.read_parquet(data_path, columns=["REPORTER", "PARTNER", "PRODUCT_NC", measure])
-    data = filter_partners(
-        data,
+    totals = _load_year_totals(
+        year=year,
+        annual_base_dir=annual_base_dir,
+        measure=measure,
         exclude_reporters=exclude_reporters,
         exclude_partners=exclude_partners,
     )
-    totals = (
-        data.groupby("PRODUCT_NC", as_index=False, sort=False)[measure]
-        .sum()
-        .rename(columns={measure: "value"})
-    )
-    weights = weights_by_year.get(str(year)) if year != target_year else None
-    converted = convert_totals_to_target(
+    return _build_values_for_groups_from_totals_impl(
         totals=totals,
-        weights=weights,
-        assume_identity_for_missing=True,
+        year=year,
+        target_year=target_year,
+        weights_by_year=weights_by_year,
+        group_map=group_map,
+        group_ids=group_ids,
     )
-    df = converted.merge(group_map, on="target_code", how="inner")
-    df = df[df["group_id"].isin(group_ids)]
-    df = df.rename(columns={"target_code": "product_code"})
-    return df[["group_id", "product_code", "value"]]
 
 
 def build_values_for_groups_from_totals(
@@ -251,17 +310,14 @@ def build_values_for_groups_from_totals(
 ) -> pd.DataFrame:
     if year not in totals_by_year:
         raise KeyError(f"Missing totals for year {year}")
-    totals = totals_by_year[year]
-    weights = weights_by_year.get(str(year)) if year != target_year else None
-    converted = convert_totals_to_target(
-        totals=totals,
-        weights=weights,
-        assume_identity_for_missing=True,
+    return _build_values_for_groups_from_totals_impl(
+        totals=totals_by_year[year],
+        year=year,
+        target_year=target_year,
+        weights_by_year=weights_by_year,
+        group_map=group_map,
+        group_ids=group_ids,
     )
-    df = converted.merge(group_map, on="target_code", how="inner")
-    df = df[df["group_id"].isin(group_ids)]
-    df = df.rename(columns={"target_code": "product_code"})
-    return df[["group_id", "product_code", "value"]]
 
 
 def build_panel_pairs(

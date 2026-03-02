@@ -18,6 +18,7 @@ from ..common.metrics import (
 )
 from ..common.plotting import plot_share_panels
 from ..common.progress import progress
+from ..common.chain_sampling import map_codes_to_target as _map_codes_to_target_common
 from ..common.shares import (
     build_panel_pairs,
     build_values_for_groups_from_totals,
@@ -55,17 +56,11 @@ def _unstable_codes_from_edges(edges: pd.DataFrame) -> tuple[set[str], set[str]]
 
 
 def _map_codes_to_target(codes: set[str], weights: pd.DataFrame | None) -> set[str]:
-    if not codes:
-        return set()
-    codes_series = normalize_codes(pd.Series(list(codes)))
-    if weights is None:
-        return set(codes_series.tolist())
-
-    weights = weights[["from_code", "to_code"]].copy()
-    weights["from_code"] = normalize_codes(weights["from_code"])
-    weights["to_code"] = normalize_codes(weights["to_code"])
-    mapped = weights[weights["from_code"].isin(codes_series)]["to_code"].unique().tolist()
-    return set(mapped)
+    return _map_codes_to_target_common(
+        codes,
+        weights,
+        preserve_unmapped=False,
+    )
 
 
 def _collect_unstable_target_codes(

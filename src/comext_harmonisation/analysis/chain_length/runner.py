@@ -2,82 +2,27 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import numpy as np
 import pandas as pd
 
 from ..config import ChainLengthConfig
+from ..common.chain_sampling import (
+    build_chain_group_map as _build_chain_group_map_common,
+)
 from ..common.metrics import mae_weighted, r2_45_weighted_symmetric, weighted_mean
 from ..common.plotting import plot_chain_length_delta_panels
 from ..common.progress import progress
 from ..common.shares import (
     build_values_for_groups_from_totals,
     build_year_shares_from_totals,
-    normalize_codes,
 )
 from ..common.steps import (
     compute_step_metrics,
-    chain_steps,
     load_annual_totals,
     load_step_weights,
     feasible_target_map,
 )
 from ...estimation.chaining import build_chained_weights_for_range, build_code_universe_from_annual
 from ...estimation.runner import load_concordance_groups
-from ...mappings import get_ambiguous_group_summary
-
-
-class _UnionFind:
-    def __init__(self) -> None:
-        self._parent: dict[str, str] = {}
-        self._size: dict[str, int] = {}
-
-    def add(self, item: str) -> None:
-        if item not in self._parent:
-            self._parent[item] = item
-            self._size[item] = 1
-
-    def find(self, item: str) -> str:
-        self.add(item)
-        parent = self._parent[item]
-        if parent != item:
-            parent = self.find(parent)
-            self._parent[item] = parent
-        return parent
-
-    def union(self, a: str, b: str) -> None:
-        root_a = self.find(a)
-        root_b = self.find(b)
-        if root_a == root_b:
-            return
-        if self._size[root_a] < self._size[root_b]:
-            root_a, root_b = root_b, root_a
-        self._parent[root_b] = root_a
-        self._size[root_a] += self._size[root_b]
-
-
-def _ambiguous_edges_for_step(groups, period: str, direction: str) -> pd.DataFrame:
-    summary = get_ambiguous_group_summary(groups, direction)
-    summary_period = summary.loc[summary["period"] == period]
-    if summary_period.empty:
-        return groups.edges.iloc[0:0].copy()
-    return groups.edges.merge(
-        summary_period[["period", "group_id"]], on=["period", "group_id"], how="inner"
-    )
-
-
-def _map_codes_to_target(codes: set[str], weights: pd.DataFrame | None) -> set[str]:
-    if not codes:
-        return set()
-    codes_series = normalize_codes(pd.Series(list(codes)))
-    if weights is None:
-        return set(codes_series.tolist())
-    weights = weights[["from_code", "to_code"]].copy()
-    weights["from_code"] = normalize_codes(weights["from_code"])
-    weights["to_code"] = normalize_codes(weights["to_code"])
-    mapped = weights[weights["from_code"].isin(codes_series)]["to_code"].unique().tolist()
-    return set(mapped)
 
 
 def _build_chain_group_map(
@@ -87,65 +32,70 @@ def _build_chain_group_map(
     target_year: int,
     weights_by_year: dict[str, pd.DataFrame],
 ) -> tuple[pd.DataFrame, set[str], set[str]]:
-    uf = _UnionFind()
-    sample_codes: set[str] = set()
+    return _build_chain_group_map_common(
+        groups=groups,
+        base_year=base_year,
+        target_year=target_year,
+        weights_by_year=weights_by_year,
+        preserve_unmapped=False,
+    )
 
-    for step in chain_steps(base_year, target_year):
-        period = str(step["period"])
-        direction = str(step["direction"])
-        step_edges = _ambiguous_edges_for_step(groups=groups, period=period, direction=direction)
-        if step_edges.empty:
-            continue
 
-        year_a = int(step_edges["vintage_a_year"].iloc[0])
-        year_b = int(step_edges["vintage_b_year"].iloc[0])
-        weights_a = weights_by_year.get(str(year_a)) if year_a != target_year else None
-        weights_b = weights_by_year.get(str(year_b)) if year_b != target_year else None
+def _build_share_pair(
+    *,
+    year_x: int,
+    year_y: int,
+    target_year: int,
+    totals_by_year: dict[int, pd.DataFrame],
+    weights_by_year: dict[str, pd.DataFrame],
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+) -> pd.DataFrame:
+    shares_by_year = build_year_shares_from_totals(
+        years=[year_x, year_y],
+        target_year=target_year,
+        totals_by_year=totals_by_year,
+        weights_by_year=weights_by_year,
+        group_map=group_map,
+        group_ids=group_ids,
+    )
+    left = shares_by_year[year_x].rename(columns={"share": "share_t"})
+    right = shares_by_year[year_y].rename(columns={"share": "share_t1"})
+    return left.merge(right, on=["group_id", "product_code"], how="inner")
 
-        for _, edges in step_edges.groupby("group_id", sort=False):
-            codes_a = set(edges["vintage_a_code"].tolist())
-            codes_b = set(edges["vintage_b_code"].tolist())
-            mapped = set()
-            mapped |= _map_codes_to_target(codes_a, weights_a)
-            mapped |= _map_codes_to_target(codes_b, weights_b)
-            mapped = set(normalize_codes(pd.Series(list(mapped))).tolist())
-            if not mapped:
-                continue
-            sample_codes |= mapped
-            mapped_list = list(mapped)
-            for code in mapped_list:
-                uf.add(code)
-            anchor = mapped_list[0]
-            for code in mapped_list[1:]:
-                uf.union(anchor, code)
 
-    if not sample_codes:
-        return (
-            pd.DataFrame(columns=["target_code", "group_id"]),
-            set(),
-            set(),
-        )
-
-    components: dict[str, list[str]] = {}
-    for code in sample_codes:
-        root = uf.find(code)
-        components.setdefault(root, []).append(code)
-
-    component_rows: list[tuple[str, list[str]]] = []
-    for codes in components.values():
-        codes_sorted = sorted(codes)
-        component_rows.append((codes_sorted[0], codes_sorted))
-    component_rows.sort(key=lambda item: item[0])
-
-    group_map_rows: list[dict[str, str]] = []
-    group_ids: set[str] = set()
-    for idx, (_, codes) in enumerate(component_rows, start=1):
-        group_id = f"{base_year}to{target_year}_g{idx:06d}"
-        group_ids.add(group_id)
-        for code in codes:
-            group_map_rows.append({"target_code": code, "group_id": group_id})
-
-    return pd.DataFrame(group_map_rows), group_ids, sample_codes
+def _build_weighted_pair_frame(
+    *,
+    merged: pd.DataFrame,
+    year_x: int,
+    year_y: int,
+    target_year: int,
+    totals_by_year: dict[int, pd.DataFrame],
+    weights_by_year: dict[str, pd.DataFrame],
+    group_map: pd.DataFrame,
+    group_ids: set[str],
+) -> pd.DataFrame:
+    values_x = build_values_for_groups_from_totals(
+        year=year_x,
+        target_year=target_year,
+        totals_by_year=totals_by_year,
+        weights_by_year=weights_by_year,
+        group_map=group_map,
+        group_ids=group_ids,
+    ).rename(columns={"value": "value_x"})
+    values_y = build_values_for_groups_from_totals(
+        year=year_y,
+        target_year=target_year,
+        totals_by_year=totals_by_year,
+        weights_by_year=weights_by_year,
+        group_map=group_map,
+        group_ids=group_ids,
+    ).rename(columns={"value": "value_y"})
+    weighted = merged.merge(values_x, on=["group_id", "product_code"], how="left")
+    weighted = weighted.merge(values_y, on=["group_id", "product_code"], how="left")
+    weighted["value_x"] = weighted["value_x"].fillna(0.0)
+    weighted["value_y"] = weighted["value_y"].fillna(0.0)
+    return weighted
 
 
 def _compute_chain_point(
@@ -176,41 +126,28 @@ def _compute_chain_point(
     if not group_ids:
         raise ValueError(f"No sample groups for chain {base_year}->{target_year}")
 
-    shares_by_year = build_year_shares_from_totals(
-        years=[base_year, target_year],
+    merged = _build_share_pair(
+        year_x=base_year,
+        year_y=target_year,
         target_year=target_year,
         totals_by_year=totals_by_year,
         weights_by_year=weights_by_year,
         group_map=group_map,
         group_ids=group_ids,
     )
-    left = shares_by_year[base_year].rename(columns={"share": "share_t"})
-    right = shares_by_year[target_year].rename(columns={"share": "share_t1"})
-    merged = left.merge(right, on=["group_id", "product_code"], how="inner")
     if merged.empty:
         raise ValueError(f"No merged shares for chain {base_year}->{target_year}")
 
-    values_base = build_values_for_groups_from_totals(
-        year=base_year,
+    weights_df = _build_weighted_pair_frame(
+        merged=merged,
+        year_x=base_year,
+        year_y=target_year,
         target_year=target_year,
         totals_by_year=totals_by_year,
         weights_by_year=weights_by_year,
         group_map=group_map,
         group_ids=group_ids,
-    ).rename(columns={"value": "value_x"})
-    values_target = build_values_for_groups_from_totals(
-        year=target_year,
-        target_year=target_year,
-        totals_by_year=totals_by_year,
-        weights_by_year=weights_by_year,
-        group_map=group_map,
-        group_ids=group_ids,
-    ).rename(columns={"value": "value_y"})
-
-    weights_df = merged.merge(values_base, on=["group_id", "product_code"], how="left")
-    weights_df = weights_df.merge(values_target, on=["group_id", "product_code"], how="left")
-    weights_df["value_x"] = weights_df["value_x"].fillna(0.0)
-    weights_df["value_y"] = weights_df["value_y"].fillna(0.0)
+    )
 
     r2_sym = r2_45_weighted_symmetric(
         weights_df["share_t"].to_numpy(),
@@ -228,42 +165,26 @@ def _compute_chain_point(
     mae_step = float("nan")
     if abs(base_year - target_year) >= 2:
         adjacent_year = base_year - 1 if base_year > target_year else base_year + 1
-        step_shares = build_year_shares_from_totals(
-            years=[base_year, adjacent_year],
+        step_merged = _build_share_pair(
+            year_x=base_year,
+            year_y=adjacent_year,
             target_year=target_year,
             totals_by_year=totals_by_year,
             weights_by_year=weights_by_year,
             group_map=group_map,
             group_ids=group_ids,
         )
-        step_left = step_shares[base_year].rename(columns={"share": "share_t"})
-        step_right = step_shares[adjacent_year].rename(columns={"share": "share_t1"})
-        step_merged = step_left.merge(step_right, on=["group_id", "product_code"], how="inner")
         if not step_merged.empty:
-            step_values_base = build_values_for_groups_from_totals(
-                year=base_year,
+            step_weights_df = _build_weighted_pair_frame(
+                merged=step_merged,
+                year_x=base_year,
+                year_y=adjacent_year,
                 target_year=target_year,
                 totals_by_year=totals_by_year,
                 weights_by_year=weights_by_year,
                 group_map=group_map,
                 group_ids=group_ids,
-            ).rename(columns={"value": "value_x"})
-            step_values_adj = build_values_for_groups_from_totals(
-                year=adjacent_year,
-                target_year=target_year,
-                totals_by_year=totals_by_year,
-                weights_by_year=weights_by_year,
-                group_map=group_map,
-                group_ids=group_ids,
-            ).rename(columns={"value": "value_y"})
-            step_weights_df = step_merged.merge(
-                step_values_base, on=["group_id", "product_code"], how="left"
             )
-            step_weights_df = step_weights_df.merge(
-                step_values_adj, on=["group_id", "product_code"], how="left"
-            )
-            step_weights_df["value_x"] = step_weights_df["value_x"].fillna(0.0)
-            step_weights_df["value_y"] = step_weights_df["value_y"].fillna(0.0)
             mae_step = mae_weighted(
                 step_weights_df["share_t"].to_numpy(),
                 step_weights_df["share_t1"].to_numpy(),
