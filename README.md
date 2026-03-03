@@ -1,61 +1,165 @@
 # comext-harmonisation
 
-LT-style harmonisation of Comext CN8 trade data across code-vintage revisions.
+Research pipeline for LT-style harmonisation of Comext CN8 trade data across product-code vintage revisions.
 
-## Scope
-- Method baseline: *Harmonizing the Harmonized System* (Section 3, Eq. (1), and chaining composition).
-- Unit of harmonisation: CN8 (not HS6).
-- This repository consumes preprocessed parquet inputs; upstream extraction/preprocessing is external.
+## Research Context and Objective
+This repository supports thesis work on replicating and adapting the method in *"Harmonizing the Harmonized System"* to Comext CN8 data. The goal is to produce classification-consistent trade series over time, despite CN code revisions.
 
-## Data Inputs
-- Annual input (default): `data/extracted_annual_no_confidential/products_like`
-- Monthly input (default): `data/extracted_no_confidential/products_like`
-- Schema and processed-data notes: `data/metadata/PROCESSED.txt`
+The pipeline is organized as:
+1. Estimate adjacent-vintage conversion weights.
+2. Chain adjacent weights to a chosen target vintage.
+3. Apply chained weights to annual and/or monthly trade panels.
 
-## Pipeline Entrypoints
-- CLI runner: `python -m comext_harmonisation.cli.run_pipeline --config configs/pipeline/example.yaml`
-- Programmatic orchestrator:
-  - `comext_harmonisation.pipeline.runner.run_pipeline_from_config_path`
-  - `comext_harmonisation.pipeline.runner.run_pipeline_with_config`
-- Config loader: `comext_harmonisation.pipeline.config.load_pipeline_config`
+## Method Baseline and Adaptation to CN8
 
-Pipeline stage order:
-1. Estimate adjacent weights
-2. Chain weights to target vintage
-3. Apply chained weights to annual/monthly data
+| LT baseline | This repository | Why |
+| --- | --- | --- |
+| LT Section 3 and Eq. (1) for conversion weights and chaining | Same estimation/chaining logic is implemented in Python modules and pipeline stages | Preserve method fidelity while making runs reproducible |
+| HS-focused framing in paper context | Applied to Comext CN8 codes | Thesis scope and dataset are CN8-based |
+| Method description abstracted from specific ETL system | Upstream extraction/preprocessing handled outside this repo (`comext-fetcher`) | Keep this repository focused on harmonisation logic |
 
-## Namespace Layout
-- Concordance parsing/grouping/mapping: `comext_harmonisation.concordance.*`
-- Estimation: `comext_harmonisation.estimation.*`
-- Chaining: `comext_harmonisation.chaining.*`
-- Apply: `comext_harmonisation.apply.*`
-- Pipeline config/orchestration: `comext_harmonisation.pipeline.*`
-- Weight schema/finalization/I/O: `comext_harmonisation.weights.*`
-- Shared low-level primitives: `comext_harmonisation.core.*`
+## Data Dependencies and Upstream Boundary
+This repository consumes prepared parquet inputs.
 
-Representative entrypoints:
-- Estimation: `comext_harmonisation.estimation.run_weight_estimation_for_period`, `run_weight_estimation_for_period_multi`
-- Chaining: `comext_harmonisation.chaining.chain_weights_for_year`, `build_chained_weights_for_range`
-- Apply: `comext_harmonisation.apply.apply_weights_to_annual_period`, `apply_chained_weights_wide_for_range`, `apply_chained_weights_wide_for_month_range`
-- Config: `comext_harmonisation.pipeline.config.load_pipeline_config`
+Default input paths:
+- Annual: `data/extracted_annual_no_confidential/products_like`
+- Monthly: `data/extracted_no_confidential/products_like`
 
-## Method Invariants (Intentional Behavior)
-1. Estimation sample uses imports flow (`FLOW="1"`); estimated weights are then applicable to both flows.
-2. Strict revised-link handling hard-fails unresolved revised links when strict/fail flags are enabled.
-3. Intermediate chain compositions are not normalized; only finalization paths normalize.
-4. Apply paths finalize effective weights before multiplication.
-5. Chaining universe checks use observed annual code universes.
+Concordance and schema references:
+- Concordance file: `data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls`
+- Processed-data schema notes: `data/metadata/PROCESSED.txt`
 
-## Internal Architecture
-- Root package is minimal (`comext_harmonisation.__init__` exports namespaces only).
-- Domain namespaces are explicit: `core/`, `concordance/`, `weights/`, `estimation/`, `chaining/`, `apply/`, `pipeline/`, `analysis/`, `cli/`.
-- Breaking-path migration (old -> new): `application -> apply`, `estimation.chaining -> chaining.engine`, `pipeline_config -> pipeline.config`, `pipeline_runner -> pipeline.runner`, and concordance/weights module moves into namespace packages.
+Upstream boundary:
+- Preparation of those parquet inputs is external to this repository (typically from `comext-fetcher`).
 
-## Development
-Install in editable mode:
-- `python3 -m pip install -e .[dev]`
+## Repository Layout
+```text
+.
+├── src/comext_harmonisation/
+│   ├── concordance/
+│   ├── estimation/
+│   ├── chaining/
+│   ├── apply/
+│   ├── pipeline/
+│   ├── weights/
+│   ├── analysis/
+│   ├── cli/
+│   └── core/
+├── configs/
+│   ├── pipeline/
+│   └── analysis/
+├── tests/
+├── data/
+├── outputs/
+├── pyproject.toml
+└── README.md
+```
 
-Run tests:
-- `python3 -m pytest -q`
+| Path | Purpose |
+| --- | --- |
+| `src/comext_harmonisation/concordance/` | Parse concordance tables, build groups, and derive deterministic mappings |
+| `src/comext_harmonisation/estimation/` | Build LT share matrices and estimate adjacent conversion weights |
+| `src/comext_harmonisation/chaining/` | Compose adjacent weights into target-vintage chains |
+| `src/comext_harmonisation/apply/` | Apply adjacent/chained weights to annual and monthly trade data |
+| `src/comext_harmonisation/pipeline/` | Typed config loading and end-to-end stage orchestration |
+| `src/comext_harmonisation/weights/` | Weight schema, validation, I/O, and finalization |
+| `src/comext_harmonisation/analysis/` | Post-harmonisation diagnostics and research analyses |
+| `src/comext_harmonisation/cli/` | Module CLI entrypoints for pipeline, estimation, and analysis |
+| `src/comext_harmonisation/core/` | Shared normalization, revised-link, and diagnostics helpers |
 
-Current suite baseline after namespace restructure: `99 passed`.
+## Reproducible Setup
+From repository root:
+
+```bash
+python3 -m pip install -e '.[dev]'
+python3 -m pytest -q
+```
+
+Python requirement is defined in `pyproject.toml` (`>=3.9`).
+
+## Run the Harmonisation Pipeline
+Canonical module CLI:
+
+```bash
+python -m comext_harmonisation.cli.run_pipeline --config configs/pipeline/example.yaml
+```
+
+Full-range backward chaining run:
+
+```bash
+python -m comext_harmonisation.cli.run_pipeline --config configs/pipeline/estimate_chain_all_years_backward.yaml
+```
+
+Console-script equivalent (after editable install):
+
+```bash
+comext-run-pipeline --config configs/pipeline/example.yaml
+```
+
+## Run Estimation Only
+Run adjacent-period estimation without full chain/apply stages:
+
+```bash
+python -m comext_harmonisation.cli.run_estimation --period 20102011 --direction a_to_b --measure BOTH
+```
+
+Console-script equivalent:
+
+```bash
+comext-run-estimation --period 20102011 --direction a_to_b --measure BOTH
+```
+
+## Run Analysis
+Example chain-length analysis:
+
+```bash
+python -m comext_harmonisation.cli.run_analysis --config configs/analysis/chain_length.yaml
+```
+
+Console-script equivalent:
+
+```bash
+comext-run-analysis --config configs/analysis/chain_length.yaml
+```
+
+## Key Configuration Switches
+
+| Key | Meaning | Default in loader |
+| --- | --- | --- |
+| `estimation.flow` | Flow used to build estimation shares | `"1"` |
+| `chaining.strict_revised_link_validation` | Fail on unresolved revised-link coverage in chaining | `true` |
+| `chaining.write_unresolved_details` | Persist unresolved revised-link detail rows during chaining | `true` |
+| `apply.assume_identity_for_missing` | Inject identity rows for missing apply codes | `true` |
+| `apply.fail_on_missing` | Raise if missing apply coverage remains | `true` |
+| `apply.strict_revised_link_validation` | Validate unresolved revised-link coverage before apply | `true` |
+| `chaining.finalize_weights` | Finalize chained weights at chain-output stage | `false` |
+| `chaining.neg_tol`, `chaining.pos_tol`, `chaining.row_sum_tol` | Numerical tolerances for clamping/normalization checks | `1e-6`, `1e-10`, `1e-6` |
+
+Note: checked-in example configs can override these defaults for specific runs.
+
+## Outputs and Artifacts
+Default artifacts written by the pipeline include:
+- Adjacent estimation weights: `outputs/weights/adjacent/<period>/<direction>/<measure>/`
+- Estimation diagnostics and summary: `outputs/weights/diagnostics/`, `outputs/weights/summary.csv`
+- Per-run pipeline outputs: `outputs/runs/run_<timestamp>_CN<target>/`
+- Chained weights and diagnostics inside a run: `<run_dir>/chain/`
+- Applied annual/monthly wide outputs and summaries inside a run: `<run_dir>/apply/`
+
+Strict-link diagnostics:
+- Chaining unresolved details can be written to `.../chain/CN<target>/unresolved_details.csv`
+- Apply unresolved details can be written to `.../apply/CN<target>/diagnostics/unresolved_details.csv`
+
+## Pragmatic Implementation Choices vs LT Baseline
+1. Estimation sample is fixed to imports flow (`FLOW="1"`).
+2. Deterministic concordance links are represented as fixed `weight=1.0`; only ambiguous links are estimated.
+3. Chaining universe checks are based on observed annual code universes.
+4. Strict revised-link validation can fail-fast when unresolved revised links are detected.
+5. Unresolved revised-link details can be written as explicit diagnostics tables.
+6. Intermediate chain compositions are intentionally left non-normalized.
+7. Apply paths finalize effective weights before multiplication.
+8. Apply can optionally use identity fallback for missing codes (`assume_identity_for_missing`), with strict fail mode available (`fail_on_missing`).
+
+## Citation and Thesis Context (Template)
+- LT paper citation: `TODO`
+- Thesis citation: `TODO`
+- Repository citation (version/commit): `TODO`
