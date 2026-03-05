@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run analysis based on a YAML config (share_stability or stress_test)."""
+"""Run analysis based on a YAML config."""
 
 from __future__ import annotations
 
@@ -28,9 +28,11 @@ def main() -> None:
         load_share_stability_config,
         load_stress_config,
         load_chain_length_config,
+        load_synthetic_persistence_config,
         run_share_stability_analysis,
         run_stress_test_analysis,
         run_chain_length_analysis,
+        run_synthetic_persistence_analysis,
     )
 
     if analysis_type == "share_stability":
@@ -50,6 +52,12 @@ def main() -> None:
         outputs = run_chain_length_analysis(config)
         print("plot:", outputs["output_plot"])
         print("summary:", outputs["summary_csv"])
+        return
+    if analysis_type == "synthetic_persistence":
+        config = load_synthetic_persistence_config(config_path)
+        outputs = run_synthetic_persistence_analysis(config)
+        print("plot:", outputs["output_plot"])
+        print("evidence:", outputs["code_evidence_csv"])
         return
     raise ValueError(f"Unknown analysis_type '{analysis_type}'")
 

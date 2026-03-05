@@ -4,14 +4,17 @@ from .config import (
     ShareStabilityConfig,
     StressConfig,
     ChainLengthConfig,
+    SyntheticPersistenceConfig,
     load_share_stability_config,
     load_stress_config,
     load_chain_length_config,
+    load_synthetic_persistence_config,
 )
 from .common.metrics import get_metric, list_metrics, r2_45
 from .share_stability.runner import run_share_stability_analysis
 from .stress_test.runner import run_stress_test_analysis
 from .chain_length.runner import run_chain_length_analysis
+from .synthetic_persistence.runner import run_synthetic_persistence_analysis
 
 __all__ = [
     "ShareStabilityConfig",
@@ -23,6 +26,9 @@ __all__ = [
     "ChainLengthConfig",
     "load_chain_length_config",
     "run_chain_length_analysis",
+    "SyntheticPersistenceConfig",
+    "load_synthetic_persistence_config",
+    "run_synthetic_persistence_analysis",
     "get_metric",
     "list_metrics",
     "r2_45",

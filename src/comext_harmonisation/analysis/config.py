@@ -1,4 +1,4 @@
-"""Config loader for share-stability and stress-test analyses."""
+"""Config loader for analysis scenarios."""
 
 from __future__ import annotations
 
@@ -196,6 +196,80 @@ class ChainLengthConfig:
     chaining: ChainLengthChainingConfig
     sample: ChainLengthSampleConfig
     plot: AnalysisPlotConfig
+
+
+@dataclass(frozen=True)
+class SyntheticPersistenceYearsConfig:
+    start: int
+    end: int
+    prehistory_anchor: int
+    afterlife_anchor: int
+
+
+@dataclass(frozen=True)
+class SyntheticPersistenceMeasureConfig:
+    weights_source: str
+    analysis_measure: str
+
+
+@dataclass(frozen=True)
+class SyntheticPersistenceFlowConfig:
+    mode: str
+    flow_code: str
+
+
+@dataclass(frozen=True)
+class SyntheticPersistenceCandidatesConfig:
+    prehistory: Sequence[str]
+    afterlife: Sequence[str]
+
+
+@dataclass(frozen=True)
+class SyntheticPersistencePathsConfig:
+    concordance_path: Path
+    concordance_sheet: str | int | None
+    annual_base_dir: Path
+    weights_dir: Path
+    output_dir: Path
+
+
+@dataclass(frozen=True)
+class SyntheticPersistenceChainingConfig:
+    finalize_weights: bool
+    neg_tol: float
+    pos_tol: float
+    row_sum_tol: float
+    fail_on_missing: bool
+    strict_revised_link_validation: bool
+    write_unresolved_details: bool
+
+
+@dataclass(frozen=True)
+class SyntheticPersistenceSampleConfig:
+    exclude_reporters: Sequence[str]
+    exclude_partners: Sequence[str]
+
+
+@dataclass(frozen=True)
+class SyntheticPersistencePlotConfig:
+    summary_output_path: Path
+    use_latex: bool
+    latex_preamble: str
+    line_width: float
+    point_size: float
+    y_axis_unit: str
+
+
+@dataclass(frozen=True)
+class SyntheticPersistenceConfig:
+    years: SyntheticPersistenceYearsConfig
+    measures: SyntheticPersistenceMeasureConfig
+    flow: SyntheticPersistenceFlowConfig
+    candidates: SyntheticPersistenceCandidatesConfig
+    paths: SyntheticPersistencePathsConfig
+    chaining: SyntheticPersistenceChainingConfig
+    sample: SyntheticPersistenceSampleConfig
+    plot: SyntheticPersistencePlotConfig
 
 
 CHAIN_LENGTH_DELTA_METRICS = (
@@ -546,5 +620,207 @@ def load_chain_length_config(path: Path) -> ChainLengthConfig:
             point_color=str(plot["point_color"]),
             use_latex=bool(plot["use_latex"]),
             latex_preamble=str(plot["latex_preamble"]),
+        ),
+    )
+
+
+def _normalize_code_list(value: Any) -> list[str]:
+    result: list[str] = []
+    for raw in _normalize_list(value):
+        code = str(raw).strip()
+        if not code:
+            continue
+        if code.isdigit():
+            code = code.zfill(8)
+        result.append(code)
+    return result
+
+
+def _dedupe_preserve_order(values: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        out.append(value)
+        seen.add(value)
+    return out
+
+
+def load_synthetic_persistence_config(path: Path) -> SyntheticPersistenceConfig:
+    data = yaml.safe_load(path.read_text()) or {}
+    if "thresholds" in data:
+        raise ValueError(
+            "synthetic_persistence: thresholds are deprecated in qualitative mode; "
+            "remove the thresholds block from config."
+        )
+
+    candidate_block = data.get("candidates") or {}
+    legacy_afterlife_keys = [
+        key
+        for key in ("afterlife_semantic", "afterlife_high_signal", "afterlife_original")
+        if key in candidate_block
+    ]
+    if legacy_afterlife_keys:
+        keys = ", ".join(sorted(legacy_afterlife_keys))
+        raise ValueError(
+            "synthetic_persistence: legacy candidate keys detected "
+            f"({keys}); use candidates.afterlife for qualitative analysis."
+        )
+
+    years = _merge(
+        {
+            "start": 1988,
+            "end": 2023,
+            "prehistory_anchor": 2023,
+            "afterlife_anchor": 1988,
+        },
+        data.get("years"),
+    )
+    start = int(years["start"])
+    end = int(years["end"])
+    prehistory_anchor = int(years["prehistory_anchor"])
+    afterlife_anchor = int(years["afterlife_anchor"])
+    if start > end:
+        raise ValueError("synthetic_persistence: years.start must be <= years.end")
+    if not (start <= prehistory_anchor <= end):
+        raise ValueError(
+            "synthetic_persistence: years.prehistory_anchor must be inside [years.start, years.end]"
+        )
+    if not (start <= afterlife_anchor <= end):
+        raise ValueError(
+            "synthetic_persistence: years.afterlife_anchor must be inside [years.start, years.end]"
+        )
+
+    measures = _merge(
+        {"weights_source": "VALUE_EUR", "analysis_measure": "VALUE_EUR"},
+        data.get("measures"),
+    )
+
+    flow = _merge({"mode": "imports_only", "flow_code": "1"}, data.get("flow"))
+    flow_mode = str(flow.get("mode", "imports_only")).strip().lower()
+    if flow_mode != "imports_only":
+        raise ValueError(
+            "synthetic_persistence: flow.mode must be 'imports_only' for this analysis."
+        )
+
+    candidates = _merge(
+        {
+            "prehistory": [
+                "85171300",
+                "88062210",
+                "85241100",
+                "85414100",
+                "85414300",
+                "85235200",
+            ],
+            "afterlife": [
+                "85281011",
+                "85282010",
+                "85401130",
+                "85211039",
+                "85281079",
+                "85401190",
+                "85211031",
+            ],
+        },
+        data.get("candidates"),
+    )
+    # Legacy key kept for backward compatibility; ignored in qualitative mode.
+    _ = data.get("selection")
+
+    paths = _merge(
+        {
+            "concordance_path": "data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls",
+            "concordance_sheet": None,
+            "annual_base_dir": "data/extracted_annual_no_confidential/products_like",
+            "weights_dir": "outputs/weights/adjacent",
+            "output_dir": "outputs/analysis/synthetic_persistence_qualitative",
+        },
+        data.get("paths"),
+    )
+
+    chaining = _merge(
+        {
+            "finalize_weights": True,
+            "neg_tol": 1e-6,
+            "pos_tol": 1e-10,
+            "row_sum_tol": 1e-6,
+            "fail_on_missing": True,
+            "strict_revised_link_validation": False,
+            "write_unresolved_details": False,
+        },
+        data.get("chaining"),
+    )
+    sample = _merge(
+        {
+            "exclude_reporters": [],
+            "exclude_partners": [],
+        },
+        data.get("sample"),
+    )
+    plot = _merge(
+        {
+            "summary_output_path": (
+                "outputs/analysis/synthetic_persistence_qualitative/qualitative_summary.png"
+            ),
+            "use_latex": True,
+            "latex_preamble": r"\\usepackage{newtxtext,newtxmath}",
+            "line_width": 1.0,
+            "point_size": 3.0,
+            "y_axis_unit": "percent",
+        },
+        data.get("plot"),
+    )
+    y_axis_unit = str(plot["y_axis_unit"]).strip().lower()
+    if y_axis_unit not in {"percent", "share"}:
+        raise ValueError("synthetic_persistence: plot.y_axis_unit must be one of ['percent', 'share']")
+
+    return SyntheticPersistenceConfig(
+        years=SyntheticPersistenceYearsConfig(
+            start=start,
+            end=end,
+            prehistory_anchor=prehistory_anchor,
+            afterlife_anchor=afterlife_anchor,
+        ),
+        measures=SyntheticPersistenceMeasureConfig(
+            weights_source=str(measures["weights_source"]).upper(),
+            analysis_measure=str(measures["analysis_measure"]).upper(),
+        ),
+        flow=SyntheticPersistenceFlowConfig(
+            mode=flow_mode,
+            flow_code=str(flow.get("flow_code", "1")).strip(),
+        ),
+        candidates=SyntheticPersistenceCandidatesConfig(
+            prehistory=_dedupe_preserve_order(_normalize_code_list(candidates.get("prehistory"))),
+            afterlife=_dedupe_preserve_order(_normalize_code_list(candidates.get("afterlife"))),
+        ),
+        paths=SyntheticPersistencePathsConfig(
+            concordance_path=Path(paths["concordance_path"]),
+            concordance_sheet=paths["concordance_sheet"],
+            annual_base_dir=Path(paths["annual_base_dir"]),
+            weights_dir=Path(paths["weights_dir"]),
+            output_dir=Path(paths["output_dir"]),
+        ),
+        chaining=SyntheticPersistenceChainingConfig(
+            finalize_weights=bool(chaining["finalize_weights"]),
+            neg_tol=float(chaining["neg_tol"]),
+            pos_tol=float(chaining["pos_tol"]),
+            row_sum_tol=float(chaining["row_sum_tol"]),
+            fail_on_missing=bool(chaining["fail_on_missing"]),
+            strict_revised_link_validation=bool(chaining["strict_revised_link_validation"]),
+            write_unresolved_details=bool(chaining["write_unresolved_details"]),
+        ),
+        sample=SyntheticPersistenceSampleConfig(
+            exclude_reporters=_normalize_list(sample.get("exclude_reporters")),
+            exclude_partners=_normalize_list(sample.get("exclude_partners")),
+        ),
+        plot=SyntheticPersistencePlotConfig(
+            summary_output_path=Path(plot["summary_output_path"]),
+            use_latex=bool(plot["use_latex"]),
+            latex_preamble=str(plot["latex_preamble"]),
+            line_width=float(plot["line_width"]),
+            point_size=float(plot["point_size"]),
+            y_axis_unit=y_axis_unit,
         ),
     )

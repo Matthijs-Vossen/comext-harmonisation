@@ -8,6 +8,7 @@ import yaml
 from comext_harmonisation.analysis import (
     load_chain_length_config,
     load_share_stability_config,
+    load_synthetic_persistence_config,
     load_stress_config,
 )
 
@@ -30,5 +31,9 @@ def test_all_analysis_configs_load(config_path: Path) -> None:
     if analysis_type == "stress_test":
         cfg = load_stress_config(config_path)
         assert len(cfg.years.chains) > 0
+        return
+    if analysis_type == "synthetic_persistence":
+        cfg = load_synthetic_persistence_config(config_path)
+        assert cfg.years.start <= cfg.years.end
         return
     raise AssertionError(f"Unknown analysis_type '{analysis_type}' in {config_path}")

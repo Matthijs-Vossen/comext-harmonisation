@@ -116,6 +116,12 @@ Example chain-length analysis:
 python -m comext_harmonisation.cli.run_analysis --config configs/analysis/chain_length.yaml
 ```
 
+Synthetic-persistence qualitative evidence analysis:
+
+```bash
+python -m comext_harmonisation.cli.run_analysis --config configs/analysis/synthetic_persistence.yaml
+```
+
 Console-script equivalent:
 
 ```bash
@@ -148,6 +154,9 @@ Default artifacts written by the pipeline include:
 Strict-link diagnostics:
 - Chaining unresolved details can be written to `.../chain/CN<target>/unresolved_details.csv`
 - Apply unresolved details can be written to `.../apply/CN<target>/diagnostics/unresolved_details.csv`
+
+Analysis artifacts:
+- Synthetic-persistence outputs: `outputs/analysis/synthetic_persistence_qualitative/{code_catalog.csv,candidate_series.csv,code_evidence.csv,qualitative_summary.png}`
 
 ## Pragmatic Implementation Choices vs LT Baseline
 1. Estimation sample is fixed to imports flow (`FLOW="1"`).

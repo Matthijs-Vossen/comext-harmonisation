@@ -18,6 +18,7 @@ python -m comext_harmonisation.cli.run_pipeline --config configs/pipeline/exampl
 - `configs/analysis/share_stability.yaml`: baseline share-stability analysis.
 - `configs/analysis/share_stability_filtered.yaml`: share-stability with stability filter enabled.
 - `configs/analysis/stress_test.yaml`: long-horizon stress-test analysis.
+- `configs/analysis/synthetic_persistence.yaml`: qualitative evidence analysis for challenging pre-history/afterlife product codes.
 
 Canonical invocation:
 ```bash

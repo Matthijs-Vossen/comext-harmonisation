@@ -1,0 +1,60 @@
+analysis_type: synthetic_persistence
+
+years:
+  start: 1988
+  end: 2023
+  prehistory_anchor: 2023
+  afterlife_anchor: 1988
+
+measures:
+  weights_source: VALUE_EUR
+  analysis_measure: VALUE_EUR
+
+flow:
+  mode: imports_only
+  flow_code: "1"
+
+candidates:
+  prehistory:
+    - 85171300
+    - 88062210
+    - 85241100
+    - 85414100
+    - 85414300
+    - 85235200
+  afterlife:
+    - 85281011
+    - 85282010
+    - 85401130
+    - 85211039
+    - 85281079
+    - 85401190
+    - 85211031
+
+paths:
+  concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
+  concordance_sheet: null
+  annual_base_dir: data/extracted_annual_no_confidential/products_like
+  weights_dir: outputs/weights/adjacent
+  output_dir: outputs/analysis/synthetic_persistence_qualitative
+
+chaining:
+  finalize_weights: true
+  neg_tol: 0.000001
+  pos_tol: 0.0000000001
+  row_sum_tol: 0.000001
+  fail_on_missing: true
+  strict_revised_link_validation: false
+  write_unresolved_details: false
+
+sample:
+  exclude_reporters: []
+  exclude_partners: []
+
+plot:
+  summary_output_path: outputs/analysis/synthetic_persistence_qualitative/qualitative_summary.png
+  use_latex: true
+  latex_preamble: "\\usepackage{newtxtext,newtxmath}"
+  line_width: 1.0
+  point_size: 3.0
+  y_axis_unit: percent
