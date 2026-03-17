@@ -14,6 +14,7 @@ python -m comext_harmonisation.cli.run_pipeline --config configs/pipeline/exampl
 ```
 
 ## Analysis Configs
+- `configs/analysis/bilateral_persistence_cn2007_raw.yaml`: raw-data CN analogue of LT Table 3 around the `2006->2007` break, using zero-completed pair-code panels with a break-centered deterministic-all broad row, a filtered break-group broad row, and an adjusted row defined by the union of non-`1:1` break groups within that retained universe.
 - `configs/analysis/chain_length.yaml`: chain-length diagnostics and delta plotting.
 - `configs/analysis/share_stability.yaml`: baseline share-stability analysis.
 - `configs/analysis/share_stability_filtered.yaml`: share-stability with stability filter enabled.

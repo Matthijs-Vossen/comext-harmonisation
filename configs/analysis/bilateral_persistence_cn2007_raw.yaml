@@ -1,0 +1,33 @@
+analysis_type: bilateral_persistence
+
+years:
+  columns: [2005, 2006, 2008, 2009]
+
+break:
+  period: "20062007"
+  direction: "union"
+
+measures:
+  analysis_measure: VALUE_EUR
+
+flow:
+  flow_code: "1"
+
+paths:
+  concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
+  concordance_sheet: null
+  annual_base_dir: data/extracted_annual_no_confidential/products_like
+  output_dir: outputs/analysis/bilateral_persistence_cn2007_raw
+
+sample:
+  exclude_reporters: []
+  exclude_partners: []
+
+adjusted_filter:
+  years: [2004, 2005, 2007, 2008]
+
+output:
+  table_csv: outputs/analysis/bilateral_persistence_cn2007_raw/table.csv
+  table_tex: outputs/analysis/bilateral_persistence_cn2007_raw/table.tex
+  details_csv: outputs/analysis/bilateral_persistence_cn2007_raw/regression_details.csv
+  sample_diagnostics_csv: outputs/analysis/bilateral_persistence_cn2007_raw/sample_diagnostics.csv

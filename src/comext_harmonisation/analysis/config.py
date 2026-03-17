@@ -272,6 +272,66 @@ class SyntheticPersistenceConfig:
     plot: SyntheticPersistencePlotConfig
 
 
+@dataclass(frozen=True)
+class BilateralPersistenceYearsConfig:
+    columns: Sequence[int]
+
+
+@dataclass(frozen=True)
+class BilateralPersistenceBreakConfig:
+    period: str
+    direction: str
+
+
+@dataclass(frozen=True)
+class BilateralPersistenceMeasureConfig:
+    analysis_measure: str
+
+
+@dataclass(frozen=True)
+class BilateralPersistenceFlowConfig:
+    flow_code: str
+
+
+@dataclass(frozen=True)
+class BilateralPersistencePathsConfig:
+    concordance_path: Path
+    concordance_sheet: str | int | None
+    annual_base_dir: Path
+    output_dir: Path
+
+
+@dataclass(frozen=True)
+class BilateralPersistenceSampleConfig:
+    exclude_reporters: Sequence[str]
+    exclude_partners: Sequence[str]
+
+
+@dataclass(frozen=True)
+class BilateralPersistenceFilterConfig:
+    years: Sequence[int]
+
+
+@dataclass(frozen=True)
+class BilateralPersistenceOutputConfig:
+    table_csv: Path
+    table_tex: Path
+    details_csv: Path
+    sample_diagnostics_csv: Path
+
+
+@dataclass(frozen=True)
+class BilateralPersistenceConfig:
+    years: BilateralPersistenceYearsConfig
+    break_config: BilateralPersistenceBreakConfig
+    measures: BilateralPersistenceMeasureConfig
+    flow: BilateralPersistenceFlowConfig
+    paths: BilateralPersistencePathsConfig
+    sample: BilateralPersistenceSampleConfig
+    adjusted_filter: BilateralPersistenceFilterConfig
+    output: BilateralPersistenceOutputConfig
+
+
 CHAIN_LENGTH_DELTA_METRICS = (
     "mae_weighted",
     "mae_weighted_step",
@@ -286,7 +346,7 @@ def load_share_stability_config(path: Path) -> ShareStabilityConfig:
     if years["start"] is None or years["end"] is None or years["target"] is None:
         raise ValueError("Config must include years.start, years.end, and years.target.")
 
-    break_config = _merge({"period": None, "direction": "b_to_a"}, data.get("break"))
+    break_config = _merge({"period": None, "direction": "union"}, data.get("break"))
     if break_config["period"] is None:
         raise ValueError("Config must include break.period")
 
@@ -822,5 +882,98 @@ def load_synthetic_persistence_config(path: Path) -> SyntheticPersistenceConfig:
             line_width=float(plot["line_width"]),
             point_size=float(plot["point_size"]),
             y_axis_unit=y_axis_unit,
+        ),
+    )
+
+
+def load_bilateral_persistence_config(path: Path) -> BilateralPersistenceConfig:
+    data = yaml.safe_load(path.read_text()) or {}
+
+    years = _merge(
+        {
+            "columns": [2005, 2006, 2008, 2009],
+        },
+        data.get("years"),
+    )
+    columns = [int(year) for year in years.get("columns", [])]
+    if not columns:
+        raise ValueError("bilateral_persistence: years.columns must not be empty")
+    if sorted(columns) != columns:
+        raise ValueError("bilateral_persistence: years.columns must be sorted ascending")
+    if len(set(columns)) != len(columns):
+        raise ValueError("bilateral_persistence: years.columns must be unique")
+
+    break_config = _merge({"period": None, "direction": "union"}, data.get("break"))
+    period = str(break_config.get("period") or "").strip()
+    if not period:
+        raise ValueError("bilateral_persistence: break.period is required")
+    if len(period) != 8 or not period.isdigit():
+        raise ValueError("bilateral_persistence: break.period must be an 8-digit period")
+    direction = str(break_config.get("direction", "union")).strip().lower()
+    if direction not in {"a_to_b", "b_to_a", "union"}:
+        raise ValueError(
+            "bilateral_persistence: break.direction must be 'a_to_b', 'b_to_a', or 'union'"
+        )
+
+    measures = _merge({"analysis_measure": "VALUE_EUR"}, data.get("measures"))
+    analysis_measure = str(measures.get("analysis_measure", "VALUE_EUR")).strip().upper()
+    if analysis_measure not in {"VALUE_EUR", "QUANTITY_KG"}:
+        raise ValueError("bilateral_persistence: measures.analysis_measure must be VALUE_EUR or QUANTITY_KG")
+
+    flow = _merge({"flow_code": "1"}, data.get("flow"))
+    flow_code = str(flow.get("flow_code", "1")).strip()
+
+    paths = _merge(
+        {
+            "concordance_path": "data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls",
+            "concordance_sheet": None,
+            "annual_base_dir": "data/extracted_annual_no_confidential/products_like",
+            "output_dir": "outputs/analysis/bilateral_persistence_cn2007_raw",
+        },
+        data.get("paths"),
+    )
+    output_dir = Path(paths["output_dir"])
+
+    sample = _merge(
+        {
+            "exclude_reporters": [],
+            "exclude_partners": [],
+        },
+        data.get("sample"),
+    )
+    adjusted_filter = _merge({"years": [2004, 2005, 2007, 2008]}, data.get("adjusted_filter"))
+    filter_years = [int(year) for year in _normalize_list(adjusted_filter.get("years"))]
+
+    outputs = _merge(
+        {
+            "table_csv": str(output_dir / "table.csv"),
+            "table_tex": str(output_dir / "table.tex"),
+            "details_csv": str(output_dir / "regression_details.csv"),
+            "sample_diagnostics_csv": str(output_dir / "sample_diagnostics.csv"),
+        },
+        data.get("output"),
+    )
+
+    return BilateralPersistenceConfig(
+        years=BilateralPersistenceYearsConfig(columns=columns),
+        break_config=BilateralPersistenceBreakConfig(period=period, direction=direction),
+        measures=BilateralPersistenceMeasureConfig(analysis_measure=analysis_measure),
+        flow=BilateralPersistenceFlowConfig(flow_code=flow_code),
+        paths=BilateralPersistencePathsConfig(
+            concordance_path=Path(paths["concordance_path"]),
+            concordance_sheet=paths["concordance_sheet"],
+            annual_base_dir=Path(paths["annual_base_dir"]),
+            output_dir=output_dir,
+        ),
+        sample=BilateralPersistenceSampleConfig(
+            exclude_reporters=_normalize_list(sample.get("exclude_reporters")),
+            exclude_partners=_normalize_list(sample.get("exclude_partners")),
+        ),
+        adjusted_filter=BilateralPersistenceFilterConfig(years=filter_years),
+        output=BilateralPersistenceOutputConfig(
+            table_csv=Path(outputs["table_csv"]),
+            table_tex=Path(outputs["table_tex"]),
+            details_csv=Path(outputs["details_csv"]),
+            sample_diagnostics_csv=Path(outputs["sample_diagnostics_csv"]),
         ),
     )
