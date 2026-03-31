@@ -1,9 +1,15 @@
+from types import SimpleNamespace
+
 import pandas as pd
 
 from comext_harmonisation.analysis.synthetic_persistence.runner import (
     CandidateTiming,
+    _candidate_rows,
     _classify_candidate_status,
     _compute_code_evidence,
+    _format_panel_title,
+    _panel_columns,
+    _plot_summary,
     _split_regime_segments_for_plot,
 )
 
@@ -117,3 +123,87 @@ def test_classify_candidate_status_outside_window_and_concept_flag() -> None:
     )
     assert included is False
     assert reason == "concept_not_afterlife"
+
+
+def test_format_panel_title_prefers_label_plus_code() -> None:
+    assert _format_panel_title("Smartphones", "85171300") == "Smartphones\n(85171300)"
+    assert _format_panel_title("85171300", "85171300") == "85171300"
+
+
+def test_candidate_rows_preserve_config_order_and_labels() -> None:
+    config = SimpleNamespace(
+        candidates=SimpleNamespace(
+            prehistory=["88062210", "85171300"],
+            afterlife=["85281079", "85211031"],
+            display_labels={
+                "88062210": "Drones",
+                "85171300": "Smartphones",
+                "85281079": "CRT televisions",
+                "85211031": "Tape camcorders",
+            },
+        )
+    )
+
+    rows = _candidate_rows(config)
+
+    assert [row["code"] for row in rows if row["set_name"] == "prehistory"] == [
+        "88062210",
+        "85171300",
+    ]
+    assert [row["code"] for row in rows if row["set_name"] == "afterlife"] == [
+        "85281079",
+        "85211031",
+    ]
+    assert [row["display_order"] for row in rows if row["set_name"] == "prehistory"] == [1, 2]
+    assert rows[0]["label"] == "Drones"
+    assert rows[-1]["label"] == "Tape camcorders"
+
+
+def test_panel_columns_caps_at_section_max_without_leaving_singleton_blanks() -> None:
+    assert _panel_columns(0, max_columns=3) == 1
+    assert _panel_columns(1, max_columns=3) == 1
+    assert _panel_columns(3, max_columns=3) == 3
+    assert _panel_columns(3, max_columns=4) == 3
+    assert _panel_columns(7, max_columns=4) == 4
+
+
+def test_plot_summary_writes_output_with_display_labels(tmp_path) -> None:
+    df = pd.DataFrame(
+        [
+            {
+                "dimension": "prehistory",
+                "set_name": "prehistory",
+                "code": "85171300",
+                "label": "Smartphones",
+                "year": year,
+                "share_conv": 0.001 * (year - 1999),
+                "is_synthetic_window": year < 2001,
+            }
+            for year in (2000, 2001, 2002)
+        ]
+        + [
+            {
+                "dimension": "afterlife",
+                "set_name": "afterlife",
+                "code": "85211031",
+                "label": "Tape camcorders",
+                "year": year,
+                "share_conv": 0.003 - 0.001 * (year - 2000),
+                "is_synthetic_window": year > 2001,
+            }
+            for year in (2000, 2001, 2002)
+        ]
+    )
+    output_path = tmp_path / "summary.png"
+
+    _plot_summary(
+        candidate_series=df,
+        output_path=output_path,
+        use_latex=False,
+        latex_preamble="",
+        line_width=1.0,
+        y_axis_unit="percent",
+    )
+
+    assert output_path.exists()
+    assert output_path.stat().st_size > 0

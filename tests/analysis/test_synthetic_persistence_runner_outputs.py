@@ -33,6 +33,11 @@ def _make_config(tmp_path: Path) -> SyntheticPersistenceConfig:
         candidates=SyntheticPersistenceCandidatesConfig(
             prehistory=["11111111"],
             afterlife=["22222222", "33333333"],
+            display_labels={
+                "11111111": "Modern widgets",
+                "22222222": "Legacy widgets",
+                "33333333": "Unused label",
+            },
         ),
         paths=SyntheticPersistencePathsConfig(
             concordance_path=Path("dummy.xls"),
@@ -160,18 +165,26 @@ def test_synthetic_persistence_runner_writes_expected_outputs(monkeypatch, tmp_p
 
     catalog = pd.read_csv(outputs["code_catalog_csv"])
     assert {"set_name", "code", "included_in_series", "exclusion_reason"}.issubset(catalog.columns)
+    catalog["code"] = catalog["code"].astype(str).str.zfill(8)
+    catalog_labels = dict(zip(catalog["code"], catalog["label"]))
+    assert catalog_labels["11111111"] == "Modern widgets"
+    assert catalog_labels["22222222"] == "Legacy widgets"
 
     series = pd.read_csv(outputs["candidate_series_csv"])
+    series["code"] = series["code"].astype(str).str.zfill(8)
     assert {
         "dimension",
         "set_name",
         "code",
+        "label",
         "year",
         "value_conv",
         "share_conv",
         "is_synthetic_window",
         "is_inlife_window",
     }.issubset(series.columns)
+    assert set(series.loc[series["code"] == "11111111", "label"]) == {"Modern widgets"}
+    assert set(series.loc[series["code"] == "22222222", "label"]) == {"Legacy widgets"}
 
     evidence = pd.read_csv(outputs["code_evidence_csv"])
     assert {

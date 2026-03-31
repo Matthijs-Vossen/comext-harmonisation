@@ -43,6 +43,16 @@ def r2_45(x: np.ndarray, y: np.ndarray) -> float:
     return 1.0 - sse / sst
 
 
+@register_metric("mae")
+def mae(x: np.ndarray, y: np.ndarray) -> float:
+    if len(x) == 0:
+        return float("nan")
+    mask = np.isfinite(x) & np.isfinite(y)
+    if not mask.any():
+        return float("nan")
+    return float(np.mean(np.abs(y[mask] - x[mask])))
+
+
 @register_metric("r2_45_weighted")
 def r2_45_weighted(x: np.ndarray, y: np.ndarray, weights: np.ndarray) -> float:
     if len(x) == 0:

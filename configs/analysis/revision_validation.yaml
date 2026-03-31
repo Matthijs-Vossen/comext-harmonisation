@@ -1,0 +1,44 @@
+analysis_type: revision_validation
+
+years:
+  min_year: 1988
+  max_year: 2024
+
+break:
+  direction: "b_to_a"
+
+measures:
+  weights_source: VALUE_EUR
+  analysis_measure: VALUE_EUR
+
+flow:
+  flow_code: "1"
+
+paths:
+  concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
+  concordance_sheet: null
+  annual_base_dir: data/extracted_annual_no_confidential/products_like
+  weights_dir: outputs/weights/adjacent
+  output_dir: outputs/analysis/revision_validation
+
+sample:
+  exclude_reporters: []
+  exclude_partners: []
+
+chaining:
+  finalize_weights: true
+  neg_tol: 0.000001
+  pos_tol: 0.0000000001
+  row_sum_tol: 0.000001
+
+run:
+  n_bins: 20
+  seed: 20260317
+  max_workers: 5
+
+plot:
+  output_path: outputs/analysis/revision_validation/revision_validation_heatmap.png
+  title: null
+  use_latex: true
+  latex_preamble: "\\usepackage{newtxtext,newtxmath}"
+  show_annotations: false

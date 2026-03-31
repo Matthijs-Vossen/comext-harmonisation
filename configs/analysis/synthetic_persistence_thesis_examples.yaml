@@ -18,31 +18,17 @@ candidates:
   prehistory:
     - 85171300
     - 88062210
-    - 85241100
-    - 85414100
     - 85414300
-    - 85235200
   afterlife:
     - 85281011
-    - 85282010
-    - 85401130
-    - 85211039
     - 85281079
-    - 85401190
     - 85211031
   display_labels:
     85171300: Smartphones
-    88062210: Multi-rotor drones
-    85241100: LCD modules
-    85414100: LEDs
+    88062210: Drones
     85414300: Photovoltaic modules
-    85235200: Smart cards
     85281011: Tape video recorders
-    85282010: Monochrome CRT monitors
-    85401130: CRT picture tubes 42-52 cm
-    85211039: Tape video apparatus
     85281079: CRT televisions
-    85401190: CRT picture tubes >52 cm
     85211031: Tape camcorders
 
 paths:
@@ -50,7 +36,7 @@ paths:
   concordance_sheet: null
   annual_base_dir: data/extracted_annual_no_confidential/products_like
   weights_dir: outputs/weights/adjacent
-  output_dir: outputs/analysis/synthetic_persistence_qualitative
+  output_dir: outputs/analysis/synthetic_persistence_thesis_examples
 
 chaining:
   finalize_weights: true
@@ -66,7 +52,7 @@ sample:
   exclude_partners: []
 
 plot:
-  summary_output_path: outputs/analysis/synthetic_persistence_qualitative/qualitative_summary.png
+  summary_output_path: outputs/analysis/synthetic_persistence_thesis_examples/qualitative_summary.png
   use_latex: true
   latex_preamble: "\\usepackage{newtxtext,newtxmath}"
   line_width: 1.0

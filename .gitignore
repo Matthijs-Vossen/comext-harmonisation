@@ -8,6 +8,7 @@ AGENTS.md
 EXPERIMENT_CONTEXT.md
 *.pdf
 docs/
+data/crm_allocations/annex2_norm.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -216,3 +217,5 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+

@@ -32,6 +32,29 @@ def test_synthetic_persistence_config_defaults(tmp_path: Path) -> None:
     assert cfg.years.prehistory_anchor == 2023
     assert cfg.years.afterlife_anchor == 1988
     assert len(cfg.candidates.afterlife) == 7
+    assert cfg.candidates.display_labels == {}
+
+
+def test_synthetic_persistence_config_loads_optional_display_labels(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "synthetic_labels.yaml"
+    cfg_path.write_text(
+        _base_yaml(
+            """
+candidates:
+  prehistory: [85171300]
+  afterlife: [85211031]
+  display_labels:
+    85171300: Smartphones
+    85211031: Tape camcorders
+"""
+        )
+    )
+
+    cfg = load_synthetic_persistence_config(cfg_path)
+    assert cfg.candidates.display_labels == {
+        "85171300": "Smartphones",
+        "85211031": "Tape camcorders",
+    }
 
 
 def test_synthetic_persistence_config_rejects_unknown_flow_mode(tmp_path: Path) -> None:

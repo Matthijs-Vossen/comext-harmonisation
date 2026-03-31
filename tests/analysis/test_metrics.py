@@ -3,6 +3,7 @@ import pandas as pd
 
 from comext_harmonisation.analysis.common.metrics import (
     entropy_weighted,
+    mae,
     mae_weighted,
     r2_45_weighted,
     r2_45_weighted_symmetric,
@@ -83,3 +84,16 @@ def test_mae_weighted_basic():
     mae = mae_weighted(x, y, w_initial, w_target)
     # symmetric weights -> [1,1], |y-x| -> [0,1]
     assert np.isclose(mae, 0.5)
+
+
+def test_mae_basic():
+    x = np.array([0.0, 1.0], dtype=float)
+    y = np.array([0.0, 2.0], dtype=float)
+    assert np.isclose(mae(x, y), 0.5)
+
+
+def test_mae_and_mae_weighted_agree_for_equal_weights():
+    x = np.array([0.1, 0.4, 0.9], dtype=float)
+    y = np.array([0.3, 0.1, 0.6], dtype=float)
+    weights = np.ones(3, dtype=float)
+    assert np.isclose(mae(x, y), mae_weighted(x, y, weights, weights))

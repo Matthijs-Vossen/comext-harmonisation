@@ -18,7 +18,7 @@ measures:
   weights_source: VALUE_EUR
   analysis_measure: VALUE_EUR
 
-metrics: ["r2_45", "r2_45_weighted_symmetric"]
+metrics: ["r2_45"]
 
 paths:
   concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls

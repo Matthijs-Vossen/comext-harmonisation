@@ -213,22 +213,24 @@ def _classify_candidate_status(
 
 def _candidate_rows(config: SyntheticPersistenceConfig) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
-    for code in config.candidates.prehistory:
+    for idx, code in enumerate(config.candidates.prehistory, start=1):
         rows.append(
             {
                 "dimension": PREHISTORY_SET,
                 "set_name": PREHISTORY_SET,
                 "code": str(code),
-                "label": str(code),
+                "label": config.candidates.display_labels.get(str(code), str(code)),
+                "display_order": idx,
             }
         )
-    for code in config.candidates.afterlife:
+    for idx, code in enumerate(config.candidates.afterlife, start=1):
         rows.append(
             {
                 "dimension": AFTERLIFE_SET,
                 "set_name": AFTERLIFE_SET,
                 "code": str(code),
-                "label": str(code),
+                "label": config.candidates.display_labels.get(str(code), str(code)),
+                "display_order": idx,
             }
         )
     return rows
@@ -269,7 +271,7 @@ def _build_code_catalog(
             }
         )
 
-    return pd.DataFrame(rows).sort_values(["set_name", "code"]).reset_index(drop=True)
+    return pd.DataFrame(rows).sort_values(["set_name", "display_order"]).reset_index(drop=True)
 
 
 def _prehistory_intro_year(timing: CandidateTiming) -> int | None:
@@ -331,6 +333,7 @@ def _build_candidate_series(
                     "set_name": str(item.set_name),
                     "code": code,
                     "label": str(item.label),
+                    "display_order": int(item.display_order),
                     "year": int(year),
                     "value_conv": float(value_conv),
                     "share_conv": float(share_conv),
@@ -341,8 +344,11 @@ def _build_candidate_series(
                     "last_observed_year": last_year,
                 }
             )
-
-    return pd.DataFrame(rows).sort_values(["set_name", "code", "year"]).reset_index(drop=True)
+    return (
+        pd.DataFrame(rows)
+        .sort_values(["set_name", "display_order", "year"])
+        .reset_index(drop=True)
+    )
 
 
 def _peak_point(frame: pd.DataFrame) -> tuple[float, int | None]:
@@ -386,6 +392,9 @@ def _compute_code_evidence(candidate_series: pd.DataFrame) -> pd.DataFrame:
                 "dimension": dimension,
                 "set_name": set_name,
                 "code": code,
+                "display_order": int(frame["display_order"].iloc[0])
+                if "display_order" in frame.columns
+                else 0,
                 "synthetic_years": int(len(synthetic)),
                 "inlife_years": int(len(inlife)),
                 "peak_share": peak_share,
@@ -409,8 +418,11 @@ def _compute_code_evidence(candidate_series: pd.DataFrame) -> pd.DataFrame:
                 "synthetic_last_year_share": synthetic_last_share,
             }
         )
-
-    return pd.DataFrame(rows).sort_values(["set_name", "code"]).reset_index(drop=True)
+    return (
+        pd.DataFrame(rows)
+        .sort_values(["set_name", "display_order"])
+        .reset_index(drop=True)
+    )
 
 
 def _plot_style(use_latex: bool, latex_preamble: str) -> None:
@@ -481,7 +493,11 @@ def _plot_small_multiples_section(
     line_width: float,
     y_axis_unit: str,
 ) -> None:
-    series = candidate_series.loc[candidate_series["set_name"] == dimension_set_name]
+    series = candidate_series.loc[candidate_series["set_name"] == dimension_set_name].copy()
+    sort_columns = ["year"]
+    if "display_order" in series.columns:
+        sort_columns = ["display_order", "year"]
+    series = series.sort_values(sort_columns)
     codes = list(series["code"].drop_duplicates())
     years = series["year"]
     x_min = int(years.min()) if not years.empty else None
@@ -494,8 +510,9 @@ def _plot_small_multiples_section(
 
         code = codes[idx]
         frame = series.loc[series["code"] == code].sort_values("year")
+        label = str(frame["label"].iloc[0]) if not frame.empty else code
         observed, synthetic = _split_regime_segments_for_plot(frame)
-        color = "tab:blue"
+        color = "black"
         if not observed.empty:
             ax.plot(
                 observed["year"],
@@ -516,12 +533,27 @@ def _plot_small_multiples_section(
         if x_min is not None and x_max is not None:
             ax.set_xlim(x_min, x_max)
         _format_share_axis(ax, y_axis_unit=y_axis_unit)
-        ax.set_title(code, fontsize=9)
-        ax.grid(alpha=0.15, linewidth=0.5)
-        if idx % 3 == 0:
-            ax.set_ylabel("Converted share")
-        if idx >= len(codes) - 3:
-            ax.set_xlabel("Year")
+        ax.set_title(_format_panel_title(label, code), fontsize=8.5, pad=4)
+        ax.grid(True, axis="both", linestyle="--", linewidth=0.5, alpha=0.25)
+        ax.tick_params(labelsize=7.5)
+
+
+def _format_panel_title(label: str, code: str) -> str:
+    short_label = str(label).strip()
+    short_code = str(code).strip()
+    if not short_label or short_label == short_code:
+        return short_code
+    return f"{short_label}\n({short_code})"
+
+
+def _format_section_title(title: str, *, use_latex: bool) -> str:
+    if use_latex:
+        return rf"\textbf{{{title}}}"
+    return title
+
+
+def _panel_columns(code_count: int, *, max_columns: int) -> int:
+    return max(1, min(int(code_count), max_columns))
 
 
 def _plot_summary(
@@ -538,23 +570,38 @@ def _plot_summary(
 
     _plot_style(use_latex=use_latex, latex_preamble=latex_preamble)
 
-    ncols = 3
     pre_codes = candidate_series.loc[
         candidate_series["set_name"] == PREHISTORY_SET, "code"
     ].drop_duplicates()
     after_codes = candidate_series.loc[
         candidate_series["set_name"] == AFTERLIFE_SET, "code"
     ].drop_duplicates()
-    nrows_pre = max(1, int(np.ceil(len(pre_codes) / ncols)))
-    nrows_after = max(1, int(np.ceil(len(after_codes) / ncols)))
-    total_rows = nrows_pre + nrows_after
+    ncols_pre = _panel_columns(len(pre_codes), max_columns=3)
+    ncols_after = _panel_columns(len(after_codes), max_columns=4)
+    nrows_pre = max(1, int(np.ceil(len(pre_codes) / ncols_pre)))
+    nrows_after = max(1, int(np.ceil(len(after_codes) / ncols_after)))
+    fig_height = max(6.5, 1.75 * (nrows_pre + nrows_after) + 1.2)
 
-    fig, axes = plt.subplots(total_rows, ncols, figsize=(12, max(7, 2.6 * total_rows)))
-    if total_rows == 1:
-        axes = np.array([axes])
+    fig = plt.figure(figsize=(12.0, fig_height), layout="constrained")
+    outer = fig.add_gridspec(
+        4,
+        1,
+        height_ratios=[nrows_pre, 0.08, nrows_after, 0.035],
+        hspace=0.04,
+    )
 
-    pre_axes = [axes[r, c] for r in range(nrows_pre) for c in range(ncols)]
-    after_axes = [axes[r, c] for r in range(nrows_pre, total_rows) for c in range(ncols)]
+    pre_fig = fig.add_subfigure(outer[0])
+    pre_fig.suptitle(
+        _format_section_title(
+            "Forward conversion trajectories (CN2023 anchor)",
+            use_latex=use_latex,
+        ),
+        y=1.08,
+        fontsize=11,
+    )
+    pre_fig.supylabel("Converted share", fontsize=9)
+    pre_axes_grid = pre_fig.subplots(nrows_pre, ncols_pre, squeeze=False, sharex=True)
+    pre_axes = [ax for row in pre_axes_grid for ax in row]
 
     _plot_small_multiples_section(
         candidate_series=candidate_series,
@@ -563,6 +610,27 @@ def _plot_summary(
         line_width=line_width,
         y_axis_unit=y_axis_unit,
     )
+
+    title_ax = fig.add_subplot(outer[1])
+    title_ax.axis("off")
+    title_ax.text(
+        0.5,
+        0.5,
+        _format_section_title(
+            "Backward conversion trajectories (CN1988 anchor)",
+            use_latex=use_latex,
+        ),
+        ha="center",
+        va="center",
+        fontsize=11,
+    )
+
+    after_fig = fig.add_subfigure(outer[2])
+    after_fig.supxlabel("Year", fontsize=9)
+    after_fig.supylabel("Converted share", fontsize=9)
+    after_axes_grid = after_fig.subplots(nrows_after, ncols_after, squeeze=False, sharex=True)
+    after_axes = [ax for row in after_axes_grid for ax in row]
+
     _plot_small_multiples_section(
         candidate_series=candidate_series,
         dimension_set_name=AFTERLIFE_SET,
@@ -571,42 +639,23 @@ def _plot_summary(
         y_axis_unit=y_axis_unit,
     )
 
-    # Section headers
-    axes[0, 0].text(
-        -0.05,
-        1.22,
-        "Pre-history trajectories (CN2023 anchor)",
-        transform=axes[0, 0].transAxes,
-        fontsize=11,
-        fontweight="bold",
-        va="bottom",
-    )
-    axes[nrows_pre, 0].text(
-        -0.05,
-        1.22,
-        "Afterlife trajectories (CN1988 anchor)",
-        transform=axes[nrows_pre, 0].transAxes,
-        fontsize=11,
-        fontweight="bold",
-        va="bottom",
-    )
-
-    handles = [
-        Line2D([0], [0], color="tab:blue", linestyle="-", linewidth=line_width),
-        Line2D([0], [0], color="tab:blue", linestyle="--", linewidth=line_width),
-    ]
-    fig.legend(
-        handles,
-        ["observed (in-life)", "LT-converted (synthetic window)"],
-        loc="upper center",
+    legend_ax = fig.add_subplot(outer[3])
+    legend_ax.axis("off")
+    legend_ax.legend(
+        handles=[
+            Line2D([0], [0], color="black", linewidth=line_width, linestyle="-"),
+            Line2D([0], [0], color="black", linewidth=line_width, linestyle="--"),
+        ],
+        labels=["Observed share", "Converted share"],
+        loc="center",
         ncol=2,
         frameon=False,
-        fontsize=9,
-        bbox_to_anchor=(0.5, 1.01),
+        fontsize=8.5,
+        handlelength=2.8,
+        columnspacing=1.8,
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.tight_layout()
     fig.savefig(output_path, dpi=300, bbox_inches="tight", pad_inches=0.02)
     plt.close(fig)
 

@@ -122,6 +122,39 @@ Synthetic-persistence qualitative evidence analysis:
 python -m comext_harmonisation.cli.run_analysis --config configs/analysis/synthetic_persistence.yaml
 ```
 
+Adjacent revised-only CN link-distribution summary:
+
+```bash
+python -m comext_harmonisation.cli.run_analysis --config configs/analysis/link_distribution_adjacent.yaml
+```
+
+Adjacent CN link-distribution summary with observed-universe implied identities:
+
+```bash
+python -m comext_harmonisation.cli.run_analysis --config configs/analysis/link_distribution_adjacent_observed_universe.yaml
+```
+
+Chained CN link-distribution thesis figure:
+
+```bash
+python -m comext_harmonisation.cli.run_analysis --config configs/analysis/chained_link_distribution.yaml
+```
+
+CRM-focused CN2023 revision-exposure figure:
+
+```bash
+python -m comext_harmonisation.cli.run_analysis --config configs/analysis/crm_revision_exposure_2023.yaml
+```
+
+The synthetic-persistence config also supports an optional `candidates.display_labels`
+mapping for human-readable subplot titles and CSV `label` fields.
+
+Thesis-ready 6-example synthetic-persistence figure:
+
+```bash
+python -m comext_harmonisation.cli.run_analysis --config configs/analysis/synthetic_persistence_thesis_examples.yaml
+```
+
 Raw-data bilateral persistence analysis around the CN2007 break:
 
 ```bash
@@ -163,6 +196,10 @@ Strict-link diagnostics:
 
 Analysis artifacts:
 - Bilateral-persistence outputs: `outputs/analysis/bilateral_persistence_cn2007_raw/{table.csv,table.tex,regression_details.csv,sample_diagnostics.csv}`
+- Chained link-distribution outputs: `outputs/analysis/chained_link_distribution/{chained_link_distribution.png,summary.csv}`
+- CRM revision-exposure outputs: `outputs/analysis/crm_revision_exposure_2023/{crm_revision_exposure.png,summary.csv,code_exposure.csv,benchmark_summary.csv}`
+- Link-distribution outputs: `outputs/analysis/link_distribution_adjacent/{summary.csv,focal_codes.csv}`
+- Link-distribution observed-universe outputs: `outputs/analysis/link_distribution_adjacent_observed_universe/{summary.csv,focal_codes.csv}`
 - Synthetic-persistence outputs: `outputs/analysis/synthetic_persistence_qualitative/{code_catalog.csv,candidate_series.csv,code_evidence.csv,qualitative_summary.png}`
 
 The bilateral-persistence analysis is a CN-adapted LT Table 3 diagnostic built on raw reported data. It now reports three rows: a break-centered deterministic-all broad row (`All deterministically break-comparable CN codes`), a filtered `2006->2007` break-group broad row (`All break-group CN codes`), and an adjusted row defined as the ambiguous subset of that retained break universe (`Adjusted CN codes`). The new broad row uses the `2006` or `2007` break basis and includes both linked break-group concepts and deterministically comparable singleton concepts outside the break groups; the linked-group broad and adjusted rows remain restricted to the retained `2006->2007` break universe after nearby non-bijective revision filtering.

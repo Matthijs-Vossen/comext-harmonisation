@@ -1,0 +1,24 @@
+analysis_type: chained_link_distribution
+
+years:
+  backward_anchor: 2024
+  forward_anchor: 1988
+
+paths:
+  concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
+  concordance_sheet: null
+  annual_base_dir: data/extracted_annual_no_confidential/products_like
+  output_dir: outputs/analysis/chained_link_distribution
+
+scope:
+  mode: observed_universe_implied_identities
+
+output:
+  summary_csv: outputs/analysis/chained_link_distribution/summary.csv
+
+plot:
+  output_path: outputs/analysis/chained_link_distribution/chained_link_distribution.png
+  bar_output_path: outputs/analysis/chained_link_distribution/chained_link_distribution_bars.png
+  title: Chained CN link distributions relative to anchor vintages
+  use_latex: true
+  latex_preamble: "\\usepackage{newtxtext,newtxmath}"
