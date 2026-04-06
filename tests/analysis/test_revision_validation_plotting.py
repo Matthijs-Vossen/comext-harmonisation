@@ -11,7 +11,6 @@ def _sample_revision_validation_summary() -> pd.DataFrame:
             "period": ["20012002", "20022003"],
             "non_revised_mae": [0.10, 0.20],
             "break_year_mae": [0.12, float("nan")],
-            "excess_break_mae": [0.02, float("nan")],
             "n_points_break": [12.0, float("nan")],
             "instability_p50": [0.05, 0.06],
             "instability_p90": [0.10, 0.11],
@@ -50,9 +49,8 @@ def test_revision_validation_heatmap_defaults_to_no_annotations(
     bottom_ax = axes[2]
     scale_axes = axes[3:]
     assert [tick.get_text() for tick in top_ax.get_yticklabels()] == [
-        "Non-revised MAE",
+        "Local baseline MAE",
         "Break-year MAE",
-        "Excess break MAE",
     ]
     assert [tick.get_text() for tick in middle_ax.get_yticklabels()] == [
         "Median instability",

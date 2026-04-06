@@ -411,7 +411,6 @@ def plot_revision_validation_heatmap(
             [
                 ("non_revised_mae", "Local baseline MAE"),
                 ("break_year_mae", "Break-year MAE"),
-                ("excess_break_mae", "Excess break MAE"),
             ],
         ),
         (
@@ -479,7 +478,7 @@ def plot_revision_validation_heatmap(
         ncols=2,
         figure=fig,
         width_ratios=[22, 3.8],
-        height_ratios=[3, 2, 1],
+        height_ratios=[2, 2, 1],
     )
     axes_flat = [fig.add_subplot(grid[row_idx, 0]) for row_idx in range(3)]
     scale_axes = [fig.add_subplot(grid[row_idx, 1]) for row_idx in range(3)]
@@ -879,12 +878,12 @@ def plot_crm_revision_exposure_panels(
     anchor_year = int(data["anchor_year"].iloc[0]) if not data.empty else 2023
     population_styles = {
         "crm_anchor_codes": {
-            "label": f"CRM-related CN{anchor_year} codes",
+            "label": "CRM-relevant subset",
             "color": "#334155",
             "linestyle": "-",
         },
         "all_anchor_codes": {
-            "label": f"All observed CN{anchor_year} codes",
+            "label": f"All CN{anchor_year} codes",
             "color": "#94a3b8",
             "linestyle": "--",
         },
@@ -940,7 +939,7 @@ def plot_crm_revision_exposure_panels(
                     zorder=3,
                 )
 
-        ax.set_ylabel("Share of anchor codes")
+        ax.set_ylabel(f"Share of CN{anchor_year} codes")
         ax.set_ylim(0.0, 1.0)
         ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
         ax.set_yticks(np.linspace(0.0, 1.0, 6))
@@ -963,7 +962,7 @@ def plot_crm_revision_exposure_panels(
         ax.tick_params(axis="x", which="major", labelsize=8, length=4.0, width=0.6, color="#4d4d4d")
         ax.tick_params(axis="x", which="minor", length=2.0, width=0.45, color="#777777")
         ax.tick_params(axis="y", labelsize=8, length=3.5, width=0.6, color="#4d4d4d")
-        ax.set_xlabel("Comparison year")
+        ax.set_xlabel("Comparison vintage (HS/CN revision)")
 
         legend_handles = [
             Line2D(
