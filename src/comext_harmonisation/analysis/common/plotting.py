@@ -977,11 +977,11 @@ def plot_crm_revision_exposure_panels(
         ]
 
         legend_y = 0.955
-        top_margin = 0.94
+        top_margin = 0.92
         if title:
             fig.suptitle(title, y=0.965)
-            legend_y = 0.935
-            top_margin = 0.955
+            legend_y = 0.955
+            top_margin = 0.92
         fig.legend(
             legend_handles,
             [handle.get_label() for handle in legend_handles],

@@ -24,6 +24,6 @@ output:
 
 plot:
   output_path: outputs/analysis/crm_revision_exposure_2023/crm_revision_exposure.png
-  title: Cumulative exposure of CN2023 codes to revisions requiring estimated allocation
+  title: null
   use_latex: true
   latex_preamble: "\\usepackage{newtxtext,newtxmath}"
