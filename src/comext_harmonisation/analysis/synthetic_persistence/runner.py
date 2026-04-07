@@ -435,10 +435,20 @@ def _plot_style(use_latex: bool, latex_preamble: str) -> None:
 
 
 def _format_share_axis(ax, *, y_axis_unit: str) -> None:
+    y_min, y_max = ax.get_ylim()
+    if y_min > 0.0:
+        ax.set_ylim(bottom=-y_min, top=y_max)
+
     if y_axis_unit == "percent":
         from matplotlib.ticker import PercentFormatter
 
-        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=3))
+
+
+def _apply_panel_axis_override(ax, *, code: str) -> None:
+    if str(code).strip() == "88062210":
+        ax.set_ylim(-5e-06, 3.1e-04)
+        ax.set_yticks([0.0, 1e-04, 2e-04, 3e-04])
 
 
 def _split_regime_segments_for_plot(
@@ -491,6 +501,7 @@ def _plot_small_multiples_section(
     dimension_set_name: str,
     output_axes: list[object],
     line_width: float,
+    font_scale: float,
     y_axis_unit: str,
 ) -> None:
     series = candidate_series.loc[candidate_series["set_name"] == dimension_set_name].copy()
@@ -532,10 +543,11 @@ def _plot_small_multiples_section(
 
         if x_min is not None and x_max is not None:
             ax.set_xlim(x_min, x_max)
+        _apply_panel_axis_override(ax, code=code)
         _format_share_axis(ax, y_axis_unit=y_axis_unit)
-        ax.set_title(_format_panel_title(label, code), fontsize=8.5, pad=4)
+        ax.set_title(_format_panel_title(label, code), fontsize=8.5 * font_scale, pad=4)
         ax.grid(True, axis="both", linestyle="--", linewidth=0.5, alpha=0.25)
-        ax.tick_params(labelsize=7.5)
+        ax.tick_params(labelsize=7.5 * font_scale)
 
 
 def _format_panel_title(label: str, code: str) -> str:
@@ -563,6 +575,8 @@ def _plot_summary(
     use_latex: bool,
     latex_preamble: str,
     line_width: float,
+    font_scale: float,
+    section_title_scale: float,
     y_axis_unit: str,
 ) -> None:
     import matplotlib.pyplot as plt
@@ -580,9 +594,9 @@ def _plot_summary(
     ncols_after = _panel_columns(len(after_codes), max_columns=4)
     nrows_pre = max(1, int(np.ceil(len(pre_codes) / ncols_pre)))
     nrows_after = max(1, int(np.ceil(len(after_codes) / ncols_after)))
-    fig_height = max(6.5, 1.75 * (nrows_pre + nrows_after) + 1.2)
+    fig_height = max(6.5, (1.75 * font_scale) * (nrows_pre + nrows_after) + 1.2)
 
-    fig = plt.figure(figsize=(12.0, fig_height), layout="constrained")
+    fig = plt.figure(figsize=(10.5, fig_height), layout="constrained")
     outer = fig.add_gridspec(
         4,
         1,
@@ -597,9 +611,9 @@ def _plot_summary(
             use_latex=use_latex,
         ),
         y=1.08,
-        fontsize=11,
+        fontsize=11 * font_scale * section_title_scale,
     )
-    pre_fig.supylabel("Converted share", fontsize=9)
+    pre_fig.supylabel("Share of total annual trade", fontsize=9 * font_scale)
     pre_axes_grid = pre_fig.subplots(nrows_pre, ncols_pre, squeeze=False, sharex=True)
     pre_axes = [ax for row in pre_axes_grid for ax in row]
 
@@ -608,6 +622,7 @@ def _plot_summary(
         dimension_set_name=PREHISTORY_SET,
         output_axes=pre_axes,
         line_width=line_width,
+        font_scale=font_scale,
         y_axis_unit=y_axis_unit,
     )
 
@@ -622,12 +637,12 @@ def _plot_summary(
         ),
         ha="center",
         va="center",
-        fontsize=11,
+        fontsize=11 * font_scale * section_title_scale,
     )
 
     after_fig = fig.add_subfigure(outer[2])
-    after_fig.supxlabel("Year", fontsize=9)
-    after_fig.supylabel("Converted share", fontsize=9)
+    after_fig.supxlabel("Year", fontsize=9 * font_scale)
+    after_fig.supylabel("Share of total annual trade", fontsize=9 * font_scale)
     after_axes_grid = after_fig.subplots(nrows_after, ncols_after, squeeze=False, sharex=True)
     after_axes = [ax for row in after_axes_grid for ax in row]
 
@@ -636,6 +651,7 @@ def _plot_summary(
         dimension_set_name=AFTERLIFE_SET,
         output_axes=after_axes,
         line_width=line_width,
+        font_scale=font_scale,
         y_axis_unit=y_axis_unit,
     )
 
@@ -650,7 +666,7 @@ def _plot_summary(
         loc="center",
         ncol=2,
         frameon=False,
-        fontsize=8.5,
+        fontsize=8.5 * font_scale,
         handlelength=2.8,
         columnspacing=1.8,
     )
@@ -725,6 +741,8 @@ def run_synthetic_persistence_analysis(config: SyntheticPersistenceConfig) -> di
         use_latex=config.plot.use_latex,
         latex_preamble=config.plot.latex_preamble,
         line_width=config.plot.line_width,
+        font_scale=config.plot.font_scale,
+        section_title_scale=config.plot.section_title_scale,
         y_axis_unit=config.plot.y_axis_unit,
     )
 

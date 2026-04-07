@@ -1,6 +1,9 @@
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+from matplotlib.ticker import PercentFormatter
 
 from comext_harmonisation.analysis.config import (
     SyntheticPersistenceCandidatesConfig,
@@ -62,6 +65,8 @@ def _make_config(tmp_path: Path) -> SyntheticPersistenceConfig:
             latex_preamble="",
             line_width=1.0,
             point_size=3.0,
+            font_scale=1.0,
+            section_title_scale=1.0,
             y_axis_unit="percent",
         ),
     )
@@ -194,3 +199,89 @@ def test_synthetic_persistence_runner_writes_expected_outputs(monkeypatch, tmp_p
         "synthetic_cumulative_share",
         "cumulative_ratio_synth_to_inlife",
     }.issubset(evidence.columns)
+
+
+def test_plot_summary_applies_scaled_fonts_and_labels(tmp_path: Path, monkeypatch) -> None:
+    captured = {}
+    original_close = plt.close
+
+    def _capture_close(fig=None):
+        if fig is not None:
+            captured["fig"] = fig
+
+    monkeypatch.setattr(plt, "close", _capture_close)
+
+    candidate_series = pd.DataFrame(
+        {
+            "set_name": ["prehistory", "prehistory", "afterlife", "afterlife"],
+            "code": ["11111111", "11111111", "22222222", "22222222"],
+            "label": ["Modern widgets", "Modern widgets", "Legacy widgets", "Legacy widgets"],
+            "year": [2000, 2001, 2000, 2001],
+            "share_conv": [0.10, 0.12, 0.20, 0.18],
+            "is_synthetic_window": [True, False, False, True],
+            "display_order": [0, 0, 0, 0],
+        }
+    )
+
+    output_path = tmp_path / "plot.png"
+    try:
+        sp_runner._plot_summary(
+            candidate_series=candidate_series,
+            output_path=output_path,
+            use_latex=False,
+            latex_preamble="",
+            line_width=1.0,
+            font_scale=1.35,
+            section_title_scale=0.9,
+            y_axis_unit="percent",
+        )
+    finally:
+        plt.close = original_close
+        fig = captured.get("fig")
+        if fig is not None:
+            original_close(fig)
+
+    fig = captured["fig"]
+    assert output_path.exists()
+
+    texts = {text.get_text(): text for text in fig.findobj(match=lambda obj: hasattr(obj, "get_text"))}
+    assert texts["Share of total annual trade"].get_fontsize() == 9 * 1.35
+    assert texts["Forward conversion trajectories (CN2023 anchor)"].get_fontsize() == 11 * 1.35 * 0.9
+    legend = next(ax.get_legend() for ax in fig.axes if ax.get_legend() is not None)
+    legend_text = {text.get_text(): text for text in legend.get_texts()}
+    assert legend_text["Observed share"].get_fontsize() == 8.5 * 1.35
+    assert legend_text["Converted share"].get_fontsize() == 8.5 * 1.35
+
+    modern_title = next(ax.title for ax in fig.axes if ax.get_title() == "Modern widgets\n(11111111)")
+    assert modern_title.get_fontsize() == 8.5 * 1.35
+    assert fig.axes[0].get_xticklabels()[0].get_fontsize() == 7.5 * 1.35
+    formatter = fig.axes[0].yaxis.get_major_formatter()
+    assert isinstance(formatter, PercentFormatter)
+    assert formatter.decimals == 3
+
+
+def test_format_share_axis_exposes_zero_tick_when_autoscale_starts_above_zero() -> None:
+    fig, ax = plt.subplots()
+    try:
+        ax.plot([1990, 1991, 1992], [0.00012, 0.00026, 0.00018], linestyle="--")
+        lower_before, upper_before = ax.get_ylim()
+        assert lower_before > 0.0
+
+        sp_runner._format_share_axis(ax, y_axis_unit="percent")
+
+        lower_after, upper_after = ax.get_ylim()
+        assert lower_after < 0.0
+        assert upper_after == upper_before
+        assert 0.0 in ax.get_yticks()
+    finally:
+        plt.close(fig)
+
+
+def test_apply_panel_axis_override_sets_drone_ticks_and_lower_padding() -> None:
+    fig, ax = plt.subplots()
+    try:
+        sp_runner._apply_panel_axis_override(ax, code="88062210")
+        assert np.allclose(ax.get_yticks(), [0.0, 7e-05, 1.4e-04, 2.1e-04, 2.8e-04])
+        assert np.allclose(ax.get_ylim(), [-5e-06, 2.95e-04])
+    finally:
+        plt.close(fig)

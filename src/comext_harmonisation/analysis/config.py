@@ -258,6 +258,8 @@ class SyntheticPersistencePlotConfig:
     latex_preamble: str
     line_width: float
     point_size: float
+    font_scale: float
+    section_title_scale: float
     y_axis_unit: str
 
 
@@ -1114,6 +1116,8 @@ def load_synthetic_persistence_config(path: Path) -> SyntheticPersistenceConfig:
             "latex_preamble": r"\\usepackage{newtxtext,newtxmath}",
             "line_width": 1.0,
             "point_size": 3.0,
+            "font_scale": 1.0,
+            "section_title_scale": 1.0,
             "y_axis_unit": "percent",
         },
         data.get("plot"),
@@ -1168,6 +1172,8 @@ def load_synthetic_persistence_config(path: Path) -> SyntheticPersistenceConfig:
             latex_preamble=str(plot["latex_preamble"]),
             line_width=float(plot["line_width"]),
             point_size=float(plot["point_size"]),
+            font_scale=float(plot["font_scale"]),
+            section_title_scale=float(plot["section_title_scale"]),
             y_axis_unit=y_axis_unit,
         ),
     )

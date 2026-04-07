@@ -57,4 +57,6 @@ plot:
   latex_preamble: "\\usepackage{newtxtext,newtxmath}"
   line_width: 1.0
   point_size: 3.0
+  font_scale: 1.65
+  section_title_scale: 0.85
   y_axis_unit: percent

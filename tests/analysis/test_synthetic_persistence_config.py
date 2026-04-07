@@ -29,10 +29,42 @@ def test_synthetic_persistence_config_defaults(tmp_path: Path) -> None:
     assert cfg.flow.mode == "imports_only"
     assert cfg.flow.flow_code == "1"
     assert cfg.plot.y_axis_unit == "percent"
+    assert cfg.plot.font_scale == 1.0
+    assert cfg.plot.section_title_scale == 1.0
     assert cfg.years.prehistory_anchor == 2023
     assert cfg.years.afterlife_anchor == 1988
     assert len(cfg.candidates.afterlife) == 7
     assert cfg.candidates.display_labels == {}
+
+
+def test_synthetic_persistence_config_loads_plot_font_scale(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "synthetic_font_scale.yaml"
+    cfg_path.write_text(
+        _base_yaml(
+            """
+plot:
+  font_scale: 1.35
+"""
+        )
+    )
+
+    cfg = load_synthetic_persistence_config(cfg_path)
+    assert cfg.plot.font_scale == 1.35
+
+
+def test_synthetic_persistence_config_loads_section_title_scale(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "synthetic_section_title_scale.yaml"
+    cfg_path.write_text(
+        _base_yaml(
+            """
+plot:
+  section_title_scale: 0.9
+"""
+        )
+    )
+
+    cfg = load_synthetic_persistence_config(cfg_path)
+    assert cfg.plot.section_title_scale == 0.9
 
 
 def test_synthetic_persistence_config_loads_optional_display_labels(tmp_path: Path) -> None:
