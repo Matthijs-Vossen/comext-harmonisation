@@ -36,6 +36,10 @@ def plot_share_panels(
         rcParams["font.family"] = "serif"
         rcParams["text.latex.preamble"] = latex_preamble
 
+    axis_label_fontsize = 12
+    tick_label_fontsize = 10.5
+    annotation_fontsize = 11.5
+    legend_fontsize = 10.5
     n_panels = len(pairs)
     nrows = 2
     ncols = 2
@@ -66,14 +70,21 @@ def plot_share_panels(
         ticks = [0.0, 0.25, 0.5, 0.75, 1.0]
         ax.set_xticks(ticks)
         ax.set_yticks(ticks)
-        ax.set_xlabel(f"{pair.x_year} Trade Shares")
-        ax.set_ylabel(f"{pair.y_year} Trade Shares")
+        ax.set_xlabel(f"{pair.x_year} Trade Shares", fontsize=axis_label_fontsize)
+        ax.set_ylabel(f"{pair.y_year} Trade Shares", fontsize=axis_label_fontsize)
+        ax.tick_params(axis="both", labelsize=tick_label_fontsize)
         if annotation_by_year and pair.x_year in annotation_by_year:
             text = annotation_by_year[pair.x_year]
         else:
             r2 = r2_45(x, y)
             text = rf"$R^2$ = {r2:.3f}"
-        ax.text(annotation_pos[0], annotation_pos[1], text, transform=ax.transAxes)
+        ax.text(
+            annotation_pos[0],
+            annotation_pos[1],
+            text,
+            transform=ax.transAxes,
+            fontsize=annotation_fontsize,
+        )
 
     for idx in range(n_panels, nrows * ncols):
         row = idx // ncols
@@ -118,6 +129,7 @@ def plot_share_panels(
                 frameon=False,
                 handletextpad=0.4,
                 columnspacing=1.0,
+                prop={"size": legend_fontsize},
             )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -151,6 +163,9 @@ def plot_chain_length_panels(
             "exposure_weighted",
             "diffuseness_weighted",
         ]
+    axis_label_fontsize = 11.5
+    tick_label_fontsize = 10
+    title_fontsize = 12
     metric_map = {
         "r2_45_weighted_symmetric": ("one_minus_r2_sym", "1 − $R^2_{sym}$"),
         "delta_r2_45_weighted_symmetric": (
@@ -213,10 +228,11 @@ def plot_chain_length_panels(
                 linewidth=1.0,
             )
             ax.set_ylim(*y_limits[metric])
-            ax.set_xlabel("Chain length")
-            ax.set_ylabel(label)
+            ax.set_xlabel("Chain length", fontsize=axis_label_fontsize)
+            ax.set_ylabel(label, fontsize=axis_label_fontsize)
+            ax.tick_params(axis="both", labelsize=tick_label_fontsize)
             if row == 0:
-                ax.set_title(f"{direction.title()} chaining")
+                ax.set_title(f"{direction.title()} chaining", fontsize=title_fontsize)
 
     if title:
         fig.suptitle(title, y=0.98)
@@ -251,6 +267,9 @@ def plot_chain_length_delta_panels(
         rcParams["font.family"] = "serif"
         rcParams["text.latex.preamble"] = latex_preamble
 
+    axis_label_fontsize = 11.5
+    tick_label_fontsize = 10
+    title_fontsize = 12
     metric_map = {
         "mae_weighted": ("mae_weighted", "wMAE"),
         "mae_weighted_step": ("mae_weighted_step", "$\\mathrm{wMAE}_\\ell$"),
@@ -338,13 +357,17 @@ def plot_chain_length_delta_panels(
             }:
                 ax.yaxis.set_major_locator(MaxNLocator(nbins=5))
             if row == len(metric_rows) - 1:
-                ax.set_xlabel("Base year vintage (HS/CN revision)")
+                ax.set_xlabel(
+                    "Base year vintage (HS/CN revision)",
+                    fontsize=axis_label_fontsize,
+                )
             else:
                 ax.set_xlabel("")
             if col == 0:
-                ax.set_ylabel(label)
+                ax.set_ylabel(label, fontsize=axis_label_fontsize)
             else:
                 ax.set_ylabel("")
+            ax.tick_params(axis="both", labelsize=tick_label_fontsize)
             if row == 0:
                 header = f"{direction.title()} chaining"
                 if spearman_by_direction and direction in spearman_by_direction:
@@ -355,7 +378,7 @@ def plot_chain_length_delta_panels(
                             + r"$\rho_S(\mathrm{wMAE}_\ell, \mathrm{w}D_\ell)$"
                             + f" = {rho_val:.2f}"
                         )
-                ax.set_title(header)
+                ax.set_title(header, fontsize=title_fontsize)
             if anchor_year is not None:
                 hs_years = [2022, 2017, 2012, 2007, 2002, 1996, 1992, 1988]
                 ticks: list[tuple[int, str]] = []
@@ -368,7 +391,12 @@ def plot_chain_length_delta_panels(
                 ticks = sorted(ticks, key=lambda item: item[0])
                 if ticks:
                     ax.set_xticks([item[0] for item in ticks])
-                    ax.set_xticklabels([item[1] for item in ticks], rotation=30, ha="right")
+                    ax.set_xticklabels(
+                        [item[1] for item in ticks],
+                        rotation=30,
+                        ha="right",
+                        fontsize=tick_label_fontsize,
+                    )
                     for x_tick, _ in ticks:
                         ax.axvline(x_tick, color="#cccccc", linewidth=0.6, alpha=0.3)
             if metric == "mae_weighted":
@@ -410,7 +438,7 @@ def plot_revision_validation_heatmap(
             "Local persistence",
             [
                 ("non_revised_mae", "Local baseline MAE"),
-                ("break_year_mae", "Break-year MAE"),
+                ("break_year_mae", "Revision-year MAE"),
             ],
         ),
         (
@@ -424,7 +452,7 @@ def plot_revision_validation_heatmap(
             ],
         ),
         (
-            "Break-year sample size",
+            "Revision-year sample size",
             [
                 ("n_points_break", "Observations"),
             ],
@@ -470,8 +498,13 @@ def plot_revision_validation_heatmap(
             plot_data[row_idx, finite] = scaled[finite]
         return plot_data, value_data, row_ranges
 
-    fig_width = 9.4
-    fig_height = 3.3 if title else 3.0
+    fig_width = 8.4
+    fig_height = 3.8 if title else 3.5
+    block_title_fontsize = 12
+    tick_label_fontsize = 11
+    x_tick_label_fontsize = 10
+    annotation_fontsize = 8.5
+    scale_label_fontsize = 9.5
     fig = plt.figure(figsize=(fig_width, fig_height), constrained_layout=True)
     grid = GridSpec(
         nrows=3,
@@ -494,14 +527,15 @@ def plot_revision_validation_heatmap(
         scale_ax = scale_axes[block_idx]
         plot_data, value_data, row_ranges = _build_block_arrays(metric_rows)
         ax.imshow(plot_data, aspect="auto", cmap=cmap, vmin=0.0, vmax=1.0)
-        ax.set_title(block_title, fontsize=10, fontweight="bold", pad=8)
+        ax.set_title(block_title, fontsize=block_title_fontsize, fontweight="bold", pad=8)
         ax.set_yticks(np.arange(len(metric_rows)))
-        ax.set_yticklabels([label for _, label in metric_rows])
+        ax.set_yticklabels([label for _, label in metric_rows], fontsize=tick_label_fontsize)
         if block_idx == len(metric_blocks) - 1:
             tick_idx = np.arange(1, len(labels), 2)
             ax.set_xticks(tick_idx)
             ax.set_xticklabels(
                 [labels[idx] for idx in tick_idx],
+                fontsize=x_tick_label_fontsize,
                 rotation=55,
                 ha="right",
                 rotation_mode="anchor",
@@ -530,7 +564,7 @@ def plot_revision_validation_heatmap(
                         text,
                         ha="center",
                         va="center",
-                        fontsize=7,
+                        fontsize=annotation_fontsize,
                         color=text_color,
                     )
         for spine in ax.spines.values():
@@ -565,7 +599,7 @@ def plot_revision_validation_heatmap(
                 _format_scale_value(column, row_range[0]),
                 ha="right",
                 va="center",
-                fontsize=7.5,
+                fontsize=scale_label_fontsize,
                 color="black",
             )
             scale_ax.text(
@@ -574,7 +608,7 @@ def plot_revision_validation_heatmap(
                 _format_scale_value(column, row_range[1]),
                 ha="left",
                 va="center",
-                fontsize=7.5,
+                fontsize=scale_label_fontsize,
                 color="black",
             )
 
@@ -909,7 +943,10 @@ def plot_crm_revision_exposure_panels(
             rcParams["font.family"] = "serif"
             rcParams["text.latex.preamble"] = latex_preamble
 
-        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8.2, 3.8), squeeze=True)
+        axis_label_fontsize = 12
+        tick_label_fontsize = 10.5
+        legend_fontsize = 10.5
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(7.0, 3.75), squeeze=True)
         backward = data.loc[data["panel_direction"] == "backward"].copy()
         backward_metric = backward.loc[backward["metric"] == metric].copy()
         all_years = sorted(set(backward_metric["compare_year"].astype(int).tolist()))
@@ -939,7 +976,7 @@ def plot_crm_revision_exposure_panels(
                     zorder=3,
                 )
 
-        ax.set_ylabel(f"Share of CN{anchor_year} codes")
+        ax.set_ylabel(f"Share of CN{anchor_year} codes", fontsize=axis_label_fontsize)
         ax.set_ylim(0.0, 1.0)
         ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
         ax.set_yticks(np.linspace(0.0, 1.0, 6))
@@ -956,13 +993,31 @@ def plot_crm_revision_exposure_panels(
             ax.set_xticks(major_ticks)
             ax.set_xticks(minor_ticks, minor=True)
             ax.set_xlim(float(min(all_years)), float(max(all_years)))
-            ax.set_xticklabels([f"HS {year}" for year in major_ticks], rotation=0, ha="center")
+            ax.set_xticklabels(
+                [f"HS {year}" for year in major_ticks],
+                rotation=0,
+                ha="center",
+                fontsize=tick_label_fontsize,
+            )
             for x_tick in major_ticks:
                 ax.axvline(x_tick, color="#b8b8b8", linewidth=0.6, alpha=0.25, zorder=4)
-        ax.tick_params(axis="x", which="major", labelsize=8, length=4.0, width=0.6, color="#4d4d4d")
+        ax.tick_params(
+            axis="x",
+            which="major",
+            labelsize=tick_label_fontsize,
+            length=4.0,
+            width=0.6,
+            color="#4d4d4d",
+        )
         ax.tick_params(axis="x", which="minor", length=2.0, width=0.45, color="#777777")
-        ax.tick_params(axis="y", labelsize=8, length=3.5, width=0.6, color="#4d4d4d")
-        ax.set_xlabel("Comparison vintage (HS/CN revision)")
+        ax.tick_params(
+            axis="y",
+            labelsize=tick_label_fontsize,
+            length=3.5,
+            width=0.6,
+            color="#4d4d4d",
+        )
+        ax.set_xlabel("Comparison vintage (HS/CN revision)", fontsize=axis_label_fontsize)
 
         legend_handles = [
             Line2D(
@@ -991,6 +1046,7 @@ def plot_crm_revision_exposure_panels(
             frameon=False,
             handletextpad=0.5,
             columnspacing=1.0,
+            prop={"size": legend_fontsize},
         )
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1026,6 +1082,8 @@ def plot_sampling_robustness_panels(
         rcParams["font.family"] = "serif"
         rcParams["text.latex.preamble"] = latex_preamble
 
+    axis_label_fontsize = 11.5
+    tick_label_fontsize = 10
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 3.6), squeeze=False)
     ax_hist = axes[0][0]
     ax_scatter = axes[0][1]
@@ -1040,9 +1098,13 @@ def plot_sampling_robustness_panels(
         edgecolor="#3a6c92",
         linewidth=0.6,
     )
-    ax_hist.set_xlabel("Difference between Maximum and Minimum Coefficient")
-    ax_hist.set_ylabel("Count")
+    ax_hist.set_xlabel(
+        "Difference between Maximum and Minimum Coefficient",
+        fontsize=axis_label_fontsize,
+    )
+    ax_hist.set_ylabel("Count", fontsize=axis_label_fontsize)
     ax_hist.set_xlim(0.0, 1.0)
+    ax_hist.tick_params(axis="both", labelsize=tick_label_fontsize)
 
     ax_scatter.scatter(
         instability,
@@ -1052,10 +1114,14 @@ def plot_sampling_robustness_panels(
         color=point_color,
         edgecolors="none",
     )
-    ax_scatter.set_xlabel("Difference between Maximum and Minimum Coefficient")
-    ax_scatter.set_ylabel("Relative Importance in Group")
+    ax_scatter.set_xlabel(
+        "Difference between Maximum and Minimum Coefficient",
+        fontsize=axis_label_fontsize,
+    )
+    ax_scatter.set_ylabel("Relative Importance in Group", fontsize=axis_label_fontsize)
     ax_scatter.set_xlim(0.0, 1.0)
     ax_scatter.set_ylim(0.0, 1.0)
+    ax_scatter.tick_params(axis="both", labelsize=tick_label_fontsize)
 
     if title:
         fig.suptitle(title, y=0.98)

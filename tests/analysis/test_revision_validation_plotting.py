@@ -50,7 +50,7 @@ def test_revision_validation_heatmap_defaults_to_no_annotations(
     scale_axes = axes[3:]
     assert [tick.get_text() for tick in top_ax.get_yticklabels()] == [
         "Local baseline MAE",
-        "Break-year MAE",
+        "Revision-year MAE",
     ]
     assert [tick.get_text() for tick in middle_ax.get_yticklabels()] == [
         "Median instability",
@@ -61,7 +61,9 @@ def test_revision_validation_heatmap_defaults_to_no_annotations(
     ]
     assert top_ax.get_title() == "Local persistence"
     assert middle_ax.get_title() == "Weight robustness"
-    assert bottom_ax.get_title() == "Break-year sample size"
+    assert bottom_ax.get_title() == "Revision-year sample size"
+    assert top_ax.title.get_fontsize() >= 12
+    assert top_ax.get_yticklabels()[0].get_fontsize() >= 11
     width, height = fig.get_size_inches()
     assert width < 10.0
     assert height < 6.0

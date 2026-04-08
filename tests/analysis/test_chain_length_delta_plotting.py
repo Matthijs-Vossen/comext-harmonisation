@@ -53,6 +53,7 @@ def test_chain_length_delta_plot_uses_selected_metrics(monkeypatch, tmp_path: Pa
 
     def _capture_subplots(*args, **kwargs):
         fig, axes = original_subplots(*args, **kwargs)
+        captured["fig"] = fig
         captured["axes"] = axes
         return fig, axes
 
@@ -69,7 +70,14 @@ def test_chain_length_delta_plot_uses_selected_metrics(monkeypatch, tmp_path: Pa
         metrics=["mae_weighted_step", "diffuse_exposure"],
     )
     axes = captured["axes"]
+    fig = captured["fig"]
     assert axes.shape[0] == 2
+    assert axes[0][0].title.get_fontsize() >= 12
+    assert axes[1][0].xaxis.label.get_fontsize() >= 11.5
+    assert axes[0][0].get_xticklabels()[0].get_fontsize() >= 10
+    width, height = fig.get_size_inches()
+    assert width == 8
+    assert height == 6
 
 
 def test_chain_length_delta_plot_labels_weighted_d(monkeypatch, tmp_path: Path) -> None:
