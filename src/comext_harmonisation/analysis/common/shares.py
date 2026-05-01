@@ -35,7 +35,9 @@ def _weights_for_year(
     return weights_by_year.get(str(year)) if year != target_year else None
 
 
-def _validate_annual_files_exist(*, years: Sequence[int], annual_base_dir: Path) -> None:
+def _validate_annual_files_exist(
+    *, years: Sequence[int], annual_base_dir: Path
+) -> None:
     missing = [
         annual_base_dir / f"comext_{year}.parquet"
         for year in years
@@ -46,7 +48,10 @@ def _validate_annual_files_exist(*, years: Sequence[int], annual_base_dir: Path)
 
 
 def filter_partners(
-    df: pd.DataFrame, *, exclude_reporters: Sequence[str], exclude_partners: Sequence[str]
+    df: pd.DataFrame,
+    *,
+    exclude_reporters: Sequence[str],
+    exclude_partners: Sequence[str],
 ) -> pd.DataFrame:
     if not exclude_reporters and not exclude_partners:
         return df
@@ -77,18 +82,22 @@ def convert_totals_to_target(
     if missing:
         if not assume_identity_for_missing:
             sample = sorted(list(missing))[:10]
-            raise ValueError(f"Missing weights for {len(missing)} codes; sample: {sample}")
+            raise ValueError(
+                f"Missing weights for {len(missing)} codes; sample: {sample}"
+            )
         identity = pd.DataFrame(
             {"from_code": list(missing), "to_code": list(missing), "weight": 1.0}
         )
         weights = pd.concat([weights, identity], ignore_index=True)
 
-    merged = totals.merge(weights, left_on="PRODUCT_NC", right_on="from_code", how="inner")
+    merged = totals.merge(
+        weights, left_on="PRODUCT_NC", right_on="from_code", how="inner"
+    )
     merged["value"] = merged["value"] * merged["weight"]
     converted = (
-        merged.groupby("to_code", as_index=False, sort=False)["value"].sum().rename(
-            columns={"to_code": "target_code"}
-        )
+        merged.groupby("to_code", as_index=False, sort=False)["value"]
+        .sum()
+        .rename(columns={"to_code": "target_code"})
     )
     return converted
 
@@ -99,7 +108,9 @@ def compute_group_shares(
     group_map: pd.DataFrame,
     group_ids: set[str],
 ) -> pd.DataFrame:
-    df = totals.merge(group_map, left_on="target_code", right_on="target_code", how="inner")
+    df = totals.merge(
+        group_map, left_on="target_code", right_on="target_code", how="inner"
+    )
     df = df[df["group_id"].isin(group_ids)]
     group_totals = df.groupby("group_id", as_index=False, sort=False)["value"].sum()
     group_totals = group_totals.rename(columns={"value": "group_total"})
@@ -119,7 +130,9 @@ def _load_year_totals(
     data_path = annual_base_dir / f"comext_{year}.parquet"
     if not data_path.exists():
         raise FileNotFoundError(f"Missing annual data file: {data_path}")
-    data = pd.read_parquet(data_path, columns=["REPORTER", "PARTNER", "PRODUCT_NC", measure])
+    data = pd.read_parquet(
+        data_path, columns=["REPORTER", "PARTNER", "PRODUCT_NC", measure]
+    )
     data = filter_partners(
         data,
         exclude_reporters=exclude_reporters,

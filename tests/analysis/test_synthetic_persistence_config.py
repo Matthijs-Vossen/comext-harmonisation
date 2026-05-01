@@ -67,7 +67,9 @@ plot:
     assert cfg.plot.section_title_scale == 0.9
 
 
-def test_synthetic_persistence_config_loads_optional_display_labels(tmp_path: Path) -> None:
+def test_synthetic_persistence_config_loads_optional_display_labels(
+    tmp_path: Path,
+) -> None:
     cfg_path = tmp_path / "synthetic_labels.yaml"
     cfg_path.write_text(
         _base_yaml(
@@ -119,7 +121,9 @@ thresholds:
         load_synthetic_persistence_config(cfg_path)
 
 
-def test_synthetic_persistence_config_rejects_legacy_afterlife_keys(tmp_path: Path) -> None:
+def test_synthetic_persistence_config_rejects_legacy_afterlife_keys(
+    tmp_path: Path,
+) -> None:
     cfg_path = tmp_path / "synthetic_bad_candidates.yaml"
     cfg_path.write_text(
         _base_yaml(
@@ -135,7 +139,9 @@ candidates:
         load_synthetic_persistence_config(cfg_path)
 
 
-def test_synthetic_persistence_config_accepts_legacy_selection_and_plot_keys(tmp_path: Path) -> None:
+def test_synthetic_persistence_config_accepts_legacy_selection_and_plot_keys(
+    tmp_path: Path,
+) -> None:
     cfg_path = tmp_path / "synthetic_legacy_keys.yaml"
     cfg_path.write_text(
         _base_yaml(
@@ -156,7 +162,9 @@ plot:
     assert not hasattr(cfg.plot, "basket_composition_output_path")
 
 
-def test_synthetic_persistence_config_rejects_invalid_plot_axis_unit(tmp_path: Path) -> None:
+def test_synthetic_persistence_config_rejects_invalid_plot_axis_unit(
+    tmp_path: Path,
+) -> None:
     cfg_path = tmp_path / "synthetic_bad_axis_unit.yaml"
     cfg_path.write_text(
         _base_yaml(

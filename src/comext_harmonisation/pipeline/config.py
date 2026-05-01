@@ -9,7 +9,9 @@ from typing import Any, Mapping
 import yaml
 
 
-def _merge(defaults: dict[str, Any], overrides: Mapping[str, Any] | None) -> dict[str, Any]:
+def _merge(
+    defaults: dict[str, Any], overrides: Mapping[str, Any] | None
+) -> dict[str, Any]:
     data = dict(defaults)
     if overrides:
         data.update(overrides)
@@ -107,7 +109,9 @@ def load_pipeline_config(path: Path) -> PipelineConfig:
 
     years = _merge({"start": None, "end": None, "target": None}, data.get("years"))
     if years["start"] is None or years["end"] is None or years["target"] is None:
-        raise ValueError("Config must include years.start, years.end, and years.target.")
+        raise ValueError(
+            "Config must include years.start, years.end, and years.target."
+        )
 
     stages = _merge(
         {
@@ -207,14 +211,18 @@ def load_pipeline_config(path: Path) -> PipelineConfig:
             pos_tol=float(chaining["pos_tol"]),
             row_sum_tol=float(chaining["row_sum_tol"]),
             fail_on_missing=bool(chaining["fail_on_missing"]),
-            strict_revised_link_validation=bool(chaining["strict_revised_link_validation"]),
+            strict_revised_link_validation=bool(
+                chaining["strict_revised_link_validation"]
+            ),
             write_unresolved_details=bool(chaining["write_unresolved_details"]),
         ),
         apply=ApplyConfig(
             skip_existing=bool(apply["skip_existing"]),
             assume_identity_for_missing=bool(apply["assume_identity_for_missing"]),
             fail_on_missing=bool(apply["fail_on_missing"]),
-            strict_revised_link_validation=bool(apply["strict_revised_link_validation"]),
+            strict_revised_link_validation=bool(
+                apply["strict_revised_link_validation"]
+            ),
             write_unresolved_details=bool(apply["write_unresolved_details"]),
         ),
         parallel=ParallelConfig(

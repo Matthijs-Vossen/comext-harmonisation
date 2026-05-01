@@ -16,6 +16,7 @@ from .shares import EstimationShares
 from ..concordance.groups import ConcordanceGroups
 from ..weights.schema import WEIGHT_COLUMNS
 
+
 @dataclass(frozen=True)
 class SolverDiagnostics:
     group_id: str
@@ -61,7 +62,15 @@ def _build_qp_matrices(
     X: sparse.csr_matrix,
     Y: sparse.csr_matrix,
     allowed_by_to: Dict[int, List[int]],
-) -> Tuple[sparse.csc_matrix, np.ndarray, sparse.csc_matrix, np.ndarray, np.ndarray, List[int], List[int]]:
+) -> Tuple[
+    sparse.csc_matrix,
+    np.ndarray,
+    sparse.csc_matrix,
+    np.ndarray,
+    np.ndarray,
+    List[int],
+    List[int],
+]:
     k_size = X.shape[1]
     s_size = Y.shape[1]
 
@@ -98,10 +107,10 @@ def _build_qp_matrices(
 
     A = sparse.vstack([Aeq, sparse.eye(len(var_k), format="csc")], format="csc")
 
-    l = np.concatenate([np.ones(k_size), np.zeros(len(var_k))])
-    u = np.concatenate([np.ones(k_size), np.full(len(var_k), np.inf)])
+    lower = np.concatenate([np.ones(k_size), np.zeros(len(var_k))])
+    upper = np.concatenate([np.ones(k_size), np.full(len(var_k), np.inf)])
 
-    return P, q_vec, A, l, u, var_k, var_s
+    return P, q_vec, A, lower, upper, var_k, var_s
 
 
 def _solve_group(
@@ -113,7 +122,8 @@ def _solve_group(
     vintage_b_year: str,
 ) -> Tuple[pd.DataFrame, SolverDiagnostics]:
     edges = groups.edges[
-        (groups.edges["period"] == group.period) & (groups.edges["group_id"] == group.group_id)
+        (groups.edges["period"] == group.period)
+        & (groups.edges["group_id"] == group.group_id)
     ]
 
     if direction == "a_to_b":
@@ -143,15 +153,17 @@ def _solve_group(
         to_col=to_col,
     )
 
-    P, q, A, l, u, var_k, var_s = _build_qp_matrices(X=X, Y=Y, allowed_by_to=allowed_by_to)
+    P, q, A, lower, upper, var_k, var_s = _build_qp_matrices(
+        X=X, Y=Y, allowed_by_to=allowed_by_to
+    )
 
     solver = osqp.OSQP()
     setup_kwargs = dict(
         P=P,
         q=q,
         A=A,
-        l=l,
-        u=u,
+        l=lower,
+        u=upper,
         verbose=False,
         eps_abs=1e-8,
         eps_rel=1e-8,
@@ -246,7 +258,10 @@ def estimate_weights(
     else:
         results: Dict[str, tuple[pd.DataFrame, SolverDiagnostics]] = {}
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(_solve_for_group, group_id): group_id for group_id in group_ids}
+            futures = {
+                executor.submit(_solve_for_group, group_id): group_id
+                for group_id in group_ids
+            }
             for future in as_completed(futures):
                 group_id = futures[future]
                 results[group_id] = future.result()

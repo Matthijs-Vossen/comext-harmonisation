@@ -25,4 +25,3 @@ def normalize_revised_index(
             )
         normalized[(str(period), direction)] = normalize_code_set(codes)
     return normalized
-

@@ -33,7 +33,9 @@ def test_crm_revision_exposure_config_defaults(tmp_path: Path) -> None:
     assert cfg.output.benchmark_summary_csv.name == "benchmark_summary.csv"
 
 
-def test_crm_revision_exposure_config_rejects_invalid_backward_benchmark(tmp_path: Path) -> None:
+def test_crm_revision_exposure_config_rejects_invalid_backward_benchmark(
+    tmp_path: Path,
+) -> None:
     cfg_path = tmp_path / "crm_revision_exposure_bad.yaml"
     cfg_path.write_text(
         _base_yaml(

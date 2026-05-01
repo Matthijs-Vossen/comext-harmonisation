@@ -30,7 +30,9 @@ def test_revision_validation_config_defaults(tmp_path: Path) -> None:
     assert cfg.plot.show_annotations is False
 
 
-def test_revision_validation_config_rejects_non_backward_direction(tmp_path: Path) -> None:
+def test_revision_validation_config_rejects_non_backward_direction(
+    tmp_path: Path,
+) -> None:
     cfg_path = tmp_path / "revision_validation_bad_direction.yaml"
     cfg_path.write_text(
         _base_yaml(

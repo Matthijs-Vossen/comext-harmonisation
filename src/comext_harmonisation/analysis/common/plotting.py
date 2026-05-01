@@ -28,7 +28,6 @@ def plot_share_panels(
 ) -> None:
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
-    from matplotlib.ticker import MaxNLocator
     from matplotlib.lines import Line2D
 
     if use_latex:
@@ -384,8 +383,10 @@ def plot_chain_length_delta_panels(
                 ticks: list[tuple[int, str]] = []
                 for year in hs_years:
                     length = abs(anchor_year - year)
-                    if not x_vals.empty and length >= int(x_vals.min()) and length <= int(
-                        x_vals.max()
+                    if (
+                        not x_vals.empty
+                        and length >= int(x_vals.min())
+                        and length <= int(x_vals.max())
                     ):
                         ticks.append((length, f"HS {year}"))
                 ticks = sorted(ticks, key=lambda item: item[0])
@@ -468,7 +469,9 @@ def plot_revision_validation_heatmap(
 
     def _build_block_arrays(
         metric_rows: list[tuple[str, str]],
-    ) -> tuple[np.ndarray, np.ndarray, list[tuple[float, float] | None], list[float | None]]:
+    ) -> tuple[
+        np.ndarray, np.ndarray, list[tuple[float, float] | None], list[float | None]
+    ]:
         plot_data = np.full((len(metric_rows), len(data)), np.nan, dtype=float)
         value_data = np.full((len(metric_rows), len(data)), np.nan, dtype=float)
         row_ranges: list[tuple[float, float] | None] = []
@@ -530,7 +533,9 @@ def plot_revision_validation_heatmap(
         ax = axes_flat[block_idx]
         scale_ax = scale_axes[block_idx]
         median_ax = median_axes[block_idx]
-        plot_data, value_data, row_ranges, row_medians = _build_block_arrays(metric_rows)
+        plot_data, value_data, row_ranges, row_medians = _build_block_arrays(
+            metric_rows
+        )
         masked_plot_data = np.ma.masked_invalid(plot_data)
         x_edges = np.arange(len(labels) + 1, dtype=float) - 0.5
         y_edges = np.arange(len(metric_rows) + 1, dtype=float) - 0.5
@@ -546,11 +551,15 @@ def plot_revision_validation_heatmap(
             linewidth=0.8,
             antialiased=False,
         )
-        ax.set_title(block_title, fontsize=block_title_fontsize, fontweight="bold", pad=8)
+        ax.set_title(
+            block_title, fontsize=block_title_fontsize, fontweight="bold", pad=8
+        )
         ax.set_xlim(-0.5, len(labels) - 0.5)
         ax.set_ylim(len(metric_rows) - 0.5, -0.5)
         ax.set_yticks(np.arange(len(metric_rows)))
-        ax.set_yticklabels([label for _, label in metric_rows], fontsize=tick_label_fontsize)
+        ax.set_yticklabels(
+            [label for _, label in metric_rows], fontsize=tick_label_fontsize
+        )
         if block_idx == len(metric_blocks) - 1:
             tick_idx = list(np.arange(1, len(labels), 2))
             ax.set_xticks(tick_idx)
@@ -573,7 +582,9 @@ def plot_revision_validation_heatmap(
                     continue
                 if show_annotations:
                     shade = plot_data[row_idx, col_idx]
-                    text_color = "white" if np.isfinite(shade) and shade >= 0.58 else "black"
+                    text_color = (
+                        "white" if np.isfinite(shade) and shade >= 0.58 else "black"
+                    )
                     column_name = metric_rows[row_idx][0]
                     if column_name == "n_points_break":
                         text = f"{int(round(value))}"
@@ -633,7 +644,9 @@ def plot_revision_validation_heatmap(
         median_ax.set_ylim(len(metric_rows) - 0.5, -0.5)
         median_ax.axis("off")
         if block_idx == 0:
-            median_ax.set_title("Median", fontsize=block_title_fontsize, fontweight="bold", pad=8)
+            median_ax.set_title(
+                "Median", fontsize=block_title_fontsize, fontweight="bold", pad=8
+            )
         for row_idx, (column, _label) in enumerate(metric_rows):
             median_value = row_medians[row_idx]
             if median_value is None:
@@ -664,6 +677,7 @@ def plot_chained_link_distribution_panels(
     latex_preamble: str,
 ) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
@@ -708,7 +722,9 @@ def plot_chained_link_distribution_panels(
         palette_values = sequential_gray_blue[: len(order)]
         palette = {key: value for key, value in zip(order, palette_values)}
 
-        fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(8, 6), sharex=False, squeeze=False)
+        fig, axes = plt.subplots(
+            nrows=2, ncols=1, figsize=(8, 6), sharex=False, squeeze=False
+        )
         axes_flat = axes[:, 0]
 
         for ax, panel_direction in zip(axes_flat, ["backward", "forward"]):
@@ -729,7 +745,9 @@ def plot_chained_link_distribution_panels(
             x = pivot.index.to_numpy(dtype=float)
             y = [pivot[col].to_numpy(dtype=float) for col in order]
             colors = [palette[col] for col in order]
-            ax.stackplot(x, y, colors=colors, linewidth=0.4, edgecolor="black", zorder=1)
+            ax.stackplot(
+                x, y, colors=colors, linewidth=0.4, edgecolor="black", zorder=1
+            )
             ax.set_ylim(0.0, 1.0)
             ax.set_xlim(float(x.min()), float(x.max()))
             ax.margins(x=0.0, y=0.0)
@@ -739,8 +757,12 @@ def plot_chained_link_distribution_panels(
             major_ticks, minor_ticks = _year_ticks(pivot.index.to_numpy(dtype=int))
             ax.set_xticks(major_ticks)
             ax.set_xticks(minor_ticks, minor=True)
-            ax.tick_params(axis="x", labelsize=8, length=3.5, width=0.6, color="#4d4d4d")
-            ax.tick_params(axis="y", labelsize=8, length=3.5, width=0.6, color="#4d4d4d")
+            ax.tick_params(
+                axis="x", labelsize=8, length=3.5, width=0.6, color="#4d4d4d"
+            )
+            ax.tick_params(
+                axis="y", labelsize=8, length=3.5, width=0.6, color="#4d4d4d"
+            )
             ax.set_axisbelow(False)
             ax.grid(
                 axis="y",
@@ -766,7 +788,9 @@ def plot_chained_link_distribution_panels(
             ax.set_title(panel_titles.get(panel_direction, panel_direction.title()))
             ax.set_xlabel("Comparison year")
 
-        legend_handles = [Patch(facecolor=palette[key], edgecolor="black", label=key) for key in order]
+        legend_handles = [
+            Patch(facecolor=palette[key], edgecolor="black", label=key) for key in order
+        ]
         legend_y = 0.98
         top_margin = 0.93
         if title:
@@ -806,6 +830,7 @@ def plot_chained_link_distribution_bar_panels(
     latex_preamble: str,
 ) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
@@ -845,8 +870,12 @@ def plot_chained_link_distribution_bar_panels(
             rcParams["font.family"] = "serif"
             rcParams["text.latex.preamble"] = latex_preamble
 
-        palette = {key: value for key, value in zip(order, sequential_gray_blue[: len(order)])}
-        fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(8, 6), sharex=False, squeeze=False)
+        palette = {
+            key: value for key, value in zip(order, sequential_gray_blue[: len(order)])
+        }
+        fig, axes = plt.subplots(
+            nrows=2, ncols=1, figsize=(8, 6), sharex=False, squeeze=False
+        )
         axes_flat = axes[:, 0]
 
         for ax, panel_direction in zip(axes_flat, ["backward", "forward"]):
@@ -888,18 +917,38 @@ def plot_chained_link_distribution_bar_panels(
             ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
             ax.set_yticks(np.linspace(0.0, 1.0, 6))
             ax.set_xticks(_year_ticks(pivot.index.to_numpy(dtype=int)))
-            ax.tick_params(axis="x", labelsize=8, length=3.5, width=0.6, color="#4d4d4d")
-            ax.tick_params(axis="y", labelsize=8, length=3.5, width=0.6, color="#4d4d4d")
+            ax.tick_params(
+                axis="x", labelsize=8, length=3.5, width=0.6, color="#4d4d4d"
+            )
+            ax.tick_params(
+                axis="y", labelsize=8, length=3.5, width=0.6, color="#4d4d4d"
+            )
             ax.set_axisbelow(False)
-            ax.grid(axis="y", which="major", color="#3a3a3a", linewidth=0.7, alpha=0.35, zorder=5)
-            ax.grid(axis="x", which="major", color="#3a3a3a", linewidth=0.5, alpha=0.15, zorder=5)
+            ax.grid(
+                axis="y",
+                which="major",
+                color="#3a3a3a",
+                linewidth=0.7,
+                alpha=0.35,
+                zorder=5,
+            )
+            ax.grid(
+                axis="x",
+                which="major",
+                color="#3a3a3a",
+                linewidth=0.5,
+                alpha=0.15,
+                zorder=5,
+            )
             for spine in ax.spines.values():
                 spine.set_linewidth(0.7)
                 spine.set_color("#666666")
             ax.set_title(panel_titles.get(panel_direction, panel_direction.title()))
             ax.set_xlabel("Comparison year")
 
-        legend_handles = [Patch(facecolor=palette[key], edgecolor="black", label=key) for key in order]
+        legend_handles = [
+            Patch(facecolor=palette[key], edgecolor="black", label=key) for key in order
+        ]
         legend_y = 0.98
         top_margin = 0.93
         if title:
@@ -939,6 +988,7 @@ def plot_crm_revision_exposure_panels(
     latex_preamble: str,
 ) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
@@ -1017,9 +1067,30 @@ def plot_crm_revision_exposure_panels(
         ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
         ax.set_yticks(np.linspace(0.0, 1.0, 6))
         ax.set_axisbelow(False)
-        ax.grid(axis="y", which="major", color="#3a3a3a", linewidth=0.7, alpha=0.30, zorder=5)
-        ax.grid(axis="x", which="major", color="#3a3a3a", linewidth=0.55, alpha=0.18, zorder=5)
-        ax.grid(axis="x", which="minor", color="#3a3a3a", linewidth=0.35, alpha=0.08, zorder=5)
+        ax.grid(
+            axis="y",
+            which="major",
+            color="#3a3a3a",
+            linewidth=0.7,
+            alpha=0.30,
+            zorder=5,
+        )
+        ax.grid(
+            axis="x",
+            which="major",
+            color="#3a3a3a",
+            linewidth=0.55,
+            alpha=0.18,
+            zorder=5,
+        )
+        ax.grid(
+            axis="x",
+            which="minor",
+            color="#3a3a3a",
+            linewidth=0.35,
+            alpha=0.08,
+            zorder=5,
+        )
         for spine in ax.spines.values():
             spine.set_linewidth(0.7)
             spine.set_color("#666666")
@@ -1053,7 +1124,9 @@ def plot_crm_revision_exposure_panels(
             width=0.6,
             color="#4d4d4d",
         )
-        ax.set_xlabel("Comparison vintage (HS/CN revision)", fontsize=axis_label_fontsize)
+        ax.set_xlabel(
+            "Comparison vintage (HS/CN revision)", fontsize=axis_label_fontsize
+        )
 
         legend_handles = [
             Line2D(
@@ -1107,6 +1180,7 @@ def plot_crm_revision_exposure_threshold_panels(
     latex_preamble: str,
 ) -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib import rcParams
@@ -1201,9 +1275,30 @@ def plot_crm_revision_exposure_threshold_panels(
         ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
         ax.set_yticks(np.linspace(0.0, 1.0, 6))
         ax.set_axisbelow(False)
-        ax.grid(axis="y", which="major", color="#3a3a3a", linewidth=0.7, alpha=0.30, zorder=5)
-        ax.grid(axis="x", which="major", color="#3a3a3a", linewidth=0.55, alpha=0.18, zorder=5)
-        ax.grid(axis="x", which="minor", color="#3a3a3a", linewidth=0.35, alpha=0.08, zorder=5)
+        ax.grid(
+            axis="y",
+            which="major",
+            color="#3a3a3a",
+            linewidth=0.7,
+            alpha=0.30,
+            zorder=5,
+        )
+        ax.grid(
+            axis="x",
+            which="major",
+            color="#3a3a3a",
+            linewidth=0.55,
+            alpha=0.18,
+            zorder=5,
+        )
+        ax.grid(
+            axis="x",
+            which="minor",
+            color="#3a3a3a",
+            linewidth=0.35,
+            alpha=0.08,
+            zorder=5,
+        )
         for spine in ax.spines.values():
             spine.set_linewidth(0.7)
             spine.set_color("#666666")
@@ -1237,7 +1332,9 @@ def plot_crm_revision_exposure_threshold_panels(
             width=0.6,
             color="#4d4d4d",
         )
-        ax.set_xlabel("Comparison vintage (HS/CN revision)", fontsize=axis_label_fontsize)
+        ax.set_xlabel(
+            "Comparison vintage (HS/CN revision)", fontsize=axis_label_fontsize
+        )
 
         legend_handles = []
         for population in ["crm_anchor_codes", "all_anchor_codes"]:

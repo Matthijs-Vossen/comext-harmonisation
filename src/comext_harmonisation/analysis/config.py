@@ -9,7 +9,9 @@ from typing import Any, Mapping, Sequence
 import yaml
 
 
-def _merge(defaults: dict[str, Any], overrides: Mapping[str, Any] | None) -> dict[str, Any]:
+def _merge(
+    defaults: dict[str, Any], overrides: Mapping[str, Any] | None
+) -> dict[str, Any]:
     data = dict(defaults)
     if overrides:
         data.update(overrides)
@@ -625,7 +627,9 @@ def load_share_stability_config(path: Path) -> ShareStabilityConfig:
 
     years = _merge({"start": None, "end": None, "target": None}, data.get("years"))
     if years["start"] is None or years["end"] is None or years["target"] is None:
-        raise ValueError("Config must include years.start, years.end, and years.target.")
+        raise ValueError(
+            "Config must include years.start, years.end, and years.target."
+        )
 
     break_config = _merge({"period": None, "direction": "union"}, data.get("break"))
     if break_config["period"] is None:
@@ -738,7 +742,9 @@ def load_share_stability_config(path: Path) -> ShareStabilityConfig:
         ),
         stability_filter=ShareStabilityFilterConfig(
             enabled=bool(stability_filter["enabled"]),
-            years=[int(year) for year in _normalize_list(stability_filter.get("years"))],
+            years=[
+                int(year) for year in _normalize_list(stability_filter.get("years"))
+            ],
         ),
         plot=AnalysisPlotConfig(
             output_path=Path(plot["output_path"]),
@@ -872,7 +878,12 @@ def load_chain_length_config(path: Path) -> ChainLengthConfig:
     data = yaml.safe_load(path.read_text()) or {}
 
     years = _merge(
-        {"min_year": None, "max_year": None, "backward_anchor": None, "forward_anchor": None},
+        {
+            "min_year": None,
+            "max_year": None,
+            "backward_anchor": None,
+            "forward_anchor": None,
+        },
         data.get("years"),
     )
     if (
@@ -1001,7 +1012,9 @@ def _normalize_code_label_map(value: Any) -> dict[str, str]:
     if value is None:
         return {}
     if not isinstance(value, Mapping):
-        raise ValueError("synthetic_persistence: candidates.display_labels must be a mapping")
+        raise ValueError(
+            "synthetic_persistence: candidates.display_labels must be a mapping"
+        )
 
     result: dict[str, str] = {}
     for raw_code, raw_label in value.items():
@@ -1157,7 +1170,9 @@ def load_synthetic_persistence_config(path: Path) -> SyntheticPersistenceConfig:
     )
     y_axis_unit = str(plot["y_axis_unit"]).strip().lower()
     if y_axis_unit not in {"percent", "share"}:
-        raise ValueError("synthetic_persistence: plot.y_axis_unit must be one of ['percent', 'share']")
+        raise ValueError(
+            "synthetic_persistence: plot.y_axis_unit must be one of ['percent', 'share']"
+        )
 
     return SyntheticPersistenceConfig(
         years=SyntheticPersistenceYearsConfig(
@@ -1175,8 +1190,12 @@ def load_synthetic_persistence_config(path: Path) -> SyntheticPersistenceConfig:
             flow_code=str(flow.get("flow_code", "1")).strip(),
         ),
         candidates=SyntheticPersistenceCandidatesConfig(
-            prehistory=_dedupe_preserve_order(_normalize_code_list(candidates.get("prehistory"))),
-            afterlife=_dedupe_preserve_order(_normalize_code_list(candidates.get("afterlife"))),
+            prehistory=_dedupe_preserve_order(
+                _normalize_code_list(candidates.get("prehistory"))
+            ),
+            afterlife=_dedupe_preserve_order(
+                _normalize_code_list(candidates.get("afterlife"))
+            ),
             display_labels=_normalize_code_label_map(candidates.get("display_labels")),
         ),
         paths=SyntheticPersistencePathsConfig(
@@ -1192,7 +1211,9 @@ def load_synthetic_persistence_config(path: Path) -> SyntheticPersistenceConfig:
             pos_tol=float(chaining["pos_tol"]),
             row_sum_tol=float(chaining["row_sum_tol"]),
             fail_on_missing=bool(chaining["fail_on_missing"]),
-            strict_revised_link_validation=bool(chaining["strict_revised_link_validation"]),
+            strict_revised_link_validation=bool(
+                chaining["strict_revised_link_validation"]
+            ),
             write_unresolved_details=bool(chaining["write_unresolved_details"]),
         ),
         sample=SyntheticPersistenceSampleConfig(
@@ -1464,7 +1485,9 @@ def load_bilateral_persistence_config(path: Path) -> BilateralPersistenceConfig:
     if not columns:
         raise ValueError("bilateral_persistence: years.columns must not be empty")
     if sorted(columns) != columns:
-        raise ValueError("bilateral_persistence: years.columns must be sorted ascending")
+        raise ValueError(
+            "bilateral_persistence: years.columns must be sorted ascending"
+        )
     if len(set(columns)) != len(columns):
         raise ValueError("bilateral_persistence: years.columns must be unique")
 
@@ -1473,7 +1496,9 @@ def load_bilateral_persistence_config(path: Path) -> BilateralPersistenceConfig:
     if not period:
         raise ValueError("bilateral_persistence: break.period is required")
     if len(period) != 8 or not period.isdigit():
-        raise ValueError("bilateral_persistence: break.period must be an 8-digit period")
+        raise ValueError(
+            "bilateral_persistence: break.period must be an 8-digit period"
+        )
     direction = str(break_config.get("direction", "union")).strip().lower()
     if direction not in {"a_to_b", "b_to_a", "union"}:
         raise ValueError(
@@ -1481,9 +1506,13 @@ def load_bilateral_persistence_config(path: Path) -> BilateralPersistenceConfig:
         )
 
     measures = _merge({"analysis_measure": "VALUE_EUR"}, data.get("measures"))
-    analysis_measure = str(measures.get("analysis_measure", "VALUE_EUR")).strip().upper()
+    analysis_measure = (
+        str(measures.get("analysis_measure", "VALUE_EUR")).strip().upper()
+    )
     if analysis_measure not in {"VALUE_EUR", "QUANTITY_KG"}:
-        raise ValueError("bilateral_persistence: measures.analysis_measure must be VALUE_EUR or QUANTITY_KG")
+        raise ValueError(
+            "bilateral_persistence: measures.analysis_measure must be VALUE_EUR or QUANTITY_KG"
+        )
 
     flow = _merge({"flow_code": "1"}, data.get("flow"))
     flow_code = str(flow.get("flow_code", "1")).strip()
@@ -1506,17 +1535,22 @@ def load_bilateral_persistence_config(path: Path) -> BilateralPersistenceConfig:
         },
         data.get("sample"),
     )
-    adjusted_filter = _merge({"years": [2004, 2005, 2007, 2008]}, data.get("adjusted_filter"))
+    adjusted_filter = _merge(
+        {"years": [2004, 2005, 2007, 2008]}, data.get("adjusted_filter")
+    )
     filter_years = [int(year) for year in _normalize_list(adjusted_filter.get("years"))]
 
     aggregation = _merge({"levels": ["bilateral"]}, data.get("aggregation"))
     aggregation_levels = [
-        str(level).strip().lower() for level in _normalize_list(aggregation.get("levels"))
+        str(level).strip().lower()
+        for level in _normalize_list(aggregation.get("levels"))
     ]
     if not aggregation_levels:
         raise ValueError("bilateral_persistence: aggregation.levels must not be empty")
     valid_aggregation_levels = {"bilateral", "importer", "aggregate"}
-    invalid_aggregation_levels = sorted(set(aggregation_levels) - valid_aggregation_levels)
+    invalid_aggregation_levels = sorted(
+        set(aggregation_levels) - valid_aggregation_levels
+    )
     if invalid_aggregation_levels:
         raise ValueError(
             "bilateral_persistence: aggregation.levels must be drawn from "
@@ -1533,7 +1567,9 @@ def load_bilateral_persistence_config(path: Path) -> BilateralPersistenceConfig:
             "sample_diagnostics_csv": str(output_dir / "sample_diagnostics.csv"),
             "aggregation_table_csv": str(output_dir / "aggregation_table.csv"),
             "aggregation_table_tex": str(output_dir / "aggregation_table.tex"),
-            "aggregation_details_csv": str(output_dir / "aggregation_regression_details.csv"),
+            "aggregation_details_csv": str(
+                output_dir / "aggregation_regression_details.csv"
+            ),
             "aggregation_sample_diagnostics_csv": str(
                 output_dir / "aggregation_sample_diagnostics.csv"
             ),
@@ -1543,7 +1579,9 @@ def load_bilateral_persistence_config(path: Path) -> BilateralPersistenceConfig:
 
     return BilateralPersistenceConfig(
         years=BilateralPersistenceYearsConfig(columns=columns),
-        break_config=BilateralPersistenceBreakConfig(period=period, direction=direction),
+        break_config=BilateralPersistenceBreakConfig(
+            period=period, direction=direction
+        ),
         measures=BilateralPersistenceMeasureConfig(analysis_measure=analysis_measure),
         flow=BilateralPersistenceFlowConfig(flow_code=flow_code),
         paths=BilateralPersistencePathsConfig(
@@ -1584,10 +1622,14 @@ def load_sampling_robustness_config(path: Path) -> SamplingRobustnessConfig:
         raise ValueError("sampling_robustness: break.period must be an 8-digit period")
     direction = str(break_config.get("direction", "b_to_a")).strip().lower()
     if direction not in {"a_to_b", "b_to_a"}:
-        raise ValueError("sampling_robustness: break.direction must be 'a_to_b' or 'b_to_a'")
+        raise ValueError(
+            "sampling_robustness: break.direction must be 'a_to_b' or 'b_to_a'"
+        )
 
     measures = _merge({"estimation_measure": "VALUE_EUR"}, data.get("measures"))
-    estimation_measure = str(measures.get("estimation_measure", "VALUE_EUR")).strip().upper()
+    estimation_measure = (
+        str(measures.get("estimation_measure", "VALUE_EUR")).strip().upper()
+    )
     if estimation_measure not in {"VALUE_EUR", "QUANTITY_KG"}:
         raise ValueError(
             "sampling_robustness: measures.estimation_measure must be VALUE_EUR or QUANTITY_KG"
@@ -1698,7 +1740,9 @@ def load_revision_validation_config(path: Path) -> RevisionValidationConfig:
     min_year = int(years.get("min_year", 1988))
     max_year = int(years.get("max_year", 2024))
     if min_year >= max_year:
-        raise ValueError("revision_validation: years.min_year must be less than years.max_year")
+        raise ValueError(
+            "revision_validation: years.min_year must be less than years.max_year"
+        )
     if (max_year - min_year) < 4:
         raise ValueError(
             "revision_validation: years range must span at least 5 annual vintages"
@@ -1717,7 +1761,9 @@ def load_revision_validation_config(path: Path) -> RevisionValidationConfig:
         data.get("measures"),
     )
     weights_source = str(measures.get("weights_source", "VALUE_EUR")).strip().upper()
-    analysis_measure = str(measures.get("analysis_measure", "VALUE_EUR")).strip().upper()
+    analysis_measure = (
+        str(measures.get("analysis_measure", "VALUE_EUR")).strip().upper()
+    )
     valid_measures = {"VALUE_EUR", "QUANTITY_KG"}
     if weights_source not in valid_measures:
         raise ValueError(

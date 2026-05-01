@@ -14,7 +14,9 @@ def _validate_direction(direction: str) -> str:
     return direction
 
 
-def get_ambiguous_group_summary(groups: ConcordanceGroups, direction: str) -> pd.DataFrame:
+def get_ambiguous_group_summary(
+    groups: ConcordanceGroups, direction: str
+) -> pd.DataFrame:
     """Return group_summary rows that require estimation for a direction."""
     direction = _validate_direction(direction)
     flag = "a_to_b_ambiguous" if direction == "a_to_b" else "b_to_a_ambiguous"
@@ -26,10 +28,14 @@ def get_ambiguous_edges(groups: ConcordanceGroups, direction: str) -> pd.DataFra
     summary = get_ambiguous_group_summary(groups, direction)
     if summary.empty:
         return groups.edges.iloc[0:0].copy()
-    return groups.edges.merge(summary[["period", "group_id"]], on=["period", "group_id"], how="inner")
+    return groups.edges.merge(
+        summary[["period", "group_id"]], on=["period", "group_id"], how="inner"
+    )
 
 
-def build_deterministic_mappings(groups: ConcordanceGroups, direction: str) -> pd.DataFrame:
+def build_deterministic_mappings(
+    groups: ConcordanceGroups, direction: str
+) -> pd.DataFrame:
     """Build deterministic (weight=1) mappings for a conversion direction."""
     direction = _validate_direction(direction)
     if direction == "a_to_b":
@@ -38,7 +44,9 @@ def build_deterministic_mappings(groups: ConcordanceGroups, direction: str) -> p
             ["period", "vintage_a_code", "group_id"],
         ]
         edges = groups.edges.merge(
-            deterministic_nodes, on=["period", "vintage_a_code", "group_id"], how="inner"
+            deterministic_nodes,
+            on=["period", "vintage_a_code", "group_id"],
+            how="inner",
         )
         mappings = edges[
             [
@@ -63,7 +71,9 @@ def build_deterministic_mappings(groups: ConcordanceGroups, direction: str) -> p
             ["period", "vintage_b_code", "group_id"],
         ]
         edges = groups.edges.merge(
-            deterministic_nodes, on=["period", "vintage_b_code", "group_id"], how="inner"
+            deterministic_nodes,
+            on=["period", "vintage_b_code", "group_id"],
+            how="inner",
         )
         mappings = edges[
             [
@@ -84,7 +94,14 @@ def build_deterministic_mappings(groups: ConcordanceGroups, direction: str) -> p
         )
 
     mappings = mappings.drop_duplicates(
-        subset=["period", "from_vintage_year", "to_vintage_year", "from_code", "to_code", "group_id"]
+        subset=[
+            "period",
+            "from_vintage_year",
+            "to_vintage_year",
+            "from_code",
+            "to_code",
+            "group_id",
+        ]
     ).reset_index(drop=True)
     mappings["weight"] = 1.0
     return mappings[WEIGHT_COLUMNS]

@@ -128,7 +128,9 @@ def test_load_pipeline_config_normalizes_and_casts(tmp_path: Path) -> None:
 
 
 # LT_REF: Sec3 operational enforcement via config
-def test_load_pipeline_config_missing_required_year_field_raises(tmp_path: Path) -> None:
+def test_load_pipeline_config_missing_required_year_field_raises(
+    tmp_path: Path,
+) -> None:
     cfg_path = tmp_path / "pipeline_missing_year.yaml"
     _write_yaml(
         cfg_path,

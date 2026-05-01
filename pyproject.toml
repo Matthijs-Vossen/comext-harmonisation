@@ -7,10 +7,11 @@ name = "comext-harmonisation"
 version = "0.1.0"
 description = "LT-style harmonisation of Comext CN8 trade data across code-vintage revisions"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
-  { name = "Comext Harmonisation Contributors" }
+  { name = "Matthijs Vossen" }
 ]
+license = { file = "LICENSE" }
 dependencies = [
   "numpy>=1.24",
   "pandas>=1.5",
@@ -26,6 +27,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8",
+  "ruff>=0.4",
 ]
 
 [project.scripts]
@@ -42,3 +44,11 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501"]

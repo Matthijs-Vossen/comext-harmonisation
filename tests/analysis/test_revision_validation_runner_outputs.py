@@ -42,7 +42,9 @@ def _make_config(tmp_path: Path) -> RevisionValidationConfig:
             pos_tol=1e-10,
             row_sum_tol=1e-6,
         ),
-        sample=RevisionValidationSampleConfig(exclude_reporters=[], exclude_partners=[]),
+        sample=RevisionValidationSampleConfig(
+            exclude_reporters=[], exclude_partners=[]
+        ),
         run=RevisionValidationRunConfig(n_bins=20, seed=7, max_workers=2),
         output=RevisionValidationOutputConfig(
             summary_csv=output_dir / "summary.csv",
@@ -60,7 +62,11 @@ def _make_config(tmp_path: Path) -> RevisionValidationConfig:
 
 
 def test_enumerate_internal_target_years_skips_edge_windows() -> None:
-    assert rv_runner._enumerate_internal_target_years(min_year=2000, max_year=2005) == [2001, 2002, 2003]
+    assert rv_runner._enumerate_internal_target_years(min_year=2000, max_year=2005) == [
+        2001,
+        2002,
+        2003,
+    ]
 
 
 def test_summarize_panel_metrics_uses_immediate_placebos() -> None:
@@ -188,7 +194,10 @@ def test_revision_validation_runner_writes_expected_outputs(
         )
 
     monkeypatch.setattr(rv_runner, "_compute_panel_details_for_period", _stub_panels)
-    monkeypatch.setattr(rv_runner, "_compute_sampling_robustness_for_period", _stub_sampling)
+    monkeypatch.setattr(
+        rv_runner, "_compute_sampling_robustness_for_period", _stub_sampling
+    )
+
     def _stub_plot(**kwargs):
         plot_calls.append(kwargs)
         Path(kwargs["output_path"]).write_text("plot")
@@ -225,7 +234,11 @@ def test_revision_validation_runner_writes_expected_outputs(
     assert {"mae", "mae_weighted", "r2_45"} <= set(panel_details.columns)
 
     link_summary = pd.read_csv(outputs["link_summary_csv"])
-    assert set(link_summary["period"].astype(str)) == {"20012002", "20022003", "20032004"}
+    assert set(link_summary["period"].astype(str)) == {
+        "20012002",
+        "20022003",
+        "20032004",
+    }
     assert len(plot_calls) == 1
     assert plot_calls[0]["show_annotations"] is False
 
@@ -313,7 +326,9 @@ def test_revision_validation_runner_soft_skips_empty_group_revision(
         )
 
     monkeypatch.setattr(rv_runner, "_compute_panel_details_for_period", _stub_panels)
-    monkeypatch.setattr(rv_runner, "_compute_sampling_robustness_for_period", _stub_sampling)
+    monkeypatch.setattr(
+        rv_runner, "_compute_sampling_robustness_for_period", _stub_sampling
+    )
     monkeypatch.setattr(
         rv_runner,
         "plot_revision_validation_heatmap",

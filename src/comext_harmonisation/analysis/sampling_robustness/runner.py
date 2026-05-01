@@ -60,7 +60,9 @@ def _reported_ambiguous_weights(df: pd.DataFrame) -> pd.DataFrame:
 def _require_solved(diagnostics: pd.DataFrame, *, label: str) -> None:
     if diagnostics.empty:
         raise RuntimeError(f"{label}: estimation returned no diagnostics")
-    unsolved = diagnostics.loc[~diagnostics["status"].str.lower().str.startswith("solved")]
+    unsolved = diagnostics.loc[
+        ~diagnostics["status"].str.lower().str.startswith("solved")
+    ]
     if unsolved.empty:
         return
     failures = unsolved[["group_id", "status"]].to_dict(orient="records")
@@ -87,7 +89,9 @@ def _estimate_ambiguous_weights(
         flow=flow_code,
         exclude_aggregate_codes=True,
     )
-    matrices = build_group_matrices(estimation, groups=groups, dense=False, max_workers=1)
+    matrices = build_group_matrices(
+        estimation, groups=groups, dense=False, max_workers=1
+    )
     weights, diagnostics = estimate_weights(
         estimation=estimation,
         matrices=matrices,
@@ -116,14 +120,18 @@ def _group_maps_for_period(*, groups, period: str) -> tuple[pd.DataFrame, pd.Dat
     return a_map, b_map
 
 
-def _build_bin_assignments(*, matrices: dict[str, object], n_bins: int, seed: int) -> pd.DataFrame:
+def _build_bin_assignments(
+    *, matrices: dict[str, object], n_bins: int, seed: int
+) -> pd.DataFrame:
     rows: list[pd.DataFrame] = []
     for group_id, matrix in matrices.items():
         pairs = matrix.pairs.copy()
         pairs["group_id"] = group_id
         rows.append(pairs[["group_id", "REPORTER", "PARTNER"]])
     if not rows:
-        raise ValueError("sampling_robustness: no estimation pairs available for bin assignment")
+        raise ValueError(
+            "sampling_robustness: no estimation pairs available for bin assignment"
+        )
     assignments = (
         pd.concat(rows, ignore_index=True)
         .sort_values(["group_id", "REPORTER", "PARTNER"])
@@ -172,7 +180,9 @@ def _filter_holdout_rows(
     return df.loc[keep_mask, RAW_COLUMNS + [measure]].copy()
 
 
-def _product_group_shares(shares: pd.DataFrame, *, code_col: str, value_col: str) -> pd.DataFrame:
+def _product_group_shares(
+    shares: pd.DataFrame, *, code_col: str, value_col: str
+) -> pd.DataFrame:
     return (
         shares.groupby(["group_id", code_col], as_index=False, sort=False)["share"]
         .sum()
@@ -180,7 +190,9 @@ def _product_group_shares(shares: pd.DataFrame, *, code_col: str, value_col: str
     )
 
 
-def _importance_frame(*, estimation, direction: str, full_weights: pd.DataFrame) -> pd.DataFrame:
+def _importance_frame(
+    *, estimation, direction: str, full_weights: pd.DataFrame
+) -> pd.DataFrame:
     if direction == "a_to_b":
         source = _product_group_shares(
             estimation.shares_a,
@@ -206,12 +218,12 @@ def _importance_frame(*, estimation, direction: str, full_weights: pd.DataFrame)
     importance = full_weights[["group_id", "from_code", "to_code"]].drop_duplicates()
     importance = importance.merge(source, on=["group_id", "from_code"], how="left")
     importance = importance.merge(target, on=["group_id", "to_code"], how="left")
-    importance["from_code_group_share"] = (
-        pd.to_numeric(importance["from_code_group_share"], errors="coerce").fillna(0.0)
-    )
-    importance["to_code_group_share"] = (
-        pd.to_numeric(importance["to_code_group_share"], errors="coerce").fillna(0.0)
-    )
+    importance["from_code_group_share"] = pd.to_numeric(
+        importance["from_code_group_share"], errors="coerce"
+    ).fillna(0.0)
+    importance["to_code_group_share"] = pd.to_numeric(
+        importance["to_code_group_share"], errors="coerce"
+    ).fillna(0.0)
     importance["importance_product"] = (
         importance["from_code_group_share"] * importance["to_code_group_share"]
     )
@@ -226,23 +238,26 @@ def _build_link_summary(
     n_runs: int,
 ) -> pd.DataFrame:
     group_cols = ["group_id", "from_code", "to_code"]
-    baseline = full_weights[group_cols + ["weight"]].rename(columns={"weight": "full_weight"})
-    aggregates = (
-        run_weights.groupby(group_cols, as_index=False, sort=False)
-        .agg(
-            min_weight=("weight", "min"),
-            max_weight=("weight", "max"),
-            mean_weight=("weight", "mean"),
-            std_weight=("weight", "std"),
-            n_runs_present=("run_id", "nunique"),
-        )
+    baseline = full_weights[group_cols + ["weight"]].rename(
+        columns={"weight": "full_weight"}
+    )
+    aggregates = run_weights.groupby(group_cols, as_index=False, sort=False).agg(
+        min_weight=("weight", "min"),
+        max_weight=("weight", "max"),
+        mean_weight=("weight", "mean"),
+        std_weight=("weight", "std"),
+        n_runs_present=("run_id", "nunique"),
     )
     summary = baseline.merge(aggregates, on=group_cols, how="left")
     summary = summary.merge(importance, on=group_cols, how="left")
-    summary["missing_run_count"] = n_runs - summary["n_runs_present"].fillna(0).astype(int)
+    summary["missing_run_count"] = n_runs - summary["n_runs_present"].fillna(0).astype(
+        int
+    )
     summary["coverage_complete"] = summary["missing_run_count"] == 0
     summary["max_minus_min"] = summary["max_weight"] - summary["min_weight"]
-    summary["std_weight"] = pd.to_numeric(summary["std_weight"], errors="coerce").fillna(0.0)
+    summary["std_weight"] = pd.to_numeric(
+        summary["std_weight"], errors="coerce"
+    ).fillna(0.0)
     summary = summary.sort_values(
         ["max_minus_min", "importance_product", "group_id", "from_code", "to_code"],
         ascending=[False, False, True, True, True],
@@ -282,7 +297,9 @@ def _build_summary_row(
     return pd.DataFrame([summary])
 
 
-def run_sampling_robustness_analysis(config: SamplingRobustnessConfig) -> dict[str, object]:
+def run_sampling_robustness_analysis(
+    config: SamplingRobustnessConfig,
+) -> dict[str, object]:
     period = config.break_config.period
     vintage_a_year = int(period[:4])
     vintage_b_year = int(period[4:])
@@ -338,7 +355,9 @@ def run_sampling_robustness_analysis(config: SamplingRobustnessConfig) -> dict[s
         total=config.run.n_bins,
     ):
         holdout_keys = set(
-            assignments.loc[assignments["bin_id"] == omitted_bin, "holdout_key"].astype(str).tolist()
+            assignments.loc[assignments["bin_id"] == omitted_bin, "holdout_key"]
+            .astype(str)
+            .tolist()
         )
         subsample_a = _filter_holdout_rows(
             raw_a_annotated,

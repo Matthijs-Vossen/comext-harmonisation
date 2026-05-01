@@ -7,7 +7,13 @@ from comext_harmonisation.estimation.solver import estimate_weights
 from comext_harmonisation.concordance.groups import build_concordance_groups
 
 
-def _edge(vintage_a_code, vintage_b_code, period="20002001", vintage_a_year="2000", vintage_b_year="2001"):
+def _edge(
+    vintage_a_code,
+    vintage_b_code,
+    period="20002001",
+    vintage_a_year="2000",
+    vintage_b_year="2001",
+):
     return {
         "period": period,
         "vintage_a_year": vintage_a_year,

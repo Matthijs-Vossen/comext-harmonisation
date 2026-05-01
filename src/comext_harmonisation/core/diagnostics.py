@@ -25,4 +25,3 @@ def append_detail_rows(
     if not rows:
         return
     append_csv(pd.DataFrame(rows, columns=list(columns)), path)
-

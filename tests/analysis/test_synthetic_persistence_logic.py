@@ -154,7 +154,9 @@ def test_candidate_rows_preserve_config_order_and_labels() -> None:
         "85281079",
         "85211031",
     ]
-    assert [row["display_order"] for row in rows if row["set_name"] == "prehistory"] == [1, 2]
+    assert [
+        row["display_order"] for row in rows if row["set_name"] == "prehistory"
+    ] == [1, 2]
     assert rows[0]["label"] == "Drones"
     assert rows[-1]["label"] == "Tape camcorders"
 

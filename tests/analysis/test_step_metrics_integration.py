@@ -64,18 +64,28 @@ def test_compute_step_metrics_two_step_chain(tmp_path: Path) -> None:
             "to_code": ["C", "D", "D"],
             "weight": [0.25, 0.75, 1.0],
         }
-    ).to_csv(weights_dir / "20002001" / "a_to_b" / "value_eur" / "weights_ambiguous.csv", index=False)
+    ).to_csv(
+        weights_dir / "20002001" / "a_to_b" / "value_eur" / "weights_ambiguous.csv",
+        index=False,
+    )
     pd.DataFrame(
         {
             "from_code": ["C", "D"],
             "to_code": ["E", "F"],
             "weight": [1.0, 1.0],
         }
-    ).to_csv(weights_dir / "20012002" / "a_to_b" / "value_eur" / "weights_ambiguous.csv", index=False)
+    ).to_csv(
+        weights_dir / "20012002" / "a_to_b" / "value_eur" / "weights_ambiguous.csv",
+        index=False,
+    )
 
     weights_by_year = {
-        "2000": pd.DataFrame({"from_code": ["A", "B"], "to_code": ["E", "F"], "weight": [1.0, 1.0]}),
-        "2001": pd.DataFrame({"from_code": ["C", "D"], "to_code": ["E", "F"], "weight": [1.0, 1.0]}),
+        "2000": pd.DataFrame(
+            {"from_code": ["A", "B"], "to_code": ["E", "F"], "weight": [1.0, 1.0]}
+        ),
+        "2001": pd.DataFrame(
+            {"from_code": ["C", "D"], "to_code": ["E", "F"], "weight": [1.0, 1.0]}
+        ),
     }
 
     step_rows = compute_step_metrics(
@@ -97,12 +107,18 @@ def test_compute_step_metrics_two_step_chain(tmp_path: Path) -> None:
     steps_df = pd.DataFrame(step_rows).sort_values("step_index")
     assert len(steps_df) == 2
 
-    exposure_step1 = steps_df.loc[steps_df["step_index"] == 1, "ambiguity_exposure"].iloc[0]
+    exposure_step1 = steps_df.loc[
+        steps_df["step_index"] == 1, "ambiguity_exposure"
+    ].iloc[0]
     assert np.isclose(exposure_step1, 100.0 / 150.0)
 
-    exposure_step2 = steps_df.loc[steps_df["step_index"] == 2, "ambiguity_exposure"].iloc[0]
+    exposure_step2 = steps_df.loc[
+        steps_df["step_index"] == 2, "ambiguity_exposure"
+    ].iloc[0]
     assert np.isclose(exposure_step2, 0.0)
-    ambiguous_trade_step1 = steps_df.loc[steps_df["step_index"] == 1, "ambiguous_trade"].iloc[0]
+    ambiguous_trade_step1 = steps_df.loc[
+        steps_df["step_index"] == 1, "ambiguous_trade"
+    ].iloc[0]
     assert np.isclose(ambiguous_trade_step1, 100.0)
 
     exp_vals = steps_df["ambiguity_exposure"].to_numpy(dtype=float)

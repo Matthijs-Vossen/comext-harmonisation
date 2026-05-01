@@ -31,7 +31,9 @@ def _make_config(tmp_path: Path, crm_codes_path: Path) -> CrmRevisionExposureCon
             crm_codes_path=crm_codes_path,
             output_dir=output_dir,
         ),
-        scope=CrmRevisionExposureScopeConfig(mode="observed_universe_implied_identities"),
+        scope=CrmRevisionExposureScopeConfig(
+            mode="observed_universe_implied_identities"
+        ),
         output=CrmRevisionExposureOutputConfig(
             summary_csv=output_dir / "summary.csv",
             code_exposure_csv=output_dir / "code_exposure.csv",

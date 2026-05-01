@@ -1,9 +1,11 @@
 # Custom
 *.parquet
+!examples/demo_cn_revision/data/**/*.parquet
 *.DS_Store
 data/extracted_annual_no_confidential/products_like/comext_2000_first20.csv
 data/extracted_no_confidential/products_like/comext_201001_first20.csv
 outputs/
+examples/demo_cn_revision/outputs/
 AGENTS.md
 EXPERIMENT_CONTEXT.md
 *.pdf
@@ -217,5 +219,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-
 

@@ -26,7 +26,9 @@ class GroupMatrices:
     dense_b: Optional[pd.DataFrame]
 
 
-def _build_pair_index(pairs: pd.DataFrame) -> Tuple[Dict[Tuple[str, str], int], pd.MultiIndex]:
+def _build_pair_index(
+    pairs: pd.DataFrame,
+) -> Tuple[Dict[Tuple[str, str], int], pd.MultiIndex]:
     tuples = list(zip(pairs["REPORTER"], pairs["PARTNER"]))
     index = pd.MultiIndex.from_tuples(tuples, names=["REPORTER", "PARTNER"])
     return {pair: idx for idx, pair in enumerate(tuples)}, index
@@ -62,7 +64,9 @@ def _build_sparse_matrix(
     return matrix
 
 
-def _dense_from_sparse(matrix: sparse.csr_matrix, index: pd.MultiIndex, columns: List[str]) -> pd.DataFrame:
+def _dense_from_sparse(
+    matrix: sparse.csr_matrix, index: pd.MultiIndex, columns: List[str]
+) -> pd.DataFrame:
     return pd.DataFrame(matrix.toarray(), index=index, columns=columns)
 
 
@@ -150,7 +154,10 @@ def build_group_matrices(
         return matrices
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(_build_group_matrix, group_id): group_id for group_id in group_ids}
+        futures = {
+            executor.submit(_build_group_matrix, group_id): group_id
+            for group_id in group_ids
+        }
         results: Dict[str, GroupMatrices] = {}
         for future in as_completed(futures):
             group_id = futures[future]

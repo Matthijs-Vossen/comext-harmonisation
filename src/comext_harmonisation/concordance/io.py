@@ -29,7 +29,9 @@ def _normalize_period(value: object) -> ConcordancePeriod:
         raise ValueError(f"Invalid period '{value}'; expected 8-digit YYYYYYYY")
     vintage_a_year = period[:4]
     vintage_b_year = period[4:]
-    return ConcordancePeriod(period=period, vintage_a_year=vintage_a_year, vintage_b_year=vintage_b_year)
+    return ConcordancePeriod(
+        period=period, vintage_a_year=vintage_a_year, vintage_b_year=vintage_b_year
+    )
 
 
 def _normalize_code(value: object) -> str:
@@ -92,7 +94,9 @@ def parse_concordance_df(df: pd.DataFrame) -> pd.DataFrame:
     return normalized
 
 
-def read_concordance_xls(path: str, sheet_name: str | int | None = None) -> pd.DataFrame:
+def read_concordance_xls(
+    path: str, sheet_name: str | int | None = None
+) -> pd.DataFrame:
     """Read and normalize the official CN concordance XLS file."""
     if sheet_name is None:
         # Use first sheet to avoid a hard dependency on a specific name.

@@ -79,7 +79,9 @@ def compose_weights(
             carry_mid = sorted(set(missing_mid) - unresolved_revised_mid)
         if carry_mid:
             carry = left[left["to_code"].isin(carry_mid)]
-            carry = carry.groupby(["from_code", "to_code"], as_index=False)["weight"].sum()
+            carry = carry.groupby(["from_code", "to_code"], as_index=False)[
+                "weight"
+            ].sum()
             chained_parts.append(carry)
 
     if not chained_parts:
@@ -128,7 +130,9 @@ def inject_step_identity_strict(
     return step, unresolved_revised
 
 
-def check_weight_bounds(weights: pd.DataFrame, *, bound_tol: float, context: str) -> None:
+def check_weight_bounds(
+    weights: pd.DataFrame, *, bound_tol: float, context: str
+) -> None:
     min_weight = float(weights["weight"].min())
     max_weight = float(weights["weight"].max())
     if min_weight < -bound_tol or max_weight > 1.0 + bound_tol:

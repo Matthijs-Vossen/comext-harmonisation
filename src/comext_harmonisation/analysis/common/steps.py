@@ -77,9 +77,11 @@ def sample_source_codes(
     weights = weights_to_target[["from_code", "to_code"]].copy()
     weights["from_code"] = normalize_codes(weights["from_code"])
     weights["to_code"] = normalize_codes(weights["to_code"])
-    matched = weights[weights["to_code"].isin(sample_target_codes)][
-        "from_code"
-    ].unique().tolist()
+    matched = (
+        weights[weights["to_code"].isin(sample_target_codes)]["from_code"]
+        .unique()
+        .tolist()
+    )
     return set(matched)
 
 
@@ -91,7 +93,9 @@ def load_step_weights(
     weights_dir: Path,
 ) -> pd.DataFrame:
     measure_tag = measure.lower()
-    weights_path = weights_dir / period / direction / measure_tag / "weights_ambiguous.csv"
+    weights_path = (
+        weights_dir / period / direction / measure_tag / "weights_ambiguous.csv"
+    )
     if not weights_path.exists():
         raise FileNotFoundError(f"Missing weights file: {weights_path}")
     weights = pd.read_csv(weights_path)
@@ -151,7 +155,9 @@ def compute_step_metrics(
         direction = str(step["direction"])
         source_year = int(step["source_year"])
         weights_to_target = (
-            weights_by_year.get(str(source_year)) if source_year != target_year else None
+            weights_by_year.get(str(source_year))
+            if source_year != target_year
+            else None
         )
         sample_source = sample_source_codes(
             sample_target_codes=sample_target_codes,
@@ -194,7 +200,9 @@ def compute_step_metrics(
         if feasible_map_cache is not None:
             map_key = (period, direction)
             if map_key not in feasible_map_cache:
-                feasible_map_cache[map_key] = feasible_target_map(period_edges, direction)
+                feasible_map_cache[map_key] = feasible_target_map(
+                    period_edges, direction
+                )
             feasible_map = feasible_map_cache[map_key]
         else:
             feasible_map = feasible_target_map(period_edges, direction)
@@ -202,7 +210,9 @@ def compute_step_metrics(
             code for code, targets in feasible_map.items() if len(targets) > 1
         }
         estimable_sources = set(step_weights["from_code"].unique().tolist())
-        ambiguous_sources = ambiguous_sources & set(totals["PRODUCT_NC"].unique().tolist())
+        ambiguous_sources = ambiguous_sources & set(
+            totals["PRODUCT_NC"].unique().tolist()
+        )
 
         exposure = float("nan")
         ambiguous_trade = float("nan")
@@ -223,7 +233,11 @@ def compute_step_metrics(
             )
             if np.isnan(ambiguous_trade):
                 ambiguous_trade = ambiguous_trade_entropy
-            if total_trade > 0 and np.isfinite(step_entropy) and np.isfinite(ambiguous_trade):
+            if (
+                total_trade > 0
+                and np.isfinite(step_entropy)
+                and np.isfinite(ambiguous_trade)
+            ):
                 diffuse_exposure = step_entropy * (ambiguous_trade / total_trade)
 
         step_rows_chain.append(

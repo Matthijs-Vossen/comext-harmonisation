@@ -26,7 +26,9 @@ def test_run_analysis_dispatches_sampling_robustness(
             "summary_csv": tmp_path / "summary.csv",
         }
 
-    monkeypatch.setattr(analysis_module, "load_sampling_robustness_config", _stub_loader)
+    monkeypatch.setattr(
+        analysis_module, "load_sampling_robustness_config", _stub_loader
+    )
     monkeypatch.setattr(
         analysis_module,
         "run_sampling_robustness_analysis",

@@ -29,7 +29,10 @@ from ..sampling_robustness.runner import (
     _reported_ambiguous_weights,
 )
 from ..share_stability.runner import _collect_unstable_target_codes
-from ...chaining.engine import build_chained_weights_for_range, build_code_universe_from_annual
+from ...chaining.engine import (
+    build_chained_weights_for_range,
+    build_code_universe_from_annual,
+)
 from ...concordance.mappings import get_ambiguous_group_summary
 from ...estimation.runner import load_concordance_groups
 
@@ -54,12 +57,18 @@ def _panel_label(*, x_year: int, target_year: int) -> str:
 
 def _importance_weighted_mean_instability(link_summary: pd.DataFrame) -> float:
     return weighted_mean(
-        pd.to_numeric(link_summary["max_minus_min"], errors="coerce").to_numpy(dtype=float),
-        pd.to_numeric(link_summary["importance_product"], errors="coerce").to_numpy(dtype=float),
+        pd.to_numeric(link_summary["max_minus_min"], errors="coerce").to_numpy(
+            dtype=float
+        ),
+        pd.to_numeric(link_summary["importance_product"], errors="coerce").to_numpy(
+            dtype=float
+        ),
     )
 
 
-def _skipped_summary_row(*, period: str, target_year: int, reason: str) -> dict[str, object]:
+def _skipped_summary_row(
+    *, period: str, target_year: int, reason: str
+) -> dict[str, object]:
     return {
         "period": period,
         "target_year": int(target_year),
@@ -128,7 +137,9 @@ def _summarize_panel_metrics(panel_details: pd.DataFrame) -> dict[str, float | i
         "excess_break_wmae": break_wmae - non_revised_wmae,
         "n_points_pre_immediate": int(panel_by_label.loc["pre_immediate", "n_points"]),
         "n_points_break": int(panel_by_label.loc["break", "n_points"]),
-        "n_points_post_immediate": int(panel_by_label.loc["post_immediate", "n_points"]),
+        "n_points_post_immediate": int(
+            panel_by_label.loc["post_immediate", "n_points"]
+        ),
     }
 
 
@@ -178,7 +189,9 @@ def _compute_panel_details_for_period(
     )
     if unstable_target_codes:
         unstable_groups = set(
-            group_map[group_map["target_code"].isin(unstable_target_codes)]["group_id"].unique()
+            group_map[group_map["target_code"].isin(unstable_target_codes)][
+                "group_id"
+            ].unique()
         )
         group_ids_filtered -= unstable_groups
     if not group_ids_filtered:
@@ -198,7 +211,9 @@ def _compute_panel_details_for_period(
         start_year=target_year - 1,
         end_year=target_year + 2,
         year_shares=year_shares,
-        group_ids_filtered=group_ids_filtered if group_ids_filtered != group_ids else None,
+        group_ids_filtered=group_ids_filtered
+        if group_ids_filtered != group_ids
+        else None,
     )
     values_by_year: dict[int, pd.DataFrame] = {}
 
@@ -217,16 +232,22 @@ def _compute_panel_details_for_period(
     rows: list[dict[str, object]] = []
     for pair in panel_pairs:
         values_y = _values_for_year(pair.y_year).rename(columns={"value": "value_y"})
-        weights_y = pair.data.merge(values_y, on=["group_id", "product_code"], how="left")
+        weights_y = pair.data.merge(
+            values_y, on=["group_id", "product_code"], how="left"
+        )
         weights_y["value_y"] = weights_y["value_y"].fillna(0.0)
         values_x = _values_for_year(pair.x_year).rename(columns={"value": "value_x"})
-        weights_xy = weights_y.merge(values_x, on=["group_id", "product_code"], how="left")
+        weights_xy = weights_y.merge(
+            values_x, on=["group_id", "product_code"], how="left"
+        )
         weights_xy["value_x"] = weights_xy["value_x"].fillna(0.0)
         rows.append(
             {
                 "period": period,
                 "target_year": int(target_year),
-                "panel_label": _panel_label(x_year=pair.x_year, target_year=target_year),
+                "panel_label": _panel_label(
+                    x_year=pair.x_year, target_year=target_year
+                ),
                 "year_t": int(pair.x_year),
                 "year_t1": int(pair.y_year),
                 "r2_45": float(
@@ -282,7 +303,9 @@ def _compute_sampling_robustness_for_period(
     )
     full_weights = _reported_ambiguous_weights(full_weights)
     if full_weights.empty:
-        raise ValueError(f"revision_validation {period}: no ambiguous weights estimated")
+        raise ValueError(
+            f"revision_validation {period}: no ambiguous weights estimated"
+        )
 
     assignments = _build_bin_assignments(
         matrices=full_matrices,
@@ -337,7 +360,9 @@ def _compute_sampling_robustness_for_period(
         n_runs=config.run.n_bins,
     )
     if not bool(link_summary["coverage_complete"].all()):
-        raise RuntimeError(f"revision_validation {period}: incomplete link coverage across runs")
+        raise RuntimeError(
+            f"revision_validation {period}: incomplete link coverage across runs"
+        )
 
     link_summary["period"] = period
     link_summary["target_year"] = int(target_year)
@@ -355,7 +380,9 @@ def _compute_sampling_robustness_for_period(
                 _importance_weighted_mean_instability(link_summary)
             ),
         },
-        link_summary.sort_values(["group_id", "from_code", "to_code"]).reset_index(drop=True),
+        link_summary.sort_values(["group_id", "from_code", "to_code"]).reset_index(
+            drop=True
+        ),
     )
 
 
@@ -397,15 +424,19 @@ def _compute_revision_result(
     return summary_row, panel_details, link_summary
 
 
-def run_revision_validation_analysis(config: RevisionValidationConfig) -> dict[str, object]:
+def run_revision_validation_analysis(
+    config: RevisionValidationConfig,
+) -> dict[str, object]:
     groups = load_concordance_groups(
         concordance_path=config.paths.concordance_path,
         sheet_name=config.paths.concordance_sheet,
     )
     period_summary = get_ambiguous_group_summary(groups, config.break_config.direction)
-    group_ids_by_period = period_summary.groupby("period", sort=False)["group_id"].apply(
-        lambda s: set(s.tolist())
-    ).to_dict()
+    group_ids_by_period = (
+        period_summary.groupby("period", sort=False)["group_id"]
+        .apply(lambda s: set(s.tolist()))
+        .to_dict()
+    )
 
     target_years = _enumerate_internal_target_years(
         min_year=config.years.min_year,
@@ -515,16 +546,24 @@ def run_revision_validation_analysis(config: RevisionValidationConfig) -> dict[s
                 target_year, period = future_to_spec[future]
                 try:
                     results.append(future.result())
-                except Exception as exc:  # pragma: no cover - exercised via future wrapping
+                except (
+                    Exception
+                ) as exc:  # pragma: no cover - exercised via future wrapping
                     raise RuntimeError(
                         f"revision_validation {period}: revision worker failed"
                     ) from exc
 
     summary_rows = [summary_row for summary_row, _, _ in results]
-    panel_frames = [panel_details for _, panel_details, _ in results if not panel_details.empty]
-    link_frames = [link_summary for _, _, link_summary in results if not link_summary.empty]
+    panel_frames = [
+        panel_details for _, panel_details, _ in results if not panel_details.empty
+    ]
+    link_frames = [
+        link_summary for _, _, link_summary in results if not link_summary.empty
+    ]
 
-    summary = pd.DataFrame(summary_rows).sort_values("target_year").reset_index(drop=True)
+    summary = (
+        pd.DataFrame(summary_rows).sort_values("target_year").reset_index(drop=True)
+    )
     if panel_frames:
         panel_details = (
             pd.concat(panel_frames, ignore_index=True)

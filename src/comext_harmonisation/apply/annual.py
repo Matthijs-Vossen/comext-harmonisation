@@ -49,7 +49,9 @@ def _apply_weights_to_frame(
     missing_codes = data_codes - weight_codes
     if missing_codes and fail_on_missing:
         sample = sorted(list(missing_codes))[:10]
-        raise ValueError(f"Missing weights for {len(missing_codes)} codes; sample: {sample}")
+        raise ValueError(
+            f"Missing weights for {len(missing_codes)} codes; sample: {sample}"
+        )
 
     merged = data.merge(weights, left_on=code_column, right_on="from_code", how="inner")
     for col in measure_columns:
@@ -82,7 +84,9 @@ def _load_weights(
     )
 
 
-def _append_identity_rows(weights: pd.DataFrame, missing_codes: set[str]) -> pd.DataFrame:
+def _append_identity_rows(
+    weights: pd.DataFrame, missing_codes: set[str]
+) -> pd.DataFrame:
     if not missing_codes:
         return weights
     identity = pd.DataFrame(
@@ -117,7 +121,9 @@ def _finalize_and_prepare_weights(
         missing_codes = set()
     if missing_codes and fail_on_missing:
         sample = sorted(list(missing_codes))[:10]
-        raise ValueError(f"Missing weights for {len(missing_codes)} codes; sample: {sample}")
+        raise ValueError(
+            f"Missing weights for {len(missing_codes)} codes; sample: {sample}"
+        )
     return prepared, missing_codes
 
 
@@ -223,7 +229,9 @@ def apply_weights_to_annual_period_impl(
         missing_codes = missing_value | missing_quantity
         if missing_codes and fail_on_missing:
             sample = sorted(list(missing_codes))[:10]
-            raise ValueError(f"Missing weights for {len(missing_codes)} codes; sample: {sample}")
+            raise ValueError(
+                f"Missing weights for {len(missing_codes)} codes; sample: {sample}"
+            )
         id_cols = [col for col in data.columns if col not in measure_columns]
         converted_value = _apply_weights_to_frame(
             data,

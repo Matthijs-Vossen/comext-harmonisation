@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional, Sequence, Set, Tuple
+from typing import Iterable, Optional, Set, Tuple
 
 import pandas as pd
 
@@ -106,14 +106,11 @@ def _prepare_side_shares(
     df = df.merge(group_map, on=code_col_name, how="inner")
     df = df[df["group_id"].isin(group_ids)]
 
-    df = (
-        df.groupby(
-            ["REPORTER", "PARTNER", "group_id", code_col_name],
-            as_index=False,
-            sort=False,
-        )
-        .agg(**{value_col: (value_col, "sum")})
-    )
+    df = df.groupby(
+        ["REPORTER", "PARTNER", "group_id", code_col_name],
+        as_index=False,
+        sort=False,
+    ).agg(**{value_col: (value_col, "sum")})
 
     if df.empty:
         shares = df.copy()
@@ -123,9 +120,8 @@ def _prepare_side_shares(
         )
         return shares, totals
 
-    totals = (
-        df.groupby("group_id", as_index=False, sort=False)
-        .agg(**{f"total_{value_col}": (value_col, "sum")})
+    totals = df.groupby("group_id", as_index=False, sort=False).agg(
+        **{f"total_{value_col}": (value_col, "sum")}
     )
     pairs = (
         df.drop_duplicates(["group_id", "REPORTER", "PARTNER"])
@@ -139,7 +135,9 @@ def _prepare_side_shares(
         .rename(columns={"size": "n_rows"})
     )
 
-    totals = totals.merge(pairs, on="group_id", how="left").merge(n_rows, on="group_id", how="left")
+    totals = totals.merge(pairs, on="group_id", how="left").merge(
+        n_rows, on="group_id", how="left"
+    )
     totals.insert(0, "period", period)
 
     df = df.merge(totals[["group_id", f"total_{value_col}"]], on="group_id", how="left")
@@ -222,8 +220,12 @@ def prepare_estimation_shares_from_frames(
         on=["period", "group_id"],
         how="outer",
     )
-    totals[total_a_col] = pd.to_numeric(totals[total_a_col], errors="coerce").fillna(0.0)
-    totals[total_b_col] = pd.to_numeric(totals[total_b_col], errors="coerce").fillna(0.0)
+    totals[total_a_col] = pd.to_numeric(totals[total_a_col], errors="coerce").fillna(
+        0.0
+    )
+    totals[total_b_col] = pd.to_numeric(totals[total_b_col], errors="coerce").fillna(
+        0.0
+    )
     for col in ["n_rows_a", "n_rows_b", "n_pairs_a", "n_pairs_b"]:
         if col not in totals.columns:
             totals[col] = 0

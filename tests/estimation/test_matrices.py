@@ -9,7 +9,13 @@ from comext_harmonisation.concordance.groups import build_concordance_groups
 TRADE_COLS = ["REPORTER", "PARTNER", "TRADE_TYPE", "PRODUCT_NC", "FLOW", "VALUE_EUR"]
 
 
-def _edge(vintage_a_code, vintage_b_code, period="20002001", vintage_a_year="2000", vintage_b_year="2001"):
+def _edge(
+    vintage_a_code,
+    vintage_b_code,
+    period="20002001",
+    vintage_a_year="2000",
+    vintage_b_year="2001",
+):
     return {
         "period": period,
         "vintage_a_year": vintage_a_year,

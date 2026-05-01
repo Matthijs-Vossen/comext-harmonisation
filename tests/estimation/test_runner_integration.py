@@ -8,7 +8,13 @@ import pandas as pd
 import comext_harmonisation.estimation.runner as runner
 
 
-def _edge(vintage_a_code, vintage_b_code, period="20002001", vintage_a_year="2000", vintage_b_year="2001"):
+def _edge(
+    vintage_a_code,
+    vintage_b_code,
+    period="20002001",
+    vintage_a_year="2000",
+    vintage_b_year="2001",
+):
     return {
         "period": period,
         "vintage_a_year": vintage_a_year,
@@ -89,7 +95,9 @@ def test_run_weight_estimation_integration_deterministic_and_ambiguous(
     assert outputs.summary_csv_path is not None and outputs.summary_csv_path.exists()
 
     # Ambiguous solver output should cover only the 2x2 ambiguous component.
-    amb = outputs.weights_ambiguous.sort_values(["from_code", "to_code"]).reset_index(drop=True)
+    amb = outputs.weights_ambiguous.sort_values(["from_code", "to_code"]).reset_index(
+        drop=True
+    )
     assert set(amb["from_code"]) == {"00000001", "00000002"}
     assert set(amb["to_code"]) == {"00000011", "00000012"}
     assert len(amb) == 4
@@ -110,7 +118,9 @@ def test_run_weight_estimation_integration_deterministic_and_ambiguous(
     det = outputs.weights_deterministic
     pairs = set(zip(det["from_code"], det["to_code"]))
     assert ("00000003", "00000013") in pairs
-    det_row = det[(det["from_code"] == "00000003") & (det["to_code"] == "00000013")].iloc[0]
+    det_row = det[
+        (det["from_code"] == "00000003") & (det["to_code"] == "00000013")
+    ].iloc[0]
     assert np.isclose(det_row["weight"], 1.0, atol=1e-12)
 
     # Summary sanity: one ambiguous group solved, deterministic rows present.

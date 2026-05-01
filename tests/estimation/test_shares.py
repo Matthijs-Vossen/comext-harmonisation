@@ -534,11 +534,15 @@ def test_prepare_estimation_shares_values_match_expected():
         data_b=data_b,
     )
 
-    shares_a = result.shares_a.set_index(["REPORTER", "PARTNER", "vintage_a_code"])["share"]
+    shares_a = result.shares_a.set_index(["REPORTER", "PARTNER", "vintage_a_code"])[
+        "share"
+    ]
     assert abs(shares_a.loc[("NL", "BE", "00000001")] - 0.25) < 1e-9
     assert abs(shares_a.loc[("NL", "FR", "00000002")] - 0.75) < 1e-9
 
-    shares_b = result.shares_b.set_index(["REPORTER", "PARTNER", "vintage_b_code"])["share"]
+    shares_b = result.shares_b.set_index(["REPORTER", "PARTNER", "vintage_b_code"])[
+        "share"
+    ]
     assert abs(shares_b.loc[("NL", "BE", "00000011")] - (2.0 / 3.0)) < 1e-9
     assert abs(shares_b.loc[("NL", "FR", "00000012")] - (1.0 / 3.0)) < 1e-9
 

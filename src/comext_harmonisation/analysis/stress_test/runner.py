@@ -8,7 +8,6 @@ import pandas as pd
 from ..common.metrics import (
     mae_weighted,
     r2_45,
-    r2_45_weighted,
     r2_45_weighted_symmetric,
     weighted_mean,
 )
@@ -24,7 +23,10 @@ from ..common.shares import (
 )
 from ..common.steps import compute_step_metrics, load_annual_totals
 from ..config import StressConfig
-from ...chaining.engine import build_chained_weights_for_range, build_code_universe_from_annual
+from ...chaining.engine import (
+    build_chained_weights_for_range,
+    build_code_universe_from_annual,
+)
 from ...estimation.runner import load_concordance_groups
 
 
@@ -238,7 +240,9 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
     summary_rows: list[dict[str, object]] = []
     step_rows: list[dict[str, object]] = []
 
-    for chain in progress(years.chains, desc="stress_test chains", total=len(years.chains)):
+    for chain in progress(
+        years.chains, desc="stress_test chains", total=len(years.chains)
+    ):
         base_year = int(chain.base_year)
         compare_year = int(chain.compare_year)
         group_map, group_ids, sample_codes = _build_chain_group_map(
@@ -252,7 +256,9 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
             empty = pd.DataFrame(
                 columns=["group_id", "product_code", "share_t", "share_t1"]
             )
-            panel_pairs.append(PanelPair(x_year=base_year, y_year=compare_year, data=empty))
+            panel_pairs.append(
+                PanelPair(x_year=base_year, y_year=compare_year, data=empty)
+            )
             summary_rows.append(
                 {
                     "base_year": base_year,
@@ -293,7 +299,9 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
             group_map=group_map,
             group_ids=group_ids,
         )
-        panel_pairs.append(PanelPair(x_year=base_year, y_year=compare_year, data=merged))
+        panel_pairs.append(
+            PanelPair(x_year=base_year, y_year=compare_year, data=merged)
+        )
         r2_val = (
             r2_45(merged["share_t"].to_numpy(), merged["share_t1"].to_numpy())
             if "r2_45" in metrics_set
@@ -310,9 +318,11 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
             group_ids=group_ids,
             metrics_set=metrics_set,
         )
-        exposure_weighted, diffuseness_weighted, diffuse_exposure_weighted = _compute_step_aggregates(
-            step_rows_chain=step_rows_chain,
-            metrics_set=metrics_set,
+        exposure_weighted, diffuseness_weighted, diffuse_exposure_weighted = (
+            _compute_step_aggregates(
+                step_rows_chain=step_rows_chain,
+                metrics_set=metrics_set,
+            )
         )
         lines = []
         if "r2_45" in metrics_set:
@@ -337,10 +347,14 @@ def run_stress_test_analysis(config: StressConfig) -> dict[str, object]:
                 "r2_45_weighted_symmetric": r2_sym,
                 "mae_weighted": mae_w,
                 "ambiguity_exposure_weighted": (
-                    exposure_weighted if "exposure_weighted" in metrics_set else float("nan")
+                    exposure_weighted
+                    if "exposure_weighted" in metrics_set
+                    else float("nan")
                 ),
                 "diffuseness_weighted": (
-                    diffuseness_weighted if "diffuseness_weighted" in metrics_set else float("nan")
+                    diffuseness_weighted
+                    if "diffuseness_weighted" in metrics_set
+                    else float("nan")
                 ),
                 "diffuse_exposure_weighted": (
                     diffuse_exposure_weighted

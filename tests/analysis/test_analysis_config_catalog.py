@@ -21,7 +21,9 @@ from comext_harmonisation.analysis import (
 
 @pytest.mark.parametrize(
     "config_path",
-    sorted((Path(__file__).resolve().parents[2] / "configs" / "analysis").glob("*.yaml")),
+    sorted(
+        (Path(__file__).resolve().parents[2] / "configs" / "analysis").glob("*.yaml")
+    ),
 )
 def test_all_analysis_configs_load(config_path: Path) -> None:
     data = yaml.safe_load(config_path.read_text()) or {}
@@ -44,7 +46,10 @@ def test_all_analysis_configs_load(config_path: Path) -> None:
         return
     if analysis_type == "link_distribution":
         cfg = load_link_distribution_config(config_path)
-        assert cfg.scope.mode in {"revised_only", "observed_universe_implied_identities"}
+        assert cfg.scope.mode in {
+            "revised_only",
+            "observed_universe_implied_identities",
+        }
         return
     if analysis_type == "chained_link_distribution":
         cfg = load_chained_link_distribution_config(config_path)

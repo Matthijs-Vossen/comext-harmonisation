@@ -28,7 +28,9 @@ def test_run_analysis_dispatches_revision_validation(
             "link_summary_csv": tmp_path / "link_summary.csv",
         }
 
-    monkeypatch.setattr(analysis_module, "load_revision_validation_config", _stub_loader)
+    monkeypatch.setattr(
+        analysis_module, "load_revision_validation_config", _stub_loader
+    )
     monkeypatch.setattr(
         analysis_module,
         "run_revision_validation_analysis",

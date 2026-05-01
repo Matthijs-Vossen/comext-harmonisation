@@ -42,7 +42,9 @@ def _make_config(
 ) -> SamplingRobustnessConfig:
     output_dir = tmp_path / "outputs"
     return SamplingRobustnessConfig(
-        break_config=SamplingRobustnessBreakConfig(period="20062007", direction="b_to_a"),
+        break_config=SamplingRobustnessBreakConfig(
+            period="20062007", direction="b_to_a"
+        ),
         measures=SamplingRobustnessMeasureConfig(estimation_measure="VALUE_EUR"),
         flow=SamplingRobustnessFlowConfig(flow_code="1"),
         paths=SamplingRobustnessPathsConfig(
@@ -398,5 +400,7 @@ def test_sampling_robustness_runner_rejects_more_bins_than_observations(
     groups = _make_groups()
     monkeypatch.setattr(sr_runner, "load_concordance_groups", lambda **_: groups)
 
-    with pytest.raises(ValueError, match="must not exceed the number of estimation observations"):
+    with pytest.raises(
+        ValueError, match="must not exceed the number of estimation observations"
+    ):
         sr_runner.run_sampling_robustness_analysis(config)

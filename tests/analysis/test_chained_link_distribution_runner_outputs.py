@@ -117,7 +117,9 @@ def test_chained_link_distribution_runner_outputs(monkeypatch, tmp_path: Path) -
     ].sum()
     assert set(totals["n_anchor_codes"]) == {3, 4}
     assert (
-        summary.groupby(["panel_direction", "compare_year"], as_index=False)["share_anchor_codes"]
+        summary.groupby(["panel_direction", "compare_year"], as_index=False)[
+            "share_anchor_codes"
+        ]
         .sum()["share_anchor_codes"]
         .round(8)
         .eq(1.0)
@@ -125,7 +127,9 @@ def test_chained_link_distribution_runner_outputs(monkeypatch, tmp_path: Path) -
     )
 
 
-def test_chained_link_distribution_observed_scope_increases_one_to_one(monkeypatch, tmp_path: Path) -> None:
+def test_chained_link_distribution_observed_scope_increases_one_to_one(
+    monkeypatch, tmp_path: Path
+) -> None:
     groups = _toy_groups()
     monkeypatch.setattr(cld_runner, "load_concordance_groups", lambda **_: groups)
     monkeypatch.setattr(
@@ -137,11 +141,17 @@ def test_chained_link_distribution_observed_scope_increases_one_to_one(monkeypat
             2002: {"C1", "C2", "Z", "U"},
         },
     )
-    monkeypatch.setattr(cld_runner, "plot_chained_link_distribution_panels", lambda **_: None)
-    monkeypatch.setattr(cld_runner, "plot_chained_link_distribution_bar_panels", lambda **_: None)
+    monkeypatch.setattr(
+        cld_runner, "plot_chained_link_distribution_panels", lambda **_: None
+    )
+    monkeypatch.setattr(
+        cld_runner, "plot_chained_link_distribution_bar_panels", lambda **_: None
+    )
 
     revised_cfg = _make_config(tmp_path / "revised", scope_mode="revised_only")
-    observed_cfg = _make_config(tmp_path / "observed", scope_mode="observed_universe_implied_identities")
+    observed_cfg = _make_config(
+        tmp_path / "observed", scope_mode="observed_universe_implied_identities"
+    )
 
     cld_runner.run_chained_link_distribution_analysis(revised_cfg)
     cld_runner.run_chained_link_distribution_analysis(observed_cfg)

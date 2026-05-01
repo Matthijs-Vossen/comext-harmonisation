@@ -21,7 +21,9 @@ def _make_config(tmp_path: Path) -> BilateralPersistenceConfig:
     output_dir = tmp_path / "outputs"
     return BilateralPersistenceConfig(
         years=BilateralPersistenceYearsConfig(columns=[2005, 2006, 2008, 2009]),
-        break_config=BilateralPersistenceBreakConfig(period="20062007", direction="union"),
+        break_config=BilateralPersistenceBreakConfig(
+            period="20062007", direction="union"
+        ),
         measures=BilateralPersistenceMeasureConfig(analysis_measure="VALUE_EUR"),
         flow=BilateralPersistenceFlowConfig(flow_code="1"),
         paths=BilateralPersistencePathsConfig(
@@ -30,8 +32,12 @@ def _make_config(tmp_path: Path) -> BilateralPersistenceConfig:
             annual_base_dir=tmp_path / "annual",
             output_dir=output_dir,
         ),
-        sample=BilateralPersistenceSampleConfig(exclude_reporters=[], exclude_partners=[]),
-        adjusted_filter=BilateralPersistenceFilterConfig(years=[2004, 2005, 2007, 2008]),
+        sample=BilateralPersistenceSampleConfig(
+            exclude_reporters=[], exclude_partners=[]
+        ),
+        adjusted_filter=BilateralPersistenceFilterConfig(
+            years=[2004, 2005, 2007, 2008]
+        ),
         output=BilateralPersistenceOutputConfig(
             table_csv=output_dir / "table.csv",
             table_tex=output_dir / "table.tex",
@@ -40,13 +46,16 @@ def _make_config(tmp_path: Path) -> BilateralPersistenceConfig:
             aggregation_table_csv=output_dir / "aggregation_table.csv",
             aggregation_table_tex=output_dir / "aggregation_table.tex",
             aggregation_details_csv=output_dir / "aggregation_regression_details.csv",
-            aggregation_sample_diagnostics_csv=output_dir / "aggregation_sample_diagnostics.csv",
+            aggregation_sample_diagnostics_csv=output_dir
+            / "aggregation_sample_diagnostics.csv",
         ),
         aggregation_levels=["bilateral", "importer", "aggregate"],
     )
 
 
-def test_bilateral_persistence_runner_writes_expected_outputs(monkeypatch, tmp_path: Path) -> None:
+def test_bilateral_persistence_runner_writes_expected_outputs(
+    monkeypatch, tmp_path: Path
+) -> None:
     config = _make_config(tmp_path)
 
     edges = pd.DataFrame(
@@ -59,18 +68,10 @@ def test_bilateral_persistence_runner_writes_expected_outputs(monkeypatch, tmp_p
                 + ["20082009"] * 3
             ),
             "vintage_a_year": (
-                ["2004"] * 3
-                + ["2005"] * 3
-                + ["2006"] * 4
-                + ["2007"] * 3
-                + ["2008"] * 3
+                ["2004"] * 3 + ["2005"] * 3 + ["2006"] * 4 + ["2007"] * 3 + ["2008"] * 3
             ),
             "vintage_b_year": (
-                ["2005"] * 3
-                + ["2006"] * 3
-                + ["2007"] * 4
-                + ["2008"] * 3
-                + ["2009"] * 3
+                ["2005"] * 3 + ["2006"] * 3 + ["2007"] * 4 + ["2008"] * 3 + ["2009"] * 3
             ),
             "vintage_a_code": [
                 "Q1",
@@ -194,7 +195,9 @@ def test_bilateral_persistence_runner_writes_expected_outputs(monkeypatch, tmp_p
         "break_filtered_break_groups",
         "break_filtered_adjusted",
     }
-    det_details = details.loc[details["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL].sort_values("year")
+    det_details = details.loc[
+        details["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL
+    ].sort_values("year")
     assert det_details["basis_year"].tolist() == [2006, 2006, 2007, 2007]
     assert det_details["coef"].notna().all()
 
@@ -218,52 +221,61 @@ def test_bilateral_persistence_runner_writes_expected_outputs(monkeypatch, tmp_p
     assert (broad_groups >= adjusted_groups).all()
     assert (
         diagnostics.loc[
-            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL, "n_groups_pre_filter"
-        ]
-        .to_numpy()
-        >= diagnostics.loc[diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL, "n_groups"].to_numpy()
+            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL,
+            "n_groups_pre_filter",
+        ].to_numpy()
+        >= diagnostics.loc[
+            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL, "n_groups"
+        ].to_numpy()
     ).all()
     assert (
         diagnostics.loc[
-            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL, "n_groups_pre_filter"
+            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL,
+            "n_groups_pre_filter",
         ].to_numpy()
         == diagnostics.loc[
-            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL, "n_linked_groups_pre_filter"
+            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL,
+            "n_linked_groups_pre_filter",
         ].to_numpy()
         + diagnostics.loc[
-            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL, "n_singleton_groups_pre_filter"
+            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL,
+            "n_singleton_groups_pre_filter",
         ].to_numpy()
     ).all()
     assert (
-        diagnostics.loc[diagnostics["row_key"] == bp_runner.ROW_ALL, "n_groups_pre_filter"]
-        .to_numpy()
-        > diagnostics.loc[diagnostics["row_key"] == bp_runner.ROW_ADJUSTED, "n_groups_pre_filter"]
-        .to_numpy()
+        diagnostics.loc[
+            diagnostics["row_key"] == bp_runner.ROW_ALL, "n_groups_pre_filter"
+        ].to_numpy()
+        > diagnostics.loc[
+            diagnostics["row_key"] == bp_runner.ROW_ADJUSTED, "n_groups_pre_filter"
+        ].to_numpy()
     ).all()
     assert (
-        diagnostics.loc[diagnostics["row_key"] == bp_runner.ROW_ALL, "n_groups_contaminated"]
-        .to_numpy()
-        >= diagnostics.loc[diagnostics["row_key"] == bp_runner.ROW_ADJUSTED, "n_groups_contaminated"]
-        .to_numpy()
+        diagnostics.loc[
+            diagnostics["row_key"] == bp_runner.ROW_ALL, "n_groups_contaminated"
+        ].to_numpy()
+        >= diagnostics.loc[
+            diagnostics["row_key"] == bp_runner.ROW_ADJUSTED, "n_groups_contaminated"
+        ].to_numpy()
     ).all()
-    assert (
-        diagnostics["n_cells"] >= diagnostics["n_both_positive"]
-    ).all()
-    assert (
-        diagnostics["n_cells"] > diagnostics["n_positive_lag"]
-    ).any()
+    assert (diagnostics["n_cells"] >= diagnostics["n_both_positive"]).all()
+    assert (diagnostics["n_cells"] > diagnostics["n_positive_lag"]).any()
     assert (
         diagnostics.loc[diagnostics["row_key"] == bp_runner.ROW_ALL, "n_groups"]
         < diagnostics.loc[diagnostics["row_key"] == bp_runner.ROW_ALL, "n_concepts"]
     ).all()
     assert (
         diagnostics.loc[
-            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL, "n_singleton_groups"
+            diagnostics["row_key"] == bp_runner.ROW_DETERMINISTIC_ALL,
+            "n_singleton_groups",
         ]
         > 0
     ).all()
     assert (
-        diagnostics.loc[diagnostics["row_key"] != bp_runner.ROW_DETERMINISTIC_ALL, "n_singleton_groups"]
+        diagnostics.loc[
+            diagnostics["row_key"] != bp_runner.ROW_DETERMINISTIC_ALL,
+            "n_singleton_groups",
+        ]
         == 0
     ).all()
     assert set(diagnostics["basis_year"]) == {2006, 2007}
@@ -281,7 +293,11 @@ def test_bilateral_persistence_runner_writes_expected_outputs(monkeypatch, tmp_p
     ]
 
     aggregation_details = pd.read_csv(outputs["aggregation_details_csv"])
-    assert set(aggregation_details["aggregation_level"]) == {"bilateral", "importer", "aggregate"}
+    assert set(aggregation_details["aggregation_level"]) == {
+        "bilateral",
+        "importer",
+        "aggregate",
+    }
     assert set(aggregation_details["row_key"]) == {
         bp_runner.ROW_DETERMINISTIC_ALL,
         bp_runner.ROW_ADJUSTED,

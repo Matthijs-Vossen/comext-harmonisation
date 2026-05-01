@@ -30,7 +30,9 @@ def test_chained_link_distribution_config_defaults(tmp_path: Path) -> None:
     assert cfg.output.summary_csv.name == "summary.csv"
 
 
-def test_chained_link_distribution_config_rejects_invalid_anchor_order(tmp_path: Path) -> None:
+def test_chained_link_distribution_config_rejects_invalid_anchor_order(
+    tmp_path: Path,
+) -> None:
     cfg_path = tmp_path / "chained_bad_years.yaml"
     cfg_path.write_text(
         _base_yaml(

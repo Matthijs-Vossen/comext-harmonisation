@@ -79,7 +79,9 @@ break:
         load_bilateral_persistence_config(cfg_path)
 
 
-def test_bilateral_persistence_config_rejects_invalid_aggregation_level(tmp_path: Path) -> None:
+def test_bilateral_persistence_config_rejects_invalid_aggregation_level(
+    tmp_path: Path,
+) -> None:
     cfg_path = tmp_path / "bilateral_bad_aggregation.yaml"
     cfg_path.write_text(
         _base_yaml(

@@ -24,7 +24,9 @@ def get_metric(name: str) -> MetricFn:
     try:
         return _METRICS[name]
     except KeyError as exc:
-        raise KeyError(f"Unknown metric '{name}'. Available: {sorted(_METRICS)}") from exc
+        raise KeyError(
+            f"Unknown metric '{name}'. Available: {sorted(_METRICS)}"
+        ) from exc
 
 
 def list_metrics() -> list[str]:
@@ -76,23 +78,35 @@ def r2_45_weighted(x: np.ndarray, y: np.ndarray, weights: np.ndarray) -> float:
 
 @register_metric("r2_45_weighted_symmetric")
 def r2_45_weighted_symmetric(
-    x: np.ndarray, y: np.ndarray, weights_initial: np.ndarray, weights_target: np.ndarray
+    x: np.ndarray,
+    y: np.ndarray,
+    weights_initial: np.ndarray,
+    weights_target: np.ndarray,
 ) -> float:
     """Symmetric weighted R^2 using the average of initial/target weights."""
     if len(x) == 0:
         return float("nan")
-    weights = 0.5 * (np.asarray(weights_initial, dtype=float) + np.asarray(weights_target, dtype=float))
+    weights = 0.5 * (
+        np.asarray(weights_initial, dtype=float)
+        + np.asarray(weights_target, dtype=float)
+    )
     return r2_45_weighted(x, y, weights)
 
 
 @register_metric("mae_weighted")
 def mae_weighted(
-    x: np.ndarray, y: np.ndarray, weights_initial: np.ndarray, weights_target: np.ndarray
+    x: np.ndarray,
+    y: np.ndarray,
+    weights_initial: np.ndarray,
+    weights_target: np.ndarray,
 ) -> float:
     """Symmetric weighted mean absolute error using the average of initial/target weights."""
     if len(x) == 0:
         return float("nan")
-    weights = 0.5 * (np.asarray(weights_initial, dtype=float) + np.asarray(weights_target, dtype=float))
+    weights = 0.5 * (
+        np.asarray(weights_initial, dtype=float)
+        + np.asarray(weights_target, dtype=float)
+    )
     mask = np.isfinite(x) & np.isfinite(y) & np.isfinite(weights) & (weights > 0)
     if not mask.any():
         return float("nan")

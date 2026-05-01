@@ -29,7 +29,10 @@ from ..common.shares import (
 from ..common.steps import compute_step_metrics
 from ..common.steps import chain_steps
 from ..common.steps import load_annual_totals
-from ...chaining.engine import build_chained_weights_for_range, build_code_universe_from_annual
+from ...chaining.engine import (
+    build_chained_weights_for_range,
+    build_code_universe_from_annual,
+)
 from ...estimation.runner import load_concordance_groups
 from ...concordance.mappings import get_ambiguous_group_summary
 
@@ -84,7 +87,9 @@ def _collect_unstable_target_codes(
         weights_a = weights_by_year.get(str(year)) if year != target_year else None
         if year != target_year and weights_a is None:
             raise ValueError(f"Missing chained weights for {year} -> target")
-        weights_b = weights_by_year.get(str(year + 1)) if (year + 1) != target_year else None
+        weights_b = (
+            weights_by_year.get(str(year + 1)) if (year + 1) != target_year else None
+        )
         if (year + 1) != target_year and weights_b is None:
             raise ValueError(f"Missing chained weights for {year + 1} -> target")
 
@@ -96,19 +101,24 @@ def _collect_unstable_target_codes(
 
 def _strict_one_to_one_maps(groups) -> dict[tuple[str, str], pd.DataFrame]:
     maps: dict[tuple[str, str], pd.DataFrame] = {}
-    edges = groups.edges[
-        ["period", "vintage_a_code", "vintage_b_code"]
-    ].drop_duplicates().copy()
+    edges = (
+        groups.edges[["period", "vintage_a_code", "vintage_b_code"]]
+        .drop_duplicates()
+        .copy()
+    )
     edges["vintage_a_code"] = normalize_codes(edges["vintage_a_code"])
     edges["vintage_b_code"] = normalize_codes(edges["vintage_b_code"])
 
     for period, period_edges in edges.groupby("period", sort=False):
-        a_deg = period_edges.groupby("vintage_a_code", sort=False)["vintage_b_code"].nunique()
-        b_deg = period_edges.groupby("vintage_b_code", sort=False)["vintage_a_code"].nunique()
-        mask = (
-            period_edges["vintage_a_code"].map(a_deg).eq(1)
-            & period_edges["vintage_b_code"].map(b_deg).eq(1)
-        )
+        a_deg = period_edges.groupby("vintage_a_code", sort=False)[
+            "vintage_b_code"
+        ].nunique()
+        b_deg = period_edges.groupby("vintage_b_code", sort=False)[
+            "vintage_a_code"
+        ].nunique()
+        mask = period_edges["vintage_a_code"].map(a_deg).eq(1) & period_edges[
+            "vintage_b_code"
+        ].map(b_deg).eq(1)
         matched = period_edges.loc[mask].copy()
         maps[(str(period), "a_to_b")] = matched.rename(
             columns={"vintage_a_code": "from_code", "vintage_b_code": "to_code"}
@@ -119,17 +129,25 @@ def _strict_one_to_one_maps(groups) -> dict[tuple[str, str], pd.DataFrame]:
     return maps
 
 
-def _period_revised_code_sets(groups) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+def _period_revised_code_sets(
+    groups,
+) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     revised_a: dict[str, set[str]] = {}
     revised_b: dict[str, set[str]] = {}
-    edges = groups.edges[
-        ["period", "vintage_a_code", "vintage_b_code"]
-    ].drop_duplicates().copy()
+    edges = (
+        groups.edges[["period", "vintage_a_code", "vintage_b_code"]]
+        .drop_duplicates()
+        .copy()
+    )
     edges["vintage_a_code"] = normalize_codes(edges["vintage_a_code"])
     edges["vintage_b_code"] = normalize_codes(edges["vintage_b_code"])
     for period, period_edges in edges.groupby("period", sort=False):
-        revised_a[str(period)] = set(period_edges["vintage_a_code"].astype(str).tolist())
-        revised_b[str(period)] = set(period_edges["vintage_b_code"].astype(str).tolist())
+        revised_a[str(period)] = set(
+            period_edges["vintage_a_code"].astype(str).tolist()
+        )
+        revised_b[str(period)] = set(
+            period_edges["vintage_b_code"].astype(str).tolist()
+        )
     return revised_a, revised_b
 
 
@@ -174,7 +192,9 @@ def _lineage_to_year(
             matched["to_code"],
             matched["native_code"],
         )
-        current = matched[["group_id", "lineage_code", "native_code", "complete"]].copy()
+        current = matched[
+            ["group_id", "lineage_code", "native_code", "complete"]
+        ].copy()
         current = current.loc[current["complete"]].drop_duplicates()
         if current.empty:
             return current
@@ -210,7 +230,9 @@ def _complete_lineage_maps(
             revised_b_by_period=revised_b_by_period,
         )
         counts = lineage.groupby("group_id", sort=False)["lineage_code"].nunique()
-        complete_groups = set(counts.loc[counts.eq(group_sizes)].index.astype(str).tolist())
+        complete_groups = set(
+            counts.loc[counts.eq(group_sizes)].index.astype(str).tolist()
+        )
         retained_group_ids &= complete_groups
         maps_by_year[int(year)] = lineage
 
@@ -233,7 +255,9 @@ def _shares_from_lineage_totals(
 ) -> pd.DataFrame:
     values = totals[["PRODUCT_NC", "value"]].copy()
     values["PRODUCT_NC"] = normalize_codes(values["PRODUCT_NC"])
-    values = values.rename(columns={"PRODUCT_NC": "native_code", "value": "native_value"})
+    values = values.rename(
+        columns={"PRODUCT_NC": "native_code", "value": "native_value"}
+    )
     df = lineage_map.merge(values, on="native_code", how="left")
     df["value"] = pd.to_numeric(df["native_value"], errors="coerce").fillna(0.0)
     df = (
@@ -265,7 +289,9 @@ def _build_deterministic_lineage_placebo_panels(
     break_a_year = int(break_period[:4])
     break_b_year = int(break_period[4:])
     if years.target != break_a_year:
-        raise ValueError("deterministic_lineage_placebo currently requires target year to be break vintage A")
+        raise ValueError(
+            "deterministic_lineage_placebo currently requires target year to be break vintage A"
+        )
 
     one_to_one_maps = _strict_one_to_one_maps(groups)
     revised_a_by_period, revised_b_by_period = _period_revised_code_sets(groups)
@@ -345,7 +371,9 @@ def _build_deterministic_lineage_placebo_panels(
             retained = retained_group_ids
             dropped = len(group_ids) - len(retained_group_ids)
         elif year == break_a_year:
-            panel = focal_pair.data.loc[focal_pair.data["group_id"].isin(retained_group_ids)].copy()
+            panel = focal_pair.data.loc[
+                focal_pair.data["group_id"].isin(retained_group_ids)
+            ].copy()
             mode = "lt_converted_focal"
             basis = f"CN{break_a_year}"
             retained = retained_group_ids
@@ -374,8 +402,12 @@ def _build_deterministic_lineage_placebo_panels(
                 "n_groups_retained": int(len(retained)),
                 "n_groups_dropped_lineage": int(dropped),
                 "n_points": int(len(panel)),
-                "n_codes": int(panel["product_code"].nunique()) if not panel.empty else 0,
-                "n_groups_in_panel": int(panel["group_id"].nunique()) if not panel.empty else 0,
+                "n_codes": int(panel["product_code"].nunique())
+                if not panel.empty
+                else 0,
+                "n_groups_in_panel": int(panel["group_id"].nunique())
+                if not panel.empty
+                else 0,
                 "pre_side_groups_retained": int(pre_diag["n_groups_retained"]),
                 "post_side_groups_retained": int(post_diag["n_groups_retained"]),
             }
@@ -447,7 +479,9 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
         )
         if unstable_target_codes:
             unstable_groups = set(
-                group_map[group_map["target_code"].isin(unstable_target_codes)]["group_id"].unique()
+                group_map[group_map["target_code"].isin(unstable_target_codes)][
+                    "group_id"
+                ].unique()
             )
             group_ids_filtered = group_ids_filtered - unstable_groups
 
@@ -481,7 +515,9 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
     panel_stats: dict[int, dict[str, int]] = {}
     annotation_by_year: dict[int, str] = {}
 
-    sample_group_ids = group_ids_filtered if group_ids_filtered != group_ids else group_ids
+    sample_group_ids = (
+        group_ids_filtered if group_ids_filtered != group_ids else group_ids
+    )
     sample_target_codes = set(
         group_map.loc[group_map["group_id"].isin(sample_group_ids), "target_code"]
         .astype(str)
@@ -500,13 +536,18 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
                 group_ids=sample_group_ids,
             )
         return values_by_year[year]
+
     panel_pairs = build_panel_pairs(
         start_year=years.start,
         end_year=years.end,
         year_shares=year_shares,
-        group_ids_filtered=group_ids_filtered if group_ids_filtered != group_ids else None,
+        group_ids_filtered=group_ids_filtered
+        if group_ids_filtered != group_ids
+        else None,
     )
-    for pair in progress(panel_pairs, desc="share_stability panels", total=len(panel_pairs)):
+    for pair in progress(
+        panel_pairs, desc="share_stability panels", total=len(panel_pairs)
+    ):
         merged = pair.data
         if group_ids_filtered != group_ids:
             left = year_shares[pair.x_year].rename(columns={"share": "share_t"})
@@ -543,7 +584,9 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
                 "n_groups_dropped_lineage": 0,
                 "n_points": int(len(df)),
                 "n_codes": int(df["product_code"].nunique()) if not df.empty else 0,
-                "n_groups_in_panel": int(df["group_id"].nunique()) if not df.empty else 0,
+                "n_groups_in_panel": int(df["group_id"].nunique())
+                if not df.empty
+                else 0,
             }
             for year, df in pairs
         ]
@@ -553,7 +596,9 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
         focal_year = int(vintage_a_year)
         focal_matches = [pair for pair in panel_pairs if pair.x_year == focal_year]
         if not focal_matches:
-            raise ValueError("deterministic_lineage_placebo requires a focal break panel")
+            raise ValueError(
+                "deterministic_lineage_placebo requires a focal break panel"
+            )
         panel_pairs, panel_diagnostics = _build_deterministic_lineage_placebo_panels(
             years=years,
             groups=groups,
@@ -645,10 +690,10 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
             "mae_weighted",
         } & metrics_set
         if need_weighted:
-            values_y = _values_for_year(pair.y_year).rename(columns={"value": "value_y"})
-            weights_y = df.merge(
-                values_y, on=["group_id", "product_code"], how="left"
+            values_y = _values_for_year(pair.y_year).rename(
+                columns={"value": "value_y"}
             )
+            weights_y = df.merge(values_y, on=["group_id", "product_code"], how="left")
             weights_y["value_y"] = weights_y["value_y"].fillna(0.0)
             if "r2_45_weighted" in metrics_set:
                 r2_w = r2_45_weighted(
@@ -657,8 +702,13 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
                     weights_y["value_y"].to_numpy(),
                 )
                 lines.append(rf"$R^2_w$ = {r2_w:.3f}")
-            if "r2_45_weighted_symmetric" in metrics_set or "mae_weighted" in metrics_set:
-                values_x = _values_for_year(pair.x_year).rename(columns={"value": "value_x"})
+            if (
+                "r2_45_weighted_symmetric" in metrics_set
+                or "mae_weighted" in metrics_set
+            ):
+                values_x = _values_for_year(pair.x_year).rename(
+                    columns={"value": "value_x"}
+                )
                 weights_xy = weights_y.merge(
                     values_x, on=["group_id", "product_code"], how="left"
                 )
@@ -684,7 +734,11 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
         if want_diffuseness:
             lines.append(rf"$H_w$ = {diffuseness_weighted:.3f}")
         diag_match = panel_diagnostics.loc[panel_diagnostics["year_t"] == year]
-        panel_mode = str(diag_match.iloc[0]["panel_mode"]) if not diag_match.empty else "common_target"
+        panel_mode = (
+            str(diag_match.iloc[0]["panel_mode"])
+            if not diag_match.empty
+            else "common_target"
+        )
         if config.comparison.mode == "deterministic_lineage_placebo":
             label = "LT focal" if panel_mode == "lt_converted_focal" else "native"
             lines.append(label)
@@ -723,14 +777,16 @@ def run_share_stability_analysis(config: ShareStabilityConfig) -> dict[str, obje
         and config.comparison.common_target_summary_path.exists()
     ):
         common = pd.read_csv(config.comparison.common_target_summary_path)
-        comparison = common[["year_t", "year_t1", "r2_45"]].rename(
-            columns={"r2_45": "r2_common_target"}
-        ).merge(
-            summary[["year_t", "year_t1", "r2_45", "panel_mode"]].rename(
-                columns={"r2_45": "r2_deterministic_placebo"}
-            ),
-            on=["year_t", "year_t1"],
-            how="outer",
+        comparison = (
+            common[["year_t", "year_t1", "r2_45"]]
+            .rename(columns={"r2_45": "r2_common_target"})
+            .merge(
+                summary[["year_t", "year_t1", "r2_45", "panel_mode"]].rename(
+                    columns={"r2_45": "r2_deterministic_placebo"}
+                ),
+                on=["year_t", "year_t1"],
+                how="outer",
+            )
         )
         comparison["delta_r2"] = (
             comparison["r2_deterministic_placebo"] - comparison["r2_common_target"]

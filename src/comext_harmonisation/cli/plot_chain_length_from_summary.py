@@ -10,7 +10,9 @@ import pandas as pd
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Plot chain-length analysis from summary CSV.")
+    parser = argparse.ArgumentParser(
+        description="Plot chain-length analysis from summary CSV."
+    )
     parser.add_argument(
         "--summary",
         default="outputs/analysis/chain_length/summary.csv",
@@ -41,6 +43,7 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     from ..analysis.common.plotting import plot_chain_length_delta_panels
+
     summary_path = Path(args.summary)
     if not summary_path.exists():
         raise FileNotFoundError(f"Missing summary CSV: {summary_path}")
@@ -55,7 +58,9 @@ def main() -> None:
             spearman_by_direction[direction] = float("nan")
         else:
             spearman_by_direction[direction] = float(
-                subset["mae_weighted_step"].corr(subset["diffuse_exposure"], method="spearman")
+                subset["mae_weighted_step"].corr(
+                    subset["diffuse_exposure"], method="spearman"
+                )
             )
 
     plot_chain_length_delta_panels(

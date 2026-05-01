@@ -107,8 +107,12 @@ def test_apply_weights_annual_value_strategy(tmp_path):
         assume_identity_for_missing=False,
     )
 
-    output_path = tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_value.parquet"
-    result = pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
+    output_path = (
+        tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_value.parquet"
+    )
+    result = (
+        pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
+    )
 
     assert diagnostics.n_rows_input == 2
     assert diagnostics.n_rows_output == 3
@@ -205,8 +209,12 @@ def test_apply_weights_annual_split_strategy(tmp_path):
         assume_identity_for_missing=False,
     )
 
-    output_path = tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_split.parquet"
-    result = pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
+    output_path = (
+        tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_split.parquet"
+    )
+    result = (
+        pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
+    )
     assert result.loc[0, "VALUE_EUR"] == 30.0
     assert result.loc[1, "VALUE_EUR"] == 20.0
     assert result.loc[0, "QUANTITY_KG"] == 1.0
@@ -322,8 +330,12 @@ def test_apply_weights_annual_missing_weights_identity_default(tmp_path):
         assume_identity_for_missing=True,
     )
 
-    output_path = tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_value.parquet"
-    result = pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
+    output_path = (
+        tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_value.parquet"
+    )
+    result = (
+        pd.read_parquet(output_path).sort_values(["PRODUCT_NC"]).reset_index(drop=True)
+    )
     assert result.loc[0, "PRODUCT_NC"] == "00000002"
     assert result.loc[1, "PRODUCT_NC"] == "00000011"
     assert result.loc[0, "VALUE_EUR"] == 50.0
@@ -342,13 +354,15 @@ def test_finalize_weights_table_clamps_and_renormalizes():
         ]
     )
 
-    finalized = finalize_weights_table(weights, neg_tol=1e-6, pos_tol=1e-10, row_sum_tol=1e-9)
+    finalized = finalize_weights_table(
+        weights, neg_tol=1e-6, pos_tol=1e-10, row_sum_tol=1e-9
+    )
     sums = finalized.groupby("from_code")["weight"].sum()
     assert pytest.approx(sums.loc["00000001"], abs=1e-12) == 1.0
     assert pytest.approx(sums.loc["00000002"], abs=1e-12) == 1.0
     assert (finalized["weight"] > 0).all()
-    assert ("00000012" not in finalized["to_code"].tolist())
-    assert ("00000023" not in finalized["to_code"].tolist())
+    assert "00000012" not in finalized["to_code"].tolist()
+    assert "00000023" not in finalized["to_code"].tolist()
 
 
 # LT_REF: Sec3 application equation x_hat = sum_k x * beta
@@ -375,11 +389,13 @@ def test_finalize_weights_table_clamps_small_negative():
         ]
     )
 
-    finalized = finalize_weights_table(weights, neg_tol=1e-6, pos_tol=0.0, row_sum_tol=1e-9)
+    finalized = finalize_weights_table(
+        weights, neg_tol=1e-6, pos_tol=0.0, row_sum_tol=1e-9
+    )
     sums = finalized.groupby("from_code")["weight"].sum()
     assert pytest.approx(sums.loc["00000001"], abs=1e-12) == 1.0
     assert (finalized["weight"] >= 0).all()
-    assert ("00000013" not in finalized["to_code"].tolist())
+    assert "00000013" not in finalized["to_code"].tolist()
 
 
 # LT_REF: Sec3 application equation x_hat = sum_k x * beta
@@ -446,7 +462,9 @@ def test_apply_chained_wide_finalizes_before_use(tmp_path):
     )
 
     output_path = tmp_path / "out" / "CN2010" / "annual" / "comext_2009_wide.parquet"
-    result = pd.read_parquet(output_path).sort_values("PRODUCT_NC").reset_index(drop=True)
+    result = (
+        pd.read_parquet(output_path).sort_values("PRODUCT_NC").reset_index(drop=True)
+    )
     assert len(result) == 1
     assert result.loc[0, "PRODUCT_NC"] == "00000011"
     assert result.loc[0, "VALUE_EUR_w_value"] == 100.0
@@ -472,7 +490,9 @@ def test_apply_chained_wide_external_unresolved_raises_and_writes_details(tmp_pa
         ],
     )
 
-    weights = pd.DataFrame([{"from_code": "00000001", "to_code": "00000011", "weight": 1.0}])
+    weights = pd.DataFrame(
+        [{"from_code": "00000001", "to_code": "00000011", "weight": 1.0}]
+    )
     diagnostics = pd.DataFrame(
         [
             {
@@ -513,7 +533,9 @@ def test_apply_chained_wide_external_unresolved_raises_and_writes_details(tmp_pa
             write_unresolved_details=True,
         )
 
-    unresolved_path = tmp_path / "out" / "CN2010" / "diagnostics" / "unresolved_details.csv"
+    unresolved_path = (
+        tmp_path / "out" / "CN2010" / "diagnostics" / "unresolved_details.csv"
+    )
     details = pd.read_csv(unresolved_path)
     assert "reason" in details.columns
     assert (details["reason"] == "chain_diagnostics_unresolved_revised_total").any()
@@ -568,7 +590,9 @@ def test_apply_weights_annual_finalizes_even_without_flag(tmp_path):
         assume_identity_for_missing=False,
     )
 
-    output_path = tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_value.parquet"
+    output_path = (
+        tmp_path / "out" / "CN2010" / "annual" / "comext_2009_weights_value.parquet"
+    )
     result = pd.read_parquet(output_path)
     assert diagnostics.n_rows_output == 1
     assert result.loc[0, "PRODUCT_NC"] == "00000021"

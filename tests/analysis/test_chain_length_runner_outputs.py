@@ -23,7 +23,9 @@ class _DummyGroups:
         )
 
 
-def _make_config(tmp_path: Path, *, output_name: str, point_size: float, point_color: str) -> ChainLengthConfig:
+def _make_config(
+    tmp_path: Path, *, output_name: str, point_size: float, point_color: str
+) -> ChainLengthConfig:
     output_dir = tmp_path / "out"
     return ChainLengthConfig(
         years=ChainLengthYearsConfig(
@@ -32,7 +34,9 @@ def _make_config(tmp_path: Path, *, output_name: str, point_size: float, point_c
             backward_anchor=2000,
             forward_anchor=2002,
         ),
-        measures=ChainLengthMeasureConfig(weights_source="VALUE_EUR", analysis_measure="VALUE_EUR"),
+        measures=ChainLengthMeasureConfig(
+            weights_source="VALUE_EUR", analysis_measure="VALUE_EUR"
+        ),
         metrics=["mae_weighted", "mae_weighted_step", "diffuse_exposure"],
         paths=ChainLengthPathsConfig(
             concordance_path=Path("dummy.xlsx"),
@@ -65,8 +69,12 @@ def _make_config(tmp_path: Path, *, output_name: str, point_size: float, point_c
     )
 
 
-def _patch_runner_for_plot_semantics(monkeypatch, delta_calls: list[dict[str, object]]) -> None:
-    monkeypatch.setattr(cl_runner, "load_concordance_groups", lambda **_: _DummyGroups())
+def _patch_runner_for_plot_semantics(
+    monkeypatch, delta_calls: list[dict[str, object]]
+) -> None:
+    monkeypatch.setattr(
+        cl_runner, "load_concordance_groups", lambda **_: _DummyGroups()
+    )
     monkeypatch.setattr(cl_runner, "build_code_universe_from_annual", lambda **_: {})
     monkeypatch.setattr(cl_runner, "build_chained_weights_for_range", lambda **_: [])
     monkeypatch.setattr(
@@ -106,7 +114,9 @@ def _patch_runner_for_plot_semantics(monkeypatch, delta_calls: list[dict[str, ob
     monkeypatch.setattr(cl_runner, "plot_chain_length_delta_panels", _stub_delta_plot)
 
     def _legacy_plot_should_not_be_called(**_kwargs):
-        raise AssertionError("plot_chain_length_panels should not be called in delta-only mode")
+        raise AssertionError(
+            "plot_chain_length_panels should not be called in delta-only mode"
+        )
 
     monkeypatch.setattr(
         cl_runner,
@@ -116,7 +126,9 @@ def _patch_runner_for_plot_semantics(monkeypatch, delta_calls: list[dict[str, ob
     )
 
 
-def test_chain_length_runner_delta_only_primary_output(monkeypatch, tmp_path: Path) -> None:
+def test_chain_length_runner_delta_only_primary_output(
+    monkeypatch, tmp_path: Path
+) -> None:
     config = _make_config(
         tmp_path,
         output_name="custom_primary.png",
@@ -137,7 +149,9 @@ def test_chain_length_runner_delta_only_primary_output(monkeypatch, tmp_path: Pa
     assert (config.paths.output_dir / "step_metrics.csv").exists()
 
 
-def test_chain_length_runner_delta_plot_style_passthrough(monkeypatch, tmp_path: Path) -> None:
+def test_chain_length_runner_delta_plot_style_passthrough(
+    monkeypatch, tmp_path: Path
+) -> None:
     config = _make_config(
         tmp_path,
         output_name="exact_filename_no_suffix.png",

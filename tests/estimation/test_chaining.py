@@ -14,7 +14,9 @@ def _write_weights(tmp_path, *, period, direction, measure, rows):
     ambiguous_path = weights_path / "weights_ambiguous.csv"
     deterministic_path = weights_path / "weights_deterministic.csv"
     pd.DataFrame(rows).to_csv(ambiguous_path, index=False)
-    pd.DataFrame(columns=["from_code", "to_code", "weight"]).to_csv(deterministic_path, index=False)
+    pd.DataFrame(columns=["from_code", "to_code", "weight"]).to_csv(
+        deterministic_path, index=False
+    )
 
 
 def _compose(left: pd.DataFrame, right: pd.DataFrame) -> pd.DataFrame:
@@ -96,14 +98,18 @@ def test_chain_weights_forward(tmp_path):
 
     assert direction == "a_to_b"
     weights = weights.sort_values(["from_code", "to_code"]).reset_index(drop=True)
-    expected = pd.DataFrame(
-        [
-            {"from_code": "00000001", "to_code": "00000021", "weight": 0.8},
-            {"from_code": "00000001", "to_code": "00000022", "weight": 0.2},
-            {"from_code": "00000002", "to_code": "00000021", "weight": 0.5},
-            {"from_code": "00000002", "to_code": "00000022", "weight": 0.5},
-        ]
-    ).sort_values(["from_code", "to_code"]).reset_index(drop=True)
+    expected = (
+        pd.DataFrame(
+            [
+                {"from_code": "00000001", "to_code": "00000021", "weight": 0.8},
+                {"from_code": "00000001", "to_code": "00000022", "weight": 0.2},
+                {"from_code": "00000002", "to_code": "00000021", "weight": 0.5},
+                {"from_code": "00000002", "to_code": "00000022", "weight": 0.5},
+            ]
+        )
+        .sort_values(["from_code", "to_code"])
+        .reset_index(drop=True)
+    )
 
     pd.testing.assert_frame_equal(weights, expected)
     assert not diagnostics.empty
@@ -149,13 +155,17 @@ def test_chain_weights_missing_step_identity_preserved(tmp_path):
 
     assert direction == "a_to_b"
     weights = weights.sort_values(["from_code", "to_code"]).reset_index(drop=True)
-    expected = pd.DataFrame(
-        [
-            {"from_code": "00000001", "to_code": "00000012", "weight": 0.4},
-            {"from_code": "00000001", "to_code": "00000021", "weight": 0.6},
-            {"from_code": "00000002", "to_code": "00000012", "weight": 1.0},
-        ]
-    ).sort_values(["from_code", "to_code"]).reset_index(drop=True)
+    expected = (
+        pd.DataFrame(
+            [
+                {"from_code": "00000001", "to_code": "00000012", "weight": 0.4},
+                {"from_code": "00000001", "to_code": "00000021", "weight": 0.6},
+                {"from_code": "00000002", "to_code": "00000012", "weight": 1.0},
+            ]
+        )
+        .sort_values(["from_code", "to_code"])
+        .reset_index(drop=True)
+    )
 
     pd.testing.assert_frame_equal(weights, expected)
 
@@ -291,13 +301,17 @@ def test_chain_weights_backward(tmp_path):
 
     assert direction == "b_to_a"
     weights = weights.sort_values(["from_code", "to_code"]).reset_index(drop=True)
-    expected = pd.DataFrame(
-        [
-            {"from_code": "00000011", "to_code": "00000091", "weight": 0.5},
-            {"from_code": "00000011", "to_code": "00000092", "weight": 0.5},
-            {"from_code": "00000012", "to_code": "00000092", "weight": 1.0},
-        ]
-    ).sort_values(["from_code", "to_code"]).reset_index(drop=True)
+    expected = (
+        pd.DataFrame(
+            [
+                {"from_code": "00000011", "to_code": "00000091", "weight": 0.5},
+                {"from_code": "00000011", "to_code": "00000092", "weight": 0.5},
+                {"from_code": "00000012", "to_code": "00000092", "weight": 1.0},
+            ]
+        )
+        .sort_values(["from_code", "to_code"])
+        .reset_index(drop=True)
+    )
 
     pd.testing.assert_frame_equal(weights, expected)
 
@@ -342,7 +356,9 @@ def test_chain_identity_injection(tmp_path):
         finalize_weights=False,
     )
 
-    weights = _get_output(outputs, origin_year="2010", direction="a_to_b", measure="VALUE_EUR")
+    weights = _get_output(
+        outputs, origin_year="2010", direction="a_to_b", measure="VALUE_EUR"
+    )
     weights = weights.sort_values(["from_code", "to_code"]).reset_index(drop=True)
     expected = pd.DataFrame(
         [
@@ -394,8 +410,12 @@ def test_chain_caching_consistency(tmp_path):
         finalize_weights=False,
     )
 
-    chain_2011 = _get_output(outputs, origin_year="2011", direction="a_to_b", measure="VALUE_EUR")
-    chain_2010 = _get_output(outputs, origin_year="2010", direction="a_to_b", measure="VALUE_EUR")
+    chain_2011 = _get_output(
+        outputs, origin_year="2011", direction="a_to_b", measure="VALUE_EUR"
+    )
+    chain_2010 = _get_output(
+        outputs, origin_year="2010", direction="a_to_b", measure="VALUE_EUR"
+    )
 
     step = pd.DataFrame(
         [
@@ -408,7 +428,9 @@ def test_chain_caching_consistency(tmp_path):
         ["from_code", "to_code"]
     )
     expected = expected.sort_values(["from_code", "to_code"])
-    pd.testing.assert_frame_equal(chain_2010.reset_index(drop=True), expected.reset_index(drop=True))
+    pd.testing.assert_frame_equal(
+        chain_2010.reset_index(drop=True), expected.reset_index(drop=True)
+    )
 
 
 # LT_REF: Sec3 chaining (non-adjacent weight composition)
@@ -443,9 +465,13 @@ def test_chain_finalization(tmp_path):
         pos_tol=1e-10,
     )
 
-    weights = _get_output(outputs, origin_year="2010", direction="a_to_b", measure="VALUE_EUR")
+    weights = _get_output(
+        outputs, origin_year="2010", direction="a_to_b", measure="VALUE_EUR"
+    )
     weights = weights.sort_values(["from_code", "to_code"]).reset_index(drop=True)
-    expected = pd.DataFrame([{"from_code": "00000001", "to_code": "00000011", "weight": 1.0}])
+    expected = pd.DataFrame(
+        [{"from_code": "00000001", "to_code": "00000011", "weight": 1.0}]
+    )
     pd.testing.assert_frame_equal(weights[["from_code", "to_code", "weight"]], expected)
 
 
@@ -492,14 +518,24 @@ def test_chain_multi_step_both_directions(tmp_path):
         finalize_weights=False,
     )
 
-    weights_2010 = _get_output(outputs, origin_year="2010", direction="a_to_b", measure="VALUE_EUR")
-    weights_2012 = _get_output(outputs, origin_year="2012", direction="b_to_a", measure="VALUE_EUR")
-    weights_2013 = _get_output(outputs, origin_year="2013", direction="b_to_a", measure="VALUE_EUR")
+    weights_2010 = _get_output(
+        outputs, origin_year="2010", direction="a_to_b", measure="VALUE_EUR"
+    )
+    weights_2012 = _get_output(
+        outputs, origin_year="2012", direction="b_to_a", measure="VALUE_EUR"
+    )
+    weights_2013 = _get_output(
+        outputs, origin_year="2013", direction="b_to_a", measure="VALUE_EUR"
+    )
 
     assert not weights_2010.empty
     assert not weights_2012.empty
-    weights_2013 = weights_2013[["from_code", "to_code", "weight"]].reset_index(drop=True)
-    expected = pd.DataFrame([{"from_code": "00000031", "to_code": "00000011", "weight": 1.0}])
+    weights_2013 = weights_2013[["from_code", "to_code", "weight"]].reset_index(
+        drop=True
+    )
+    expected = pd.DataFrame(
+        [{"from_code": "00000031", "to_code": "00000011", "weight": 1.0}]
+    )
     pd.testing.assert_frame_equal(weights_2013, expected)
 
 
@@ -544,7 +580,9 @@ def test_chain_missing_identity_drops_forward_codes(tmp_path):
         finalize_weights=False,
     )
 
-    weights = _get_output(outputs, origin_year="2004", direction="a_to_b", measure="VALUE_EUR")
+    weights = _get_output(
+        outputs, origin_year="2004", direction="a_to_b", measure="VALUE_EUR"
+    )
     weights = weights[["from_code", "to_code", "weight"]].sort_values(
         ["from_code", "to_code"]
     )
@@ -603,7 +641,9 @@ def test_chain_missing_identity_drops_backward_codes(tmp_path):
         finalize_weights=False,
     )
 
-    weights = _get_output(outputs, origin_year="2008", direction="b_to_a", measure="VALUE_EUR")
+    weights = _get_output(
+        outputs, origin_year="2008", direction="b_to_a", measure="VALUE_EUR"
+    )
     weights = weights[["from_code", "to_code", "weight"]].sort_values(
         ["from_code", "to_code"]
     )
@@ -659,7 +699,9 @@ def test_chain_missing_step_identity_preserves_universe_code(tmp_path):
         finalize_weights=False,
     )
 
-    weights = _get_output(outputs, origin_year="2008", direction="b_to_a", measure="VALUE_EUR")
+    weights = _get_output(
+        outputs, origin_year="2008", direction="b_to_a", measure="VALUE_EUR"
+    )
     weights = weights[["from_code", "to_code", "weight"]].sort_values(
         ["from_code", "to_code"]
     )
@@ -735,4 +777,7 @@ def test_chain_unresolved_diagnostics_and_details_written(tmp_path):
     unresolved["code"] = unresolved["code"].str.zfill(8)
     assert "code" in unresolved.columns
     assert "reason" in unresolved.columns
-    assert ((unresolved["code"] == "00000012") & (unresolved["reason"] == "step_missing_revised")).any()
+    assert (
+        (unresolved["code"] == "00000012")
+        & (unresolved["reason"] == "step_missing_revised")
+    ).any()

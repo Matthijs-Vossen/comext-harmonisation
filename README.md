@@ -1,227 +1,214 @@
-# comext-harmonisation
+# Comext CN Harmonisation
 
-Research pipeline for LT-style harmonisation of Comext CN8 trade data across product-code vintage revisions.
+Research software for LT-style harmonisation of Eurostat Comext CN8 trade data
+across product-code vintage revisions.
 
-## Research Context and Objective
-This repository supports thesis work on replicating and adapting the method in *"Harmonizing the Harmonized System"* to Comext CN8 data. The goal is to produce classification-consistent trade series over time, despite CN code revisions.
+The package estimates adjacent-year conversion weights from observed trade
+shares, chains those weights to a target CN vintage, and applies the resulting
+weights to annual or monthly Comext panels. It was developed during an MSc
+thesis internship with the Port of Rotterdam to study longitudinal trade-series
+harmonisation under changing product classifications.
 
-The pipeline is organized as:
-1. Estimate adjacent-vintage conversion weights.
-2. Chain adjacent weights to a chosen target vintage.
-3. Apply chained weights to annual and/or monthly trade panels.
+The method follows the conversion-weight estimation and chaining approach of
+Lukaszuk and Torun and adapts it to Comext CN8 data.
 
-## Method Baseline and Adaptation to CN8
+## What This Repository Does
 
-| LT baseline | This repository | Why |
-| --- | --- | --- |
-| LT Section 3 and Eq. (1) for conversion weights and chaining | Same estimation/chaining logic is implemented in Python modules and pipeline stages | Preserve method fidelity while making runs reproducible |
-| HS-focused framing in paper context | Applied to Comext CN8 codes | Thesis scope and dataset are CN8-based |
-| Method description abstracted from specific ETL system | Upstream extraction/preprocessing handled outside this repo (`comext-fetcher`) | Keep this repository focused on harmonisation logic |
+CN product codes change over time. That makes direct longitudinal comparison
+difficult: a code observed in one year may split, merge, disappear, or map only
+ambiguously to codes in another year.
 
-## Data Dependencies and Upstream Boundary
-This repository consumes prepared parquet inputs.
+This repository provides a reproducible Python implementation for:
 
-Default input paths:
-- Annual: `data/extracted_annual_no_confidential/products_like`
-- Monthly: `data/extracted_no_confidential/products_like`
+- parsing official CN concordance tables;
+- identifying deterministic and ambiguous revision groups;
+- estimating ambiguous conversion weights with LT-style constrained least
+  squares;
+- chaining adjacent conversion weights to a target vintage;
+- applying chained weights to annual or monthly trade panels;
+- writing diagnostics for missing coverage, row-sum checks, and application
+  totals.
 
-Concordance and schema references:
-- Concordance file: `data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls`
-- Processed-data schema notes: `data/metadata/PROCESSED.txt`
+Upstream Comext download and Parquet preparation are intentionally handled
+outside this package, typically by
+[`comext-fetcher`](https://github.com/Matthijs-Vossen/comext-fetcher).
 
-Upstream boundary:
-- Preparation of those parquet inputs is external to this repository (typically from `comext-fetcher`).
+## Quickstart
 
-## Repository Layout
-```text
-.
-├── src/comext_harmonisation/
-│   ├── concordance/
-│   ├── estimation/
-│   ├── chaining/
-│   ├── apply/
-│   ├── pipeline/
-│   ├── weights/
-│   ├── analysis/
-│   ├── cli/
-│   └── core/
-├── configs/
-│   ├── pipeline/
-│   └── analysis/
-├── tests/
-├── data/
-├── outputs/
-├── pyproject.toml
-└── README.md
-```
-
-| Path | Purpose |
-| --- | --- |
-| `src/comext_harmonisation/concordance/` | Parse concordance tables, build groups, and derive deterministic mappings |
-| `src/comext_harmonisation/estimation/` | Build LT share matrices and estimate adjacent conversion weights |
-| `src/comext_harmonisation/chaining/` | Compose adjacent weights into target-vintage chains |
-| `src/comext_harmonisation/apply/` | Apply adjacent/chained weights to annual and monthly trade data |
-| `src/comext_harmonisation/pipeline/` | Typed config loading and end-to-end stage orchestration |
-| `src/comext_harmonisation/weights/` | Weight schema, validation, I/O, and finalization |
-| `src/comext_harmonisation/analysis/` | Post-harmonisation diagnostics and research analyses |
-| `src/comext_harmonisation/cli/` | Module CLI entrypoints for pipeline, estimation, and analysis |
-| `src/comext_harmonisation/core/` | Shared normalization, revised-link, and diagnostics helpers |
-
-## Reproducible Setup
-From repository root:
+Install the package in editable mode:
 
 ```bash
-python3 -m pip install -e '.[dev]'
-python3 -m pytest -q
+python -m pip install -e '.[dev]'
 ```
 
-Python requirement is defined in `pyproject.toml` (`>=3.9`).
-
-## Run the Harmonisation Pipeline
-Canonical module CLI:
+Run the test suite:
 
 ```bash
-python -m comext_harmonisation.cli.run_pipeline --config configs/pipeline/example.yaml
+python -m pytest -q
 ```
 
-Full-range backward chaining run:
+Run the small demo pipeline:
 
 ```bash
-python -m comext_harmonisation.cli.run_pipeline --config configs/pipeline/estimate_chain_all_years_backward.yaml
+comext-run-pipeline --config examples/demo_cn_revision/configs/demo_pipeline.yaml
 ```
 
-Console-script equivalent (after editable install):
+The demo uses real `2007->2008` CN concordance topology with synthetic annual
+trade values. It estimates adjacent weights, chains them to CN2008, and applies
+them to two tiny annual input files. Generated outputs are written under
+`examples/demo_cn_revision/outputs/`, which is ignored by git.
+
+## Core Commands
+
+Run an end-to-end pipeline from a YAML config. This requires prepared Comext
+Parquet inputs at the paths specified by the config:
 
 ```bash
 comext-run-pipeline --config configs/pipeline/example.yaml
 ```
 
-## Run Estimation Only
-Run adjacent-period estimation without full chain/apply stages:
-
-```bash
-python -m comext_harmonisation.cli.run_estimation --period 20102011 --direction a_to_b --measure BOTH
-```
-
-Console-script equivalent:
+Run adjacent-period estimation directly:
 
 ```bash
 comext-run-estimation --period 20102011 --direction a_to_b --measure BOTH
 ```
 
-## Run Analysis
-Example chain-length analysis:
-
-```bash
-python -m comext_harmonisation.cli.run_analysis --config configs/analysis/chain_length.yaml
-```
-
-Synthetic-persistence qualitative evidence analysis:
-
-```bash
-python -m comext_harmonisation.cli.run_analysis --config configs/analysis/synthetic_persistence.yaml
-```
-
-Adjacent revised-only CN link-distribution summary:
-
-```bash
-python -m comext_harmonisation.cli.run_analysis --config configs/analysis/link_distribution_adjacent.yaml
-```
-
-Adjacent CN link-distribution summary with observed-universe implied identities:
-
-```bash
-python -m comext_harmonisation.cli.run_analysis --config configs/analysis/link_distribution_adjacent_observed_universe.yaml
-```
-
-Chained CN link-distribution thesis figure:
-
-```bash
-python -m comext_harmonisation.cli.run_analysis --config configs/analysis/chained_link_distribution.yaml
-```
-
-CRM-focused CN2023 revision-exposure figure:
-
-```bash
-python -m comext_harmonisation.cli.run_analysis --config configs/analysis/crm_revision_exposure_2023.yaml
-```
-
-The synthetic-persistence config also supports an optional `candidates.display_labels`
-mapping for human-readable subplot titles and CSV `label` fields.
-
-Thesis-ready 6-example synthetic-persistence figure:
-
-```bash
-python -m comext_harmonisation.cli.run_analysis --config configs/analysis/synthetic_persistence_thesis_examples.yaml
-```
-
-Raw-data bilateral persistence analysis around the CN2007 break:
-
-```bash
-python -m comext_harmonisation.cli.run_analysis --config configs/analysis/bilateral_persistence_cn2007_raw.yaml
-```
-
-Native deterministic-lineage placebo companion to the filtered share-stability analysis:
-
-```bash
-python -m comext_harmonisation.cli.run_analysis --config configs/analysis/share_stability_deterministic_placebo.yaml
-```
-
-Console-script equivalent:
+Run a configured research diagnostic:
 
 ```bash
 comext-run-analysis --config configs/analysis/chain_length.yaml
 ```
 
-## Key Configuration Switches
+The pipeline command is the main public entry point. The direct estimation and
+analysis commands are useful for advanced or research-specific workflows.
 
-| Key | Meaning | Default in loader |
-| --- | --- | --- |
-| `estimation.flow` | Flow used to build estimation shares | `"1"` |
-| `chaining.strict_revised_link_validation` | Fail on unresolved revised-link coverage in chaining | `true` |
-| `chaining.write_unresolved_details` | Persist unresolved revised-link detail rows during chaining | `true` |
-| `apply.assume_identity_for_missing` | Inject identity rows for missing apply codes | `true` |
-| `apply.fail_on_missing` | Raise if missing apply coverage remains | `true` |
-| `apply.strict_revised_link_validation` | Validate unresolved revised-link coverage before apply | `true` |
-| `chaining.finalize_weights` | Finalize chained weights at chain-output stage | `false` |
-| `chaining.neg_tol`, `chaining.pos_tol`, `chaining.row_sum_tol` | Numerical tolerances for clamping/normalization checks | `1e-6`, `1e-10`, `1e-6` |
+## Data Inputs
 
-Note: checked-in example configs can override these defaults for specific runs.
+This repository includes the CN concordance reference file used by the package:
 
-## Outputs and Artifacts
-Default artifacts written by the pipeline include:
-- Adjacent estimation weights: `outputs/weights/adjacent/<period>/<direction>/<measure>/`
-- Estimation diagnostics and summary: `outputs/weights/diagnostics/`, `outputs/weights/summary.csv`
-- Per-run pipeline outputs: `outputs/runs/run_<timestamp>_CN<target>/`
-- Chained weights and diagnostics inside a run: `<run_dir>/chain/`
-- Applied annual/monthly wide outputs and summaries inside a run: `<run_dir>/apply/`
+```text
+data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
+```
 
-Strict-link diagnostics:
-- Chaining unresolved details can be written to `.../chain/CN<target>/unresolved_details.csv`
-- Apply unresolved details can be written to `.../apply/CN<target>/diagnostics/unresolved_details.csv`
+It does not include Comext trade data. Full runs expect prepared Parquet files,
+usually produced by
+[`comext-fetcher`](https://github.com/Matthijs-Vossen/comext-fetcher), in
+directories such as:
 
-Analysis artifacts:
-- Bilateral-persistence outputs: `outputs/analysis/bilateral_persistence_cn2007_raw/{table.csv,table.tex,regression_details.csv,sample_diagnostics.csv,aggregation_table.csv,aggregation_table.tex,aggregation_regression_details.csv,aggregation_sample_diagnostics.csv}`
-- Chained link-distribution outputs: `outputs/analysis/chained_link_distribution/{chained_link_distribution.png,summary.csv}`
-- CRM revision-exposure outputs: `outputs/analysis/crm_revision_exposure_2023/{crm_revision_exposure.png,crm_revision_exposure_thresholds.png,summary.csv,code_exposure.csv,benchmark_summary.csv}`
-- Link-distribution outputs: `outputs/analysis/link_distribution_adjacent/{summary.csv,focal_codes.csv}`
-- Link-distribution observed-universe outputs: `outputs/analysis/link_distribution_adjacent_observed_universe/{summary.csv,focal_codes.csv}`
-- Synthetic-persistence outputs: `outputs/analysis/synthetic_persistence_qualitative/{code_catalog.csv,candidate_series.csv,code_evidence.csv,qualitative_summary.png}`
-- Deterministic-placebo share-stability outputs: `outputs/analysis/share_stability_deterministic_placebo/{summary.csv,panel_diagnostics.csv,comparison_to_common_target.csv,share_stability.png}`
+```text
+data/extracted_annual_no_confidential/products_like/
+data/extracted_no_confidential/products_like/
+```
 
-The bilateral-persistence analysis is a CN-adapted LT Table 3 diagnostic built on raw reported data. It reports three main-table rows: a break-centered deterministic-all broad row (`All deterministically break-comparable CN codes`), a filtered `2006->2007` break-group broad row (`All break-group CN codes`), and an adjusted row defined as the ambiguous subset of that retained break universe (`Adjusted CN codes`). The broad row uses the `2006` or `2007` break basis and includes both linked break-group concepts and deterministically comparable singleton concepts outside the break groups; the linked-group broad and adjusted rows remain restricted to the retained `2006->2007` break universe after nearby non-bijective revision filtering. Companion aggregation-level outputs report the deterministic-all and adjusted rows at bilateral, importer, and aggregate product levels.
+The expected annual schema is:
 
-## Pragmatic Implementation Choices vs LT Baseline
-1. Estimation sample is fixed to imports flow (`FLOW="1"`).
-2. Deterministic concordance links are represented as fixed `weight=1.0`; only ambiguous links are estimated.
-3. Chaining universe checks are based on observed annual code universes.
-4. Strict revised-link validation can fail-fast when unresolved revised links are detected.
-5. Unresolved revised-link details can be written as explicit diagnostics tables.
-6. Intermediate chain compositions are intentionally left non-normalized.
-7. Apply paths finalize effective weights before multiplication.
-8. Apply can optionally use identity fallback for missing codes (`assume_identity_for_missing`), with strict fail mode available (`fail_on_missing`).
+```text
+REPORTER, PARTNER, TRADE_TYPE, PRODUCT_NC, FLOW, PERIOD, VALUE_EUR, QUANTITY_KG
+```
 
-## Citation and Thesis Context (Template)
-- LT paper citation: `TODO`
-- Thesis citation: `TODO`
-- Repository citation (version/commit): `TODO`
+Monthly inputs use the same product and measure columns with monthly `PERIOD`
+values.
+
+### Using Full Comext Data
+
+For real Comext runs, use `comext-fetcher` first to download, validate, and
+convert Eurostat bulk archives to products-like Parquet. Its default
+no-confidential outputs line up with this repository's default input paths:
+
+```text
+comext-fetcher output                                       comext-harmonisation input
+data/non_confidential/extracted_annual/products_like/  ->   data/extracted_annual_no_confidential/products_like/
+data/non_confidential/extracted/products_like/         ->   data/extracted_no_confidential/products_like/
+```
+
+In practice, copy or symlink the relevant `products_like/` directories from the
+fetcher workspace into this repository before running a full pipeline, or adjust
+`paths.annual_base_dir` and `paths.monthly_base_dir` in your pipeline config to
+point directly at the fetcher outputs.
+
+The small demo under `examples/demo_cn_revision/` does not require
+`comext-fetcher`; it uses checked-in synthetic Parquet inputs.
+
+## Configuration
+
+Pipeline configs live in `configs/pipeline/`. Important settings include:
+
+- `years.start`, `years.end`, `years.target`: processed year range and target CN
+  vintage;
+- `measures`: `VALUE_EUR`, `QUANTITY_KG`, or both;
+- `stages`: enable estimation, chaining, annual apply, and monthly apply;
+- `paths`: concordance, input data, weight cache, and run-output locations;
+- `estimation.flow`: Comext flow used to estimate shares;
+- `chaining.*` and `apply.*`: validation, finalisation, and missing-code
+  behaviour.
+
+The checked-in configs are examples and research workflows. For a new run, copy
+one and adjust paths and years explicitly.
+
+## Repository Layout
+
+```text
+.
+├── src/comext_harmonisation/
+│   ├── concordance/    # Parse CN concordances and build revision groups
+│   ├── estimation/     # Build share matrices and estimate adjacent weights
+│   ├── chaining/       # Compose adjacent weights into target-vintage chains
+│   ├── apply/          # Apply chained weights to annual/monthly panels
+│   ├── pipeline/       # Config loading and end-to-end orchestration
+│   ├── weights/        # Weight schema, validation, finalisation, and I/O
+│   ├── analysis/       # Optional research diagnostics
+│   ├── cli/            # Console command entry points
+│   └── core/           # Shared code normalisation and diagnostics helpers
+├── configs/            # Pipeline and analysis configs
+├── examples/           # Small runnable demo data and config
+├── tests/              # Unit and integration tests
+├── pyproject.toml      # Package metadata and tool configuration
+└── README.md
+```
+
+## Research Diagnostics
+
+The `analysis/` package contains diagnostics used during the thesis work:
+chain-length sensitivity, link-distribution summaries, revision validation,
+sampling robustness, synthetic persistence checks, and related plots/tables.
+
+These modules are retained because they document and test downstream research
+workflows, but they are not required for the core harmonisation pipeline.
+
+## Method Reference
+
+This implementation follows and adapts the method described in:
+
+Lukaszuk, Piotr and Torun, David, *Harmonizing the Harmonized System*.
+Available at SSRN: https://ssrn.com/abstract=4302540 or
+http://dx.doi.org/10.2139/ssrn.4302540
+
+## Development
+
+Use Python 3.10 or newer.
+
+```bash
+python -m pip install -e '.[dev]'
+ruff check .
+ruff format --check .
+python -m pytest -q
+```
+
+GitHub Actions runs the same checks on Python 3.10 and 3.12.
+
+## Limitations
+
+- Demo trade values are synthetic and are only intended to exercise the pipeline.
+- Full-data runs require local Comext Parquet inputs, typically produced by
+  `comext-fetcher`, that are not redistributed in this repository.
+- Estimated weights depend on observed trade shares, the selected flow, and the
+  quality and interpretation of the CN concordance.
+- The implementation adapts an HS-focused method to CN8 data; CN-specific
+  assumptions and validation choices matter.
+- Identity fallback and strict revised-link validation settings affect coverage
+  and should be chosen deliberately for substantive analysis.
+- Full runs can be disk- and data-intensive.
+
+## License
+
+Code in this repository is released under the MIT License. See `LICENSE`.

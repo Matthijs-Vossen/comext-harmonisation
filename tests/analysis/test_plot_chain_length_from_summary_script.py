@@ -43,7 +43,9 @@ def test_plot_chain_length_from_summary_script_delta_only(
     def _legacy_plot_should_not_run(**_kwargs):
         raise AssertionError("Legacy chain-length panel plot should not be called")
 
-    monkeypatch.setattr(plotting_module, "plot_chain_length_delta_panels", _stub_delta_plot)
+    monkeypatch.setattr(
+        plotting_module, "plot_chain_length_delta_panels", _stub_delta_plot
+    )
     monkeypatch.setattr(
         plotting_module,
         "plot_chain_length_panels",
@@ -51,7 +53,9 @@ def test_plot_chain_length_from_summary_script_delta_only(
         raising=False,
     )
 
-    from comext_harmonisation.cli import plot_chain_length_from_summary as plot_chain_length_cli
+    from comext_harmonisation.cli import (
+        plot_chain_length_from_summary as plot_chain_length_cli,
+    )
 
     monkeypatch.setattr(
         sys,

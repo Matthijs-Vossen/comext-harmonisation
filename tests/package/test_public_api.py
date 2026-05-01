@@ -18,7 +18,9 @@ def test_top_level_exports_namespace_modules() -> None:
 
 
 def test_top_level_exports_are_unique() -> None:
-    assert len(ch.__all__) == len(set(ch.__all__)), "Duplicate entries in comext_harmonisation.__all__"
+    assert len(ch.__all__) == len(set(ch.__all__)), (
+        "Duplicate entries in comext_harmonisation.__all__"
+    )
 
 
 def test_pipeline_config_loader_namespace() -> None:

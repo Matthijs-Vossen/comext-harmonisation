@@ -99,7 +99,13 @@ def build_revised_code_index_from_concordance(
         edges["vintage_b_year"] = edges["period"].str[4:]
 
     edges = edges[
-        ["period", "vintage_a_year", "vintage_b_year", "vintage_a_code", "vintage_b_code"]
+        [
+            "period",
+            "vintage_a_year",
+            "vintage_b_year",
+            "vintage_a_code",
+            "vintage_b_code",
+        ]
     ].drop_duplicates()
     if edges.empty:
         return {}
@@ -110,9 +116,9 @@ def build_revised_code_index_from_concordance(
         .nunique()
         .rename(columns={"vintage_b_code": "n_to"})
     )
-    for row in a_counts.loc[a_counts["n_to"] > 1, ["period", "vintage_a_code"]].itertuples(
-        index=False
-    ):
+    for row in a_counts.loc[
+        a_counts["n_to"] > 1, ["period", "vintage_a_code"]
+    ].itertuples(index=False):
         revised.setdefault((row.period, "a_to_b"), set()).add(row.vintage_a_code)
 
     b_counts = (
@@ -120,9 +126,9 @@ def build_revised_code_index_from_concordance(
         .nunique()
         .rename(columns={"vintage_a_code": "n_to"})
     )
-    for row in b_counts.loc[b_counts["n_to"] > 1, ["period", "vintage_b_code"]].itertuples(
-        index=False
-    ):
+    for row in b_counts.loc[
+        b_counts["n_to"] > 1, ["period", "vintage_b_code"]
+    ].itertuples(index=False):
         revised.setdefault((row.period, "b_to_a"), set()).add(row.vintage_b_code)
 
     groups = build_concordance_groups(edges)
@@ -131,9 +137,9 @@ def build_revised_code_index_from_concordance(
     ]
     if not ambiguous_a_groups.empty:
         ambiguous_a_codes = (
-            groups.edges.merge(ambiguous_a_groups, on=["period", "group_id"], how="inner")[
-                ["period", "vintage_a_code"]
-            ]
+            groups.edges.merge(
+                ambiguous_a_groups, on=["period", "group_id"], how="inner"
+            )[["period", "vintage_a_code"]]
             .drop_duplicates()
             .itertuples(index=False)
         )
@@ -145,9 +151,9 @@ def build_revised_code_index_from_concordance(
     ]
     if not ambiguous_b_groups.empty:
         ambiguous_b_codes = (
-            groups.edges.merge(ambiguous_b_groups, on=["period", "group_id"], how="inner")[
-                ["period", "vintage_b_code"]
-            ]
+            groups.edges.merge(
+                ambiguous_b_groups, on=["period", "group_id"], how="inner"
+            )[["period", "vintage_b_code"]]
             .drop_duplicates()
             .itertuples(index=False)
         )
@@ -260,7 +266,9 @@ def chain_weights_for_year(
     target = _normalize_year(target_year)
     periods, direction = _chain_periods(origin, target)
     if not periods:
-        raise ValueError("origin_year and target_year are identical; no chaining required")
+        raise ValueError(
+            "origin_year and target_year are identical; no chaining required"
+        )
     revised_index = _normalize_revised_index(revised_codes_by_step)
 
     diagnostics_rows: list[dict[str, object]] = []
@@ -655,7 +663,8 @@ def build_chained_weights_for_range(
 
         all_chains = {**forward_chains, **backward_chains}
         all_diagnostics = {
-            row["origin_year"]: row for row in forward_diagnostics + backward_diagnostics
+            row["origin_year"]: row
+            for row in forward_diagnostics + backward_diagnostics
         }
         all_unresolved = forward_unresolved + backward_unresolved
         if write_unresolved_details:
@@ -682,14 +691,24 @@ def build_chained_weights_for_range(
             )
             diagnostics = pd.DataFrame([diagnostics_row])
 
-            direction = diagnostics_row.get("direction", _chain_periods(origin, target)[1])
+            direction = diagnostics_row.get(
+                "direction", _chain_periods(origin, target)[1]
+            )
             weights_out = weights.copy()
             weights_out["from_vintage_year"] = origin
             weights_out["to_vintage_year"] = target
             weights_out["direction"] = direction
             weights_out["measure"] = measure
             weights_out = weights_out[
-                ["from_vintage_year", "to_vintage_year", "direction", "measure", "from_code", "to_code", "weight"]
+                [
+                    "from_vintage_year",
+                    "to_vintage_year",
+                    "direction",
+                    "measure",
+                    "from_code",
+                    "to_code",
+                    "weight",
+                ]
             ]
 
             measure_tag = measure.lower()
@@ -702,7 +721,9 @@ def build_chained_weights_for_range(
                 / measure_tag
                 / "weights.csv"
             )
-            diagnostics_path = output_diagnostics_dir / f"CN{target}" / "diagnostics.csv"
+            diagnostics_path = (
+                output_diagnostics_dir / f"CN{target}" / "diagnostics.csv"
+            )
             weights_path.parent.mkdir(parents=True, exist_ok=True)
             weights_out.to_csv(weights_path, index=False)
             _append_csv(diagnostics, diagnostics_path)

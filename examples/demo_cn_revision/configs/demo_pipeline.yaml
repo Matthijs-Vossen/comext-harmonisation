@@ -1,0 +1,50 @@
+years:
+  start: 2007
+  end: 2008
+  target: 2008
+
+measures: [VALUE_EUR, QUANTITY_KG]
+
+stages:
+  estimate: true
+  chain: true
+  apply_annual: true
+  apply_monthly: false
+
+paths:
+  concordance_path: data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls
+  concordance_sheet: null
+  annual_base_dir: examples/demo_cn_revision/data/annual
+  monthly_base_dir: examples/demo_cn_revision/data/monthly
+  estimate_weights_dir: examples/demo_cn_revision/outputs/weights/adjacent
+  estimate_diagnostics_dir: examples/demo_cn_revision/outputs/weights/diagnostics
+  estimate_summary_path: examples/demo_cn_revision/outputs/weights/summary.csv
+  run_base_dir: examples/demo_cn_revision/outputs/runs
+
+estimation:
+  flow: "1"
+  include_aggregate_codes: false
+  fail_on_status: true
+  skip_existing: false
+
+chaining:
+  finalize_weights: true
+  neg_tol: 0.000001
+  pos_tol: 0.0000000001
+  row_sum_tol: 0.000001
+  fail_on_missing: true
+  strict_revised_link_validation: false
+  write_unresolved_details: false
+
+apply:
+  skip_existing: false
+  assume_identity_for_missing: true
+  fail_on_missing: true
+  strict_revised_link_validation: false
+  write_unresolved_details: false
+
+parallel:
+  max_workers_matrices: null
+  max_workers_solver: null
+  max_workers_chain: null
+  max_workers_apply: null

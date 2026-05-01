@@ -13,6 +13,7 @@ import pandas as pd
 try:
     from tqdm import tqdm
 except ImportError:  # pragma: no cover - exercised via environments without tqdm
+
     class _TqdmStub:
         @staticmethod
         def write(message: str) -> None:
@@ -24,7 +25,9 @@ except ImportError:  # pragma: no cover - exercised via environments without tqd
     tqdm = _TqdmStub()
 
 
-def _estimate_periods(start_year: int, end_year: int, target_year: int) -> list[tuple[str, str]]:
+def _estimate_periods(
+    start_year: int, end_year: int, target_year: int
+) -> list[tuple[str, str]]:
     periods: list[tuple[str, str]] = []
     if start_year < target_year:
         for year in range(start_year, target_year):
@@ -35,10 +38,14 @@ def _estimate_periods(start_year: int, end_year: int, target_year: int) -> list[
     return periods
 
 
-def _weights_exist(weights_dir: Path, period: str, direction: str, measure: str) -> bool:
+def _weights_exist(
+    weights_dir: Path, period: str, direction: str, measure: str
+) -> bool:
     measure_tag = measure.lower()
     base = weights_dir / period / direction / measure_tag
-    return (base / "weights_ambiguous.csv").exists() and (base / "weights_deterministic.csv").exists()
+    return (base / "weights_ambiguous.csv").exists() and (
+        base / "weights_deterministic.csv"
+    ).exists()
 
 
 def _combine_chain_diagnostics(
@@ -68,7 +75,8 @@ def _partition_estimation_periods(
     skipped = 0
     for period, direction in periods:
         if all(
-            _weights_exist(estimate_weights_dir, period, direction, measure) for measure in measures
+            _weights_exist(estimate_weights_dir, period, direction, measure)
+            for measure in measures
         ):
             skipped += 1
             continue
@@ -76,7 +84,9 @@ def _partition_estimation_periods(
     return to_process, skipped
 
 
-def _count_existing_outputs(paths: Iterable[Path], *, skip_existing: bool) -> tuple[int, int]:
+def _count_existing_outputs(
+    paths: Iterable[Path], *, skip_existing: bool
+) -> tuple[int, int]:
     paths_list = list(paths)
     if not skip_existing:
         return len(paths_list), 0
@@ -95,7 +105,10 @@ def _annual_output_paths(
     for year in range(start_year, end_year + 1):
         origin = str(year)
         paths.append(
-            apply_output_dir / f"CN{target_year}" / "annual" / f"comext_{origin}_wide.parquet"
+            apply_output_dir
+            / f"CN{target_year}"
+            / "annual"
+            / f"comext_{origin}_wide.parquet"
         )
     return paths
 
@@ -112,7 +125,10 @@ def _monthly_output_paths(
         for month in range(1, 13):
             period = f"{year}{month:02d}"
             paths.append(
-                apply_output_dir / f"CN{target_year}" / "monthly" / f"comext_{period}_wide.parquet"
+                apply_output_dir
+                / f"CN{target_year}"
+                / "monthly"
+                / f"comext_{period}_wide.parquet"
             )
     return paths
 
@@ -151,7 +167,9 @@ def _build_chains_for_measure(
     )
 
 
-def _append_apply_summary_sanity(summary: pd.DataFrame, sanity_items: list[tuple[str, str]]) -> None:
+def _append_apply_summary_sanity(
+    summary: pd.DataFrame, sanity_items: list[tuple[str, str]]
+) -> None:
     totals = [
         ("sum_value_eur_input", "sum_value_eur_w_value"),
         ("sum_quantity_kg_input", "sum_quantity_kg_w_value"),
@@ -161,14 +179,30 @@ def _append_apply_summary_sanity(summary: pd.DataFrame, sanity_items: list[tuple
     for src, dst in totals:
         if src in summary.columns and dst in summary.columns:
             diff = (summary[dst] - summary[src]).abs()
-            sanity_items.append((f"{src}->{dst}", f"max_abs={diff.max()} mean_abs={diff.mean()}"))
+            sanity_items.append(
+                (f"{src}->{dst}", f"max_abs={diff.max()} mean_abs={diff.mean()}")
+            )
     if "n_missing_value" in summary.columns:
-        sanity_items.append(("missing_value max", str(summary["n_missing_value"].max())))
+        sanity_items.append(
+            ("missing_value max", str(summary["n_missing_value"].max()))
+        )
     if "n_missing_quantity" in summary.columns:
-        sanity_items.append(("missing_quantity max", str(summary["n_missing_quantity"].max())))
+        sanity_items.append(
+            ("missing_quantity max", str(summary["n_missing_quantity"].max()))
+        )
     if "n_rows_input" in summary.columns and "n_rows_output" in summary.columns:
-        sanity_items.append(("output rows < input", str((summary["n_rows_output"] < summary["n_rows_input"]).sum())))
-        sanity_items.append(("output rows > input", str((summary["n_rows_output"] > summary["n_rows_input"]).sum())))
+        sanity_items.append(
+            (
+                "output rows < input",
+                str((summary["n_rows_output"] < summary["n_rows_input"]).sum()),
+            )
+        )
+        sanity_items.append(
+            (
+                "output rows > input",
+                str((summary["n_rows_output"] > summary["n_rows_input"]).sum()),
+            )
+        )
 
 
 def _run_apply_stage(
@@ -209,7 +243,9 @@ def _log_section(section_key: str, items: list[tuple[str, str]], write_line) -> 
         write_line(f"{key.ljust(width)} = {value}")
 
 
-def _print_config_summary(config, write_line, run_dir: Path, chain_dir: Path, apply_dir: Path) -> None:
+def _print_config_summary(
+    config, write_line, run_dir: Path, chain_dir: Path, apply_dir: Path
+) -> None:
     years = config.years
     items = [
         ("years", f"{years.start}-{years.end} -> CN{years.target}"),
@@ -313,7 +349,9 @@ def run_pipeline_with_config(config, *, config_path: Path | None = None) -> Path
             str(config.paths.concordance_path),
             sheet_name=config.paths.concordance_sheet,
         )
-        revised_codes_by_step = build_revised_code_index_from_concordance(concordance_edges)
+        revised_codes_by_step = build_revised_code_index_from_concordance(
+            concordance_edges
+        )
 
     if config.stages.estimate:
         periods = _estimate_periods(start_year, end_year, target_year)
@@ -368,7 +406,11 @@ def run_pipeline_with_config(config, *, config_path: Path | None = None) -> Path
             annual_base_dir=config.paths.annual_base_dir,
             years=range(start_year, end_year + 1),
         )
-        if config.parallel.max_workers_chain and config.parallel.max_workers_chain > 1 and len(measures) > 1:
+        if (
+            config.parallel.max_workers_chain
+            and config.parallel.max_workers_chain > 1
+            and len(measures) > 1
+        ):
             diag_paths: list[Path] = []
 
             def _chain_for_measure(measure: str) -> list:
@@ -394,13 +436,22 @@ def run_pipeline_with_config(config, *, config_path: Path | None = None) -> Path
                 [("measures", f"{len(measures)} (parallel)")],
                 _log,
             )
-            with ThreadPoolExecutor(max_workers=config.parallel.max_workers_chain) as executor:
-                futures = {executor.submit(_chain_for_measure, measure): measure for measure in measures}
+            with ThreadPoolExecutor(
+                max_workers=config.parallel.max_workers_chain
+            ) as executor:
+                futures = {
+                    executor.submit(_chain_for_measure, measure): measure
+                    for measure in measures
+                }
                 for future in as_completed(futures):
                     chained_outputs.extend(future.result())
 
-            combined_path = chain_diagnostics_dir / f"CN{target_year}" / "diagnostics.csv"
-            _combine_chain_diagnostics(combined_path=combined_path, diag_paths=diag_paths)
+            combined_path = (
+                chain_diagnostics_dir / f"CN{target_year}" / "diagnostics.csv"
+            )
+            _combine_chain_diagnostics(
+                combined_path=combined_path, diag_paths=diag_paths
+            )
             _log_section(
                 "stage_chaining_complete",
                 [("measures", f"{len(measures)} (parallel)")],
@@ -540,11 +591,15 @@ def run_pipeline_with_config(config, *, config_path: Path | None = None) -> Path
             sanity_items.append(("chain diagnostics", "missing"))
 
     if config.stages.apply_monthly:
-        monthly_summary = apply_output_dir / f"CN{target_year}" / "monthly" / "summary.csv"
+        monthly_summary = (
+            apply_output_dir / f"CN{target_year}" / "monthly" / "summary.csv"
+        )
         if monthly_summary.exists():
             summary = pd.read_csv(monthly_summary)
             if "origin_period" in summary.columns:
-                summary["origin_period"] = summary["origin_period"].astype(str).str.zfill(6)
+                summary["origin_period"] = (
+                    summary["origin_period"].astype(str).str.zfill(6)
+                )
             _append_apply_summary_sanity(summary, sanity_items)
         else:
             sanity_items.append(("monthly summary", "missing"))

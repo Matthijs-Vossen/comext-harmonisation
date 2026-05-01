@@ -36,7 +36,9 @@ def _normalize_revised_index(
     return normalize_revised_index(revised_codes_by_step)
 
 
-def _chain_periods(origin_year: str | int, target_year: str | int) -> tuple[list[str], str]:
+def _chain_periods(
+    origin_year: str | int, target_year: str | int
+) -> tuple[list[str], str]:
     return chain_periods(origin_year, target_year)
 
 
@@ -75,9 +77,16 @@ def _validate_chained_outputs_for_apply(
         if output.measure not in measure_set:
             continue
 
-        diagnostics = output.diagnostics if isinstance(output.diagnostics, pd.DataFrame) else pd.DataFrame()
+        diagnostics = (
+            output.diagnostics
+            if isinstance(output.diagnostics, pd.DataFrame)
+            else pd.DataFrame()
+        )
         unresolved_total = 0
-        if not diagnostics.empty and "n_unresolved_revised_total" in diagnostics.columns:
+        if (
+            not diagnostics.empty
+            and "n_unresolved_revised_total" in diagnostics.columns
+        ):
             unresolved_total = int(
                 pd.to_numeric(
                     diagnostics["n_unresolved_revised_total"],
@@ -108,7 +117,9 @@ def _validate_chained_outputs_for_apply(
         if not periods:
             continue
         first_period = periods[0]
-        revised_origin_codes = set(revised_codes_by_step.get((first_period, direction), set()))
+        revised_origin_codes = set(
+            revised_codes_by_step.get((first_period, direction), set())
+        )
         if not revised_origin_codes:
             continue
         if output.weights.empty:
@@ -158,7 +169,9 @@ def _prepare_weights(
         missing_codes = set()
     if missing_codes and fail_on_missing:
         sample = sorted(list(missing_codes))[:10]
-        raise ValueError(f"Missing weights for {len(missing_codes)} codes; sample: {sample}")
+        raise ValueError(
+            f"Missing weights for {len(missing_codes)} codes; sample: {sample}"
+        )
     return weights, missing_count
 
 
@@ -183,7 +196,9 @@ def _apply_weights_to_frame(
     missing_codes = data_codes - weight_codes
     if missing_codes and fail_on_missing:
         sample = sorted(list(missing_codes))[:10]
-        raise ValueError(f"Missing weights for {len(missing_codes)} codes; sample: {sample}")
+        raise ValueError(
+            f"Missing weights for {len(missing_codes)} codes; sample: {sample}"
+        )
 
     merged = data.merge(weights, left_on=code_column, right_on="from_code", how="inner")
     for col in measure_columns:
@@ -338,7 +353,9 @@ def _validate_or_raise_unresolved_for_apply(
     write_unresolved_details: bool,
     fail_on_missing: bool,
 ) -> None:
-    unresolved_path = output_base_dir / f"CN{target_year}" / "diagnostics" / "unresolved_details.csv"
+    unresolved_path = (
+        output_base_dir / f"CN{target_year}" / "diagnostics" / "unresolved_details.csv"
+    )
     unresolved_rows = _validate_chained_outputs_for_apply(
         chained_outputs=chained_outputs,
         target_year=target_year,
@@ -450,7 +467,9 @@ def _prepare_summary(
     return summary
 
 
-def _build_identity_wide_output(data: pd.DataFrame, *, measures: Sequence[str]) -> pd.DataFrame:
+def _build_identity_wide_output(
+    data: pd.DataFrame, *, measures: Sequence[str]
+) -> pd.DataFrame:
     output = data.copy()
     output["PRODUCT_NC"] = _normalize_codes(output["PRODUCT_NC"])
     if "VALUE_EUR" in measures:
@@ -474,9 +493,13 @@ def _resolve_weights_for_origin(
     weights_value = weights_for_year.get("VALUE_EUR")
     weights_quantity = weights_for_year.get("QUANTITY_KG")
     if "VALUE_EUR" in measures and weights_value is None:
-        raise ValueError(f"Missing chained VALUE_EUR weights for {origin}->{target_year}")
+        raise ValueError(
+            f"Missing chained VALUE_EUR weights for {origin}->{target_year}"
+        )
     if "QUANTITY_KG" in measures and weights_quantity is None:
-        raise ValueError(f"Missing chained QUANTITY_KG weights for {origin}->{target_year}")
+        raise ValueError(
+            f"Missing chained QUANTITY_KG weights for {origin}->{target_year}"
+        )
     return (
         weights_value if "VALUE_EUR" in measures else None,
         weights_quantity if "QUANTITY_KG" in measures else None,
@@ -611,7 +634,9 @@ def apply_chained_weights_wide_for_range(
             "sum_value_eur_w_value": _sum_or_zero(output, "VALUE_EUR_w_value"),
             "sum_quantity_kg_w_value": _sum_or_zero(output, "QUANTITY_KG_w_value"),
             "sum_value_eur_w_quantity": _sum_or_zero(output, "VALUE_EUR_w_quantity"),
-            "sum_quantity_kg_w_quantity": _sum_or_zero(output, "QUANTITY_KG_w_quantity"),
+            "sum_quantity_kg_w_quantity": _sum_or_zero(
+                output, "QUANTITY_KG_w_quantity"
+            ),
         }
 
     processed_rows = _run_processing(
@@ -697,7 +722,9 @@ def apply_chained_weights_wide_for_month_range(
     )
 
     if output_summary_path is None:
-        output_summary_path = output_base_dir / f"CN{target_year}" / "monthly" / "summary.csv"
+        output_summary_path = (
+            output_base_dir / f"CN{target_year}" / "monthly" / "summary.csv"
+        )
     existing_periods, summary_rows = _load_existing_summary_rows(
         output_summary_path=output_summary_path,
         key_column="origin_period",
@@ -720,7 +747,11 @@ def apply_chained_weights_wide_for_month_range(
 
     def _process_period(item: object) -> dict[str, object]:
         period, origin, month = item
-        if not isinstance(period, str) or not isinstance(origin, str) or not isinstance(month, int):
+        if (
+            not isinstance(period, str)
+            or not isinstance(origin, str)
+            or not isinstance(month, int)
+        ):
             raise ValueError("Invalid period processing item.")
         data_path = monthly_base_dir / f"comext_{period}.parquet"
         if not data_path.exists():
@@ -766,7 +797,9 @@ def apply_chained_weights_wide_for_month_range(
             "sum_value_eur_w_value": _sum_or_zero(output, "VALUE_EUR_w_value"),
             "sum_quantity_kg_w_value": _sum_or_zero(output, "QUANTITY_KG_w_value"),
             "sum_value_eur_w_quantity": _sum_or_zero(output, "VALUE_EUR_w_quantity"),
-            "sum_quantity_kg_w_quantity": _sum_or_zero(output, "QUANTITY_KG_w_quantity"),
+            "sum_quantity_kg_w_quantity": _sum_or_zero(
+                output, "QUANTITY_KG_w_quantity"
+            ),
         }
 
     processed_rows = _run_processing(
@@ -778,7 +811,9 @@ def apply_chained_weights_wide_for_month_range(
     )
     summary_rows.extend(processed_rows)
 
-    summary = _prepare_summary(rows=summary_rows, key_column="origin_period", zfill_width=6)
+    summary = _prepare_summary(
+        rows=summary_rows, key_column="origin_period", zfill_width=6
+    )
     output_summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary.to_csv(output_summary_path, index=False)
     return summary

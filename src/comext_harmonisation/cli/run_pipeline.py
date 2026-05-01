@@ -7,7 +7,9 @@ from pathlib import Path
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the end-to-end harmonisation pipeline.")
+    parser = argparse.ArgumentParser(
+        description="Run the end-to-end harmonisation pipeline."
+    )
     parser.add_argument(
         "--config",
         required=True,

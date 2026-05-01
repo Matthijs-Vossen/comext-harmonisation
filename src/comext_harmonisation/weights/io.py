@@ -44,7 +44,9 @@ def read_adjacent_weights(
     if not frames:
         raise ValueError(f"No weights found for period {period} ({measure}).")
 
-    weights = frames[0].copy() if len(frames) == 1 else pd.concat(frames, ignore_index=True)
+    weights = (
+        frames[0].copy() if len(frames) == 1 else pd.concat(frames, ignore_index=True)
+    )
     weights = weights[["from_code", "to_code", "weight"]].copy()
     weights["from_code"] = normalize_codes(weights["from_code"])
     weights["to_code"] = normalize_codes(weights["to_code"])

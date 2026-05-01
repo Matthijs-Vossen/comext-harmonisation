@@ -86,8 +86,10 @@ def _step_edges(
     step = step.drop_duplicates().reset_index(drop=True)
     if scope_mode == "observed_universe_implied_identities":
         identity_codes = (
-            code_universe[source_year] & code_universe[target_year]
-        ) - revised_source - revised_target
+            (code_universe[source_year] & code_universe[target_year])
+            - revised_source
+            - revised_target
+        )
         if identity_codes:
             identity = pd.DataFrame(
                 {
@@ -97,7 +99,9 @@ def _step_edges(
             )
             step = pd.concat([step, identity], ignore_index=True)
         if required_source_codes:
-            missing_source_codes = set(required_source_codes) - set(step["from_code"].tolist())
+            missing_source_codes = set(required_source_codes) - set(
+                step["from_code"].tolist()
+            )
             if missing_source_codes:
                 carry_identity = pd.DataFrame(
                     {
@@ -174,14 +178,24 @@ def _step_source_status(
     target_year: int,
     direction: str,
 ) -> pd.DataFrame:
-    edges = step_relation[["from_code", "to_code"]].drop_duplicates().rename(
-        columns={"from_code": "vintage_a_code", "to_code": "vintage_b_code"}
+    edges = (
+        step_relation[["from_code", "to_code"]]
+        .drop_duplicates()
+        .rename(columns={"from_code": "vintage_a_code", "to_code": "vintage_b_code"})
     )
     edges["period"] = f"{source_year}{target_year}"
     edges["vintage_a_year"] = str(source_year)
     edges["vintage_b_year"] = str(target_year)
     step_groups = build_concordance_groups(
-        edges[["period", "vintage_a_year", "vintage_b_year", "vintage_a_code", "vintage_b_code"]]
+        edges[
+            [
+                "period",
+                "vintage_a_year",
+                "vintage_b_year",
+                "vintage_a_code",
+                "vintage_b_code",
+            ]
+        ]
     )
     source_nodes = step_groups.vintage_a_nodes[
         ["period", "vintage_a_code", "group_id"]
@@ -199,10 +213,12 @@ def _step_source_status(
         )
     ]
     unknown_relationships = _unknown_relationships_for_direction(direction)
-    source_nodes["touched_non_1_to_1_this_step"] = source_nodes["step_relationship"] != "1:1"
-    source_nodes["touched_unknown_weight_this_step"] = source_nodes["step_relationship"].isin(
-        unknown_relationships
+    source_nodes["touched_non_1_to_1_this_step"] = (
+        source_nodes["step_relationship"] != "1:1"
     )
+    source_nodes["touched_unknown_weight_this_step"] = source_nodes[
+        "step_relationship"
+    ].isin(unknown_relationships)
     return source_nodes[
         [
             "vintage_a_code",
@@ -219,20 +235,32 @@ def _final_relationships(
     anchor_year: int,
     compare_year: int,
 ) -> pd.DataFrame:
-    edges = relation[["from_code", "to_code"]].drop_duplicates().rename(
-        columns={"from_code": "vintage_a_code", "to_code": "vintage_b_code"}
+    edges = (
+        relation[["from_code", "to_code"]]
+        .drop_duplicates()
+        .rename(columns={"from_code": "vintage_a_code", "to_code": "vintage_b_code"})
     )
     edges["period"] = f"{anchor_year}{compare_year}"
     edges["vintage_a_year"] = str(anchor_year)
     edges["vintage_b_year"] = str(compare_year)
     relation_groups = build_concordance_groups(
-        edges[["period", "vintage_a_year", "vintage_b_year", "vintage_a_code", "vintage_b_code"]]
+        edges[
+            [
+                "period",
+                "vintage_a_year",
+                "vintage_b_year",
+                "vintage_a_code",
+                "vintage_b_code",
+            ]
+        ]
     )
     anchor_nodes = relation_groups.vintage_a_nodes[
         ["period", "vintage_a_code", "group_id"]
     ].drop_duplicates()
     anchor_nodes = anchor_nodes.merge(
-        relation_groups.group_summary[["period", "group_id", "n_vintage_a", "n_vintage_b"]],
+        relation_groups.group_summary[
+            ["period", "group_id", "n_vintage_a", "n_vintage_b"]
+        ],
         on=["period", "group_id"],
         how="inner",
     )
@@ -286,8 +314,10 @@ def _panel_code_exposure(
             target_year=compare_year,
             direction=direction,
         )
-        anchor_source = current[["from_code", "to_code"]].drop_duplicates().rename(
-            columns={"from_code": "anchor_code", "to_code": "source_code"}
+        anchor_source = (
+            current[["from_code", "to_code"]]
+            .drop_duplicates()
+            .rename(columns={"from_code": "anchor_code", "to_code": "source_code"})
         )
         anchor_step = anchor_source.merge(step_status, on="source_code", how="left")
         if anchor_step["step_relationship"].isna().any():
@@ -300,12 +330,12 @@ def _panel_code_exposure(
                 "Missing step relationship classification for source codes: "
                 + ", ".join(missing_codes[:10])
             )
-        anchor_touch = (
-            anchor_step.groupby("anchor_code", as_index=False)
-            .agg(
-                touched_non_1_to_1_this_step=("touched_non_1_to_1_this_step", "max"),
-                touched_unknown_weight_this_step=("touched_unknown_weight_this_step", "max"),
-            )
+        anchor_touch = anchor_step.groupby("anchor_code", as_index=False).agg(
+            touched_non_1_to_1_this_step=("touched_non_1_to_1_this_step", "max"),
+            touched_unknown_weight_this_step=(
+                "touched_unknown_weight_this_step",
+                "max",
+            ),
         )
 
         status = status.merge(anchor_touch, on="anchor_code", how="left")
@@ -319,12 +349,12 @@ def _panel_code_exposure(
             status["ever_non_1_to_1_step"] | status["touched_non_1_to_1_this_step"]
         )
         status["ever_unknown_weight_step"] = (
-            status["ever_unknown_weight_step"] | status["touched_unknown_weight_this_step"]
+            status["ever_unknown_weight_step"]
+            | status["touched_unknown_weight_this_step"]
         )
-        status["unknown_weight_step_count"] = (
-            status["unknown_weight_step_count"]
-            + status["touched_unknown_weight_this_step"].astype(int)
-        )
+        status["unknown_weight_step_count"] = status[
+            "unknown_weight_step_count"
+        ] + status["touched_unknown_weight_this_step"].astype(int)
 
         current, _ = compose_weights(current, step_relation)
         current = _binarize_relation(current)
@@ -427,13 +457,17 @@ def _summarize(code_exposure: pd.DataFrame) -> pd.DataFrame:
                         "n_codes": n_codes,
                         "total_codes": total_codes,
                         "share_codes": (
-                            n_codes / float(total_codes) if total_codes else float("nan")
+                            n_codes / float(total_codes)
+                            if total_codes
+                            else float("nan")
                         ),
                     }
                 )
-    return pd.DataFrame(rows).sort_values(
-        ["panel_direction", "compare_year", "population", "metric"]
-    ).reset_index(drop=True)
+    return (
+        pd.DataFrame(rows)
+        .sort_values(["panel_direction", "compare_year", "population", "metric"])
+        .reset_index(drop=True)
+    )
 
 
 def run_crm_revision_exposure_analysis(

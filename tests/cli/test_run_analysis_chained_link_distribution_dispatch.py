@@ -27,7 +27,9 @@ def test_run_analysis_dispatches_chained_link_distribution(
             "summary_csv": tmp_path / "summary.csv",
         }
 
-    monkeypatch.setattr(analysis_module, "load_chained_link_distribution_config", _stub_loader)
+    monkeypatch.setattr(
+        analysis_module, "load_chained_link_distribution_config", _stub_loader
+    )
     monkeypatch.setattr(
         analysis_module,
         "run_chained_link_distribution_analysis",

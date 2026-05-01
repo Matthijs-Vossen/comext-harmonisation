@@ -99,7 +99,9 @@ def build_chain_group_map(
     for step in chain_steps(base_year, target_year):
         period = str(step["period"])
         direction = str(step["direction"])
-        step_edges = ambiguous_edges_for_step(groups=groups, period=period, direction=direction)
+        step_edges = ambiguous_edges_for_step(
+            groups=groups, period=period, direction=direction
+        )
         if step_edges.empty:
             continue
 
@@ -160,4 +162,3 @@ def build_chain_group_map(
             group_map_rows.append({"target_code": code, "group_id": group_id})
 
     return pd.DataFrame(group_map_rows), group_ids, sample_codes
-

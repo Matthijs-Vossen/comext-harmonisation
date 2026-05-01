@@ -7,7 +7,9 @@ from typing import Iterable, Iterator, TypeVar
 T = TypeVar("T")
 
 
-def progress(iterable: Iterable[T], *, desc: str | None = None, total: int | None = None) -> Iterator[T]:
+def progress(
+    iterable: Iterable[T], *, desc: str | None = None, total: int | None = None
+) -> Iterator[T]:
     try:
         from tqdm import tqdm  # type: ignore
     except Exception:  # pragma: no cover - optional dependency

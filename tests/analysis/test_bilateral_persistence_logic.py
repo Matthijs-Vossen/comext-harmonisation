@@ -48,7 +48,9 @@ def test_scaled_bilateral_flows_use_global_group_total() -> None:
     assert np.isclose(float(scaled["group_total"].iloc[0]), 100.0)
     assert np.isclose(
         scaled.loc[
-            (scaled["REPORTER"] == "R1") & (scaled["PARTNER"] == "P1") & (scaled["concept_code"] == "B"),
+            (scaled["REPORTER"] == "R1")
+            & (scaled["PARTNER"] == "P1")
+            & (scaled["concept_code"] == "B"),
             "scaled_flow",
         ].iloc[0],
         0.30,
@@ -111,7 +113,9 @@ def test_select_adjusted_group_ids_union_covers_both_ambiguity_directions() -> N
     assert union_ids == (a_to_b_ids | b_to_a_ids)
 
 
-def test_collect_contaminated_group_ids_ignores_bijective_renames_for_candidate_subset() -> None:
+def test_collect_contaminated_group_ids_ignores_bijective_renames_for_candidate_subset() -> (
+    None
+):
     edges = pd.DataFrame(
         {
             "period": ["20052006"] * 3 + ["20062007"] * 3,
@@ -123,7 +127,9 @@ def test_collect_contaminated_group_ids_ignores_bijective_renames_for_candidate_
     )
     groups = build_concordance_groups(edges)
     one_to_one_maps = bp_runner._strict_one_to_one_maps(groups)
-    revised_a_by_period, revised_b_by_period = bp_runner._period_revised_code_sets(groups)
+    revised_a_by_period, revised_b_by_period = bp_runner._period_revised_code_sets(
+        groups
+    )
     adjusted_group_ids = bp_runner._select_adjusted_group_ids(
         groups,
         break_period="20062007",
@@ -187,7 +193,9 @@ def test_zero_completed_panel_keeps_entries_and_exits() -> None:
     assert panel.sort_values("concept_code")["scaled_flow_cur"].tolist() == [0.0, 1.0]
 
 
-def test_build_deterministic_basis_group_map_adds_singletons_outside_break_groups() -> None:
+def test_build_deterministic_basis_group_map_adds_singletons_outside_break_groups() -> (
+    None
+):
     annual_by_year = {
         2006: pd.DataFrame(
             {
@@ -234,7 +242,9 @@ def test_collect_contaminated_basis_codes_hits_linked_and_singleton_targets() ->
     )
     groups = build_concordance_groups(edges)
     one_to_one_maps = bp_runner._strict_one_to_one_maps(groups)
-    revised_a_by_period, revised_b_by_period = bp_runner._period_revised_code_sets(groups)
+    revised_a_by_period, revised_b_by_period = bp_runner._period_revised_code_sets(
+        groups
+    )
     contaminated = bp_runner._collect_contaminated_basis_codes(
         break_a_year=2006,
         break_b_year=2007,

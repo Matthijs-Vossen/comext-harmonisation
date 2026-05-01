@@ -29,7 +29,9 @@ def normalize_year(year: str | int) -> str:
     return year_str
 
 
-def chain_periods(origin_year: str | int, target_year: str | int) -> tuple[list[str], str]:
+def chain_periods(
+    origin_year: str | int, target_year: str | int
+) -> tuple[list[str], str]:
     origin = int(origin_year)
     target = int(target_year)
     if origin == target:
@@ -37,4 +39,3 @@ def chain_periods(origin_year: str | int, target_year: str | int) -> tuple[list[
     if origin < target:
         return [f"{year}{year + 1}" for year in range(origin, target)], "a_to_b"
     return [f"{year}{year + 1}" for year in range(origin - 1, target - 1, -1)], "b_to_a"
-

@@ -9,7 +9,10 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
-from ...chaining.engine import build_chained_weights_for_range, build_code_universe_from_annual
+from ...chaining.engine import (
+    build_chained_weights_for_range,
+    build_code_universe_from_annual,
+)
 from ...concordance.io import read_concordance_xls
 from ...core.codes import normalize_codes
 from ..config import SyntheticPersistenceConfig
@@ -63,9 +66,9 @@ def _load_import_totals(
     return totals
 
 
-def _build_totals_cache(config: SyntheticPersistenceConfig) -> tuple[
-    dict[int, pd.DataFrame], dict[int, float], dict[str, list[int]]
-]:
+def _build_totals_cache(
+    config: SyntheticPersistenceConfig,
+) -> tuple[dict[int, pd.DataFrame], dict[int, float], dict[str, list[int]]]:
     totals_by_year: dict[int, pd.DataFrame] = {}
     total_trade_by_year: dict[int, float] = {}
     observed_years_by_code: dict[str, list[int]] = {}
@@ -179,8 +182,12 @@ def _build_candidate_timing(
         timing[code] = CandidateTiming(
             obs_first_year=min(years) if years else None,
             obs_last_year=max(years) if years else None,
-            concordance_intro_year=intro_by_code.get(code) if code in intro_by_code else None,
-            concordance_sunset_year=int(sunset_by_code.get(code)) if code in sunset_by_code else None,
+            concordance_intro_year=intro_by_code.get(code)
+            if code in intro_by_code
+            else None,
+            concordance_sunset_year=int(sunset_by_code.get(code))
+            if code in sunset_by_code
+            else None,
         )
     return timing
 
@@ -201,11 +208,16 @@ def _classify_candidate_status(
     end_year: int,
 ) -> tuple[bool, str | None]:
     if timing.obs_first_year is None:
-        if timing.concordance_intro_year is not None and timing.concordance_intro_year > end_year:
+        if (
+            timing.concordance_intro_year is not None
+            and timing.concordance_intro_year > end_year
+        ):
             return False, "introduced_outside_window"
         return False, "absent_in_window_data"
 
-    if dimension == AFTERLIFE_SET and _afterlife_concept_check(timing, start_year=start_year):
+    if dimension == AFTERLIFE_SET and _afterlife_concept_check(
+        timing, start_year=start_year
+    ):
         return False, "concept_not_afterlife"
 
     return True, None
@@ -271,7 +283,11 @@ def _build_code_catalog(
             }
         )
 
-    return pd.DataFrame(rows).sort_values(["set_name", "display_order"]).reset_index(drop=True)
+    return (
+        pd.DataFrame(rows)
+        .sort_values(["set_name", "display_order"])
+        .reset_index(drop=True)
+    )
 
 
 def _prehistory_intro_year(timing: CandidateTiming) -> int | None:
@@ -377,14 +393,20 @@ def _compute_code_evidence(candidate_series: pd.DataFrame) -> pd.DataFrame:
         cumulative_synthetic = float(synthetic["share_conv"].sum())
         cumulative_inlife = float(inlife["share_conv"].sum())
         cumulative_ratio = (
-            cumulative_synthetic / cumulative_inlife if cumulative_inlife > 0 else float("nan")
+            cumulative_synthetic / cumulative_inlife
+            if cumulative_inlife > 0
+            else float("nan")
         )
 
         synthetic_first_share = (
-            float(synthetic.iloc[0]["share_conv"]) if not synthetic.empty else float("nan")
+            float(synthetic.iloc[0]["share_conv"])
+            if not synthetic.empty
+            else float("nan")
         )
         synthetic_last_share = (
-            float(synthetic.iloc[-1]["share_conv"]) if not synthetic.empty else float("nan")
+            float(synthetic.iloc[-1]["share_conv"])
+            if not synthetic.empty
+            else float("nan")
         )
 
         rows.append(
@@ -504,7 +526,9 @@ def _plot_small_multiples_section(
     font_scale: float,
     y_axis_unit: str,
 ) -> None:
-    series = candidate_series.loc[candidate_series["set_name"] == dimension_set_name].copy()
+    series = candidate_series.loc[
+        candidate_series["set_name"] == dimension_set_name
+    ].copy()
     sort_columns = ["year"]
     if "display_order" in series.columns:
         sort_columns = ["display_order", "year"]
@@ -575,9 +599,9 @@ def _plot_summary(
     use_latex: bool,
     latex_preamble: str,
     line_width: float,
-    font_scale: float,
-    section_title_scale: float,
-    y_axis_unit: str,
+    font_scale: float = 1.0,
+    section_title_scale: float = 1.0,
+    y_axis_unit: str = "percent",
 ) -> None:
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
@@ -643,7 +667,9 @@ def _plot_summary(
     after_fig = fig.add_subfigure(outer[2])
     after_fig.supxlabel("Year", fontsize=9 * font_scale)
     after_fig.supylabel("Share of total annual trade", fontsize=9 * font_scale)
-    after_axes_grid = after_fig.subplots(nrows_after, ncols_after, squeeze=False, sharex=True)
+    after_axes_grid = after_fig.subplots(
+        nrows_after, ncols_after, squeeze=False, sharex=True
+    )
     after_axes = [ax for row in after_axes_grid for ax in row]
 
     _plot_small_multiples_section(
@@ -682,10 +708,14 @@ def _write_csv(df: pd.DataFrame, path: Path) -> Path:
     return path
 
 
-def run_synthetic_persistence_analysis(config: SyntheticPersistenceConfig) -> dict[str, object]:
+def run_synthetic_persistence_analysis(
+    config: SyntheticPersistenceConfig,
+) -> dict[str, object]:
     years = list(range(config.years.start, config.years.end + 1))
 
-    totals_by_year, total_trade_by_year, observed_years_by_code = _build_totals_cache(config)
+    totals_by_year, total_trade_by_year, observed_years_by_code = _build_totals_cache(
+        config
+    )
 
     all_codes = list(config.candidates.prehistory) + list(config.candidates.afterlife)
     intro_by_code, sunset_by_code = _concordance_timing_by_code(
@@ -732,7 +762,9 @@ def run_synthetic_persistence_analysis(config: SyntheticPersistenceConfig) -> di
 
     output_dir = config.paths.output_dir
     code_catalog_path = _write_csv(code_catalog, output_dir / "code_catalog.csv")
-    candidate_series_path = _write_csv(candidate_series, output_dir / "candidate_series.csv")
+    candidate_series_path = _write_csv(
+        candidate_series, output_dir / "candidate_series.csv"
+    )
     code_evidence_path = _write_csv(code_evidence, output_dir / "code_evidence.csv")
 
     _plot_summary(

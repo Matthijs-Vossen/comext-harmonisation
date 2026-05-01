@@ -71,8 +71,10 @@ def _step_edges(
     step = step.drop_duplicates().reset_index(drop=True)
     if scope_mode == "observed_universe_implied_identities":
         identity_codes = (
-            code_universe[source_year] & code_universe[target_year]
-        ) - revised_source - revised_target
+            (code_universe[source_year] & code_universe[target_year])
+            - revised_source
+            - revised_target
+        )
         if identity_codes:
             identity = pd.DataFrame(
                 {
@@ -125,14 +127,24 @@ def _relation_summary_for_year(
     total_anchor_codes: int,
 ) -> pd.DataFrame:
     period = f"{anchor_year}{compare_year}"
-    edges = relation[["from_code", "to_code"]].drop_duplicates().rename(
-        columns={"from_code": "vintage_a_code", "to_code": "vintage_b_code"}
+    edges = (
+        relation[["from_code", "to_code"]]
+        .drop_duplicates()
+        .rename(columns={"from_code": "vintage_a_code", "to_code": "vintage_b_code"})
     )
     edges["period"] = period
     edges["vintage_a_year"] = str(anchor_year)
     edges["vintage_b_year"] = str(compare_year)
     groups = build_concordance_groups(
-        edges[["period", "vintage_a_year", "vintage_b_year", "vintage_a_code", "vintage_b_code"]]
+        edges[
+            [
+                "period",
+                "vintage_a_year",
+                "vintage_b_year",
+                "vintage_a_code",
+                "vintage_b_code",
+            ]
+        ]
     )
     anchor_nodes = groups.vintage_a_nodes[
         ["period", "vintage_a_code", "group_id"]
@@ -142,7 +154,9 @@ def _relation_summary_for_year(
         on=["period", "group_id"],
         how="inner",
     )
-    anchor_nodes = anchor_nodes.drop_duplicates(subset=["vintage_a_code"]).reset_index(drop=True)
+    anchor_nodes = anchor_nodes.drop_duplicates(subset=["vintage_a_code"]).reset_index(
+        drop=True
+    )
 
     if int(anchor_nodes["vintage_a_code"].nunique()) != int(total_anchor_codes):
         raise ValueError(
@@ -158,9 +172,8 @@ def _relation_summary_for_year(
             anchor_nodes["n_vintage_b"].tolist(),
         )
     ]
-    counts = (
-        anchor_nodes.groupby("relationship", as_index=False)
-        .agg(n_anchor_codes=("vintage_a_code", "nunique"))
+    counts = anchor_nodes.groupby("relationship", as_index=False).agg(
+        n_anchor_codes=("vintage_a_code", "nunique")
     )
     counts = counts.set_index("relationship")["n_anchor_codes"].to_dict()
 
@@ -271,9 +284,11 @@ def run_chained_link_distribution_analysis(
         code_universe=code_universe,
         scope_mode=config.scope.mode,
     )
-    summary = pd.concat([backward, forward], ignore_index=True).sort_values(
-        ["panel_direction", "compare_year", "relationship"]
-    ).reset_index(drop=True)
+    summary = (
+        pd.concat([backward, forward], ignore_index=True)
+        .sort_values(["panel_direction", "compare_year", "relationship"])
+        .reset_index(drop=True)
+    )
 
     _write_csv(summary, config.output.summary_csv)
     plot_chained_link_distribution_panels(

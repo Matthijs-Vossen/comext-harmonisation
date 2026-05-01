@@ -32,18 +32,28 @@ def test_chain_length_config_valid_metrics(tmp_path: Path) -> None:
         _base_yaml('metrics: ["mae_weighted", "mae_weighted_step", "diffuse_exposure"]')
     )
     config = load_chain_length_config(cfg_path)
-    assert list(config.metrics) == ["mae_weighted", "mae_weighted_step", "diffuse_exposure"]
+    assert list(config.metrics) == [
+        "mae_weighted",
+        "mae_weighted_step",
+        "diffuse_exposure",
+    ]
 
 
 def test_chain_length_config_defaults_to_delta_metrics(tmp_path: Path) -> None:
     cfg_path = tmp_path / "chain_length_default.yaml"
     cfg_path.write_text(_base_yaml(""))
     config = load_chain_length_config(cfg_path)
-    assert list(config.metrics) == ["mae_weighted", "mae_weighted_step", "diffuse_exposure"]
+    assert list(config.metrics) == [
+        "mae_weighted",
+        "mae_weighted_step",
+        "diffuse_exposure",
+    ]
 
 
 def test_chain_length_config_rejects_invalid_metrics(tmp_path: Path) -> None:
     cfg_path = tmp_path / "chain_length_invalid.yaml"
-    cfg_path.write_text(_base_yaml('metrics: ["mae_weighted", "r2_45_weighted_symmetric"]'))
+    cfg_path.write_text(
+        _base_yaml('metrics: ["mae_weighted", "r2_45_weighted_symmetric"]')
+    )
     with pytest.raises(ValueError, match="Invalid chain_length metrics"):
         load_chain_length_config(cfg_path)

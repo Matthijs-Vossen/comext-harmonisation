@@ -11,7 +11,9 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run LT weight estimation for one concordance period.",
     )
-    parser.add_argument("--period", required=True, help="Concordance period, e.g. 20092010.")
+    parser.add_argument(
+        "--period", required=True, help="Concordance period, e.g. 20092010."
+    )
     parser.add_argument(
         "--direction",
         default="a_to_b",

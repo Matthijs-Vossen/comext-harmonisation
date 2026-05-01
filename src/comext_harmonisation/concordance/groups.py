@@ -82,7 +82,13 @@ def _group_ids_for_period(period_edges: pd.DataFrame) -> pd.DataFrame:
 
 def build_concordance_groups(concordance_edges: pd.DataFrame) -> ConcordanceGroups:
     """Build connected components and ambiguity flags per concordance period."""
-    required = {"period", "vintage_a_year", "vintage_b_year", "vintage_a_code", "vintage_b_code"}
+    required = {
+        "period",
+        "vintage_a_year",
+        "vintage_b_year",
+        "vintage_a_code",
+        "vintage_b_code",
+    }
     missing = required.difference(concordance_edges.columns)
     if missing:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
@@ -141,7 +147,13 @@ def build_concordance_groups(concordance_edges: pd.DataFrame) -> ConcordanceGrou
         )
 
     concordance_edges = concordance_edges.drop_duplicates(
-        subset=["period", "vintage_a_year", "vintage_b_year", "vintage_a_code", "vintage_b_code"]
+        subset=[
+            "period",
+            "vintage_a_year",
+            "vintage_b_year",
+            "vintage_a_code",
+            "vintage_b_code",
+        ]
     ).reset_index(drop=True)
 
     period_groups = []
@@ -152,7 +164,14 @@ def build_concordance_groups(concordance_edges: pd.DataFrame) -> ConcordanceGrou
 
     vintage_a_nodes = (
         edges_with_group.groupby(
-            ["period", "vintage_a_year", "vintage_b_year", "vintage_a_code", "group_id"], as_index=False
+            [
+                "period",
+                "vintage_a_year",
+                "vintage_b_year",
+                "vintage_a_code",
+                "group_id",
+            ],
+            as_index=False,
         )
         .agg(n_vintage_b_links=("vintage_b_code", "nunique"))
         .sort_values(["period", "vintage_a_code"])
@@ -162,7 +181,14 @@ def build_concordance_groups(concordance_edges: pd.DataFrame) -> ConcordanceGrou
 
     vintage_b_nodes = (
         edges_with_group.groupby(
-            ["period", "vintage_a_year", "vintage_b_year", "vintage_b_code", "group_id"], as_index=False
+            [
+                "period",
+                "vintage_a_year",
+                "vintage_b_year",
+                "vintage_b_code",
+                "group_id",
+            ],
+            as_index=False,
         )
         .agg(n_vintage_a_links=("vintage_a_code", "nunique"))
         .sort_values(["period", "vintage_b_code"])
@@ -170,30 +196,38 @@ def build_concordance_groups(concordance_edges: pd.DataFrame) -> ConcordanceGrou
     )
     vintage_b_nodes["deterministic_b_to_a"] = vintage_b_nodes["n_vintage_a_links"] == 1
 
-    a_flags = (
-        vintage_a_nodes.groupby(["period", "vintage_a_year", "vintage_b_year", "group_id"], as_index=False)
-        .agg(max_n_vintage_b_links=("n_vintage_b_links", "max"))
-    )
-    b_flags = (
-        vintage_b_nodes.groupby(["period", "vintage_a_year", "vintage_b_year", "group_id"], as_index=False)
-        .agg(max_n_vintage_a_links=("n_vintage_a_links", "max"))
-    )
+    a_flags = vintage_a_nodes.groupby(
+        ["period", "vintage_a_year", "vintage_b_year", "group_id"], as_index=False
+    ).agg(max_n_vintage_b_links=("n_vintage_b_links", "max"))
+    b_flags = vintage_b_nodes.groupby(
+        ["period", "vintage_a_year", "vintage_b_year", "group_id"], as_index=False
+    ).agg(max_n_vintage_a_links=("n_vintage_a_links", "max"))
 
     group_summary = (
-        edges_with_group.groupby(["period", "vintage_a_year", "vintage_b_year", "group_id"], as_index=False)
+        edges_with_group.groupby(
+            ["period", "vintage_a_year", "vintage_b_year", "group_id"], as_index=False
+        )
         .agg(
             n_vintage_a=("vintage_a_code", "nunique"),
             n_vintage_b=("vintage_b_code", "nunique"),
             n_edges=("vintage_b_code", "count"),
         )
-        .merge(a_flags, on=["period", "vintage_a_year", "vintage_b_year", "group_id"], how="left")
-        .merge(b_flags, on=["period", "vintage_a_year", "vintage_b_year", "group_id"], how="left")
+        .merge(
+            a_flags,
+            on=["period", "vintage_a_year", "vintage_b_year", "group_id"],
+            how="left",
+        )
+        .merge(
+            b_flags,
+            on=["period", "vintage_a_year", "vintage_b_year", "group_id"],
+            how="left",
+        )
     )
     group_summary["a_to_b_ambiguous"] = group_summary["max_n_vintage_b_links"] > 1
     group_summary["b_to_a_ambiguous"] = group_summary["max_n_vintage_a_links"] > 1
-    group_summary = group_summary.drop(columns=["max_n_vintage_b_links", "max_n_vintage_a_links"]).sort_values(
-        ["period", "group_id"]
-    )
+    group_summary = group_summary.drop(
+        columns=["max_n_vintage_b_links", "max_n_vintage_a_links"]
+    ).sort_values(["period", "group_id"])
 
     return ConcordanceGroups(
         edges=edges_with_group,

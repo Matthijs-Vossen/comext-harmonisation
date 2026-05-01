@@ -104,6 +104,6 @@ def test_complete_lineage_maps_allow_renames_and_drop_non_bijective_groups():
     assert retained == {"g_keep"}
     assert diagnostics["n_groups_dropped_lineage"] == 1
     lineage_2005 = maps_by_year[2005]
-    assert lineage_2005[["group_id", "lineage_code", "native_code"]].to_dict("records") == [
-        {"group_id": "g_keep", "lineage_code": "A_NEW", "native_code": "A_OLD"}
-    ]
+    assert lineage_2005[["group_id", "lineage_code", "native_code"]].to_dict(
+        "records"
+    ) == [{"group_id": "g_keep", "lineage_code": "A_NEW", "native_code": "A_OLD"}]

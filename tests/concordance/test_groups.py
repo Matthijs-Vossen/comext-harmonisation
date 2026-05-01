@@ -187,8 +187,12 @@ def test_group_id_stable_under_edge_ordering():
     df_b = pd.DataFrame(list(reversed(base)))
     result_a = build_concordance_groups(df_a)
     result_b = build_concordance_groups(df_b)
-    edges_a = result_a.edges.sort_values(["vintage_a_code", "vintage_b_code"]).reset_index(drop=True)
-    edges_b = result_b.edges.sort_values(["vintage_a_code", "vintage_b_code"]).reset_index(drop=True)
+    edges_a = result_a.edges.sort_values(
+        ["vintage_a_code", "vintage_b_code"]
+    ).reset_index(drop=True)
+    edges_b = result_b.edges.sort_values(
+        ["vintage_a_code", "vintage_b_code"]
+    ).reset_index(drop=True)
     assert edges_a["group_id"].tolist() == edges_b["group_id"].tolist()
 
 

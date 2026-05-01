@@ -26,7 +26,9 @@ def test_run_analysis_dispatches_synthetic_persistence(
             "code_evidence_csv": tmp_path / "code_evidence.csv",
         }
 
-    monkeypatch.setattr(analysis_module, "load_synthetic_persistence_config", _stub_loader)
+    monkeypatch.setattr(
+        analysis_module, "load_synthetic_persistence_config", _stub_loader
+    )
     monkeypatch.setattr(
         analysis_module,
         "run_synthetic_persistence_analysis",

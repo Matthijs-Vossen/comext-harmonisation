@@ -30,7 +30,11 @@ def finalize_weights_table_impl(
 
     too_negative = df["weight"] < -neg_tol
     if too_negative.any():
-        sample = df.loc[too_negative, ["from_code", "to_code", "weight"]].head(5).to_dict("records")
+        sample = (
+            df.loc[too_negative, ["from_code", "to_code", "weight"]]
+            .head(5)
+            .to_dict("records")
+        )
         raise ValueError(f"Found weights below -neg_tol: {sample}")
 
     if neg_tol > 0:
@@ -55,7 +59,9 @@ def finalize_weights_table_impl(
     row_sums = df.groupby("from_code", sort=False)["weight"].sum()
     max_dev = float((row_sums - 1.0).abs().max()) if not row_sums.empty else 0.0
     if max_dev > row_sum_tol:
-        raise ValueError(f"Row sums deviate from 1 by {max_dev} (tolerance {row_sum_tol})")
+        raise ValueError(
+            f"Row sums deviate from 1 by {max_dev} (tolerance {row_sum_tol})"
+        )
 
     df = df[df["weight"] > 0].reset_index(drop=True)
     validate_weight_table(df, schema="minimal", check_bounds=True, check_row_sums=True)

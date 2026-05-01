@@ -7,7 +7,9 @@ import pandas as pd
 import pytest
 
 
-def test_plot_revision_validation_from_summary_script(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_plot_revision_validation_from_summary_script(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
     summary = pd.DataFrame(
         [
             {
@@ -122,7 +124,9 @@ def test_plot_revision_validation_from_summary_script_can_enable_annotations(
     assert calls[0]["show_annotations"] is True
 
 
-def test_plot_revision_validation_from_summary_script_missing_summary(tmp_path: Path, monkeypatch) -> None:
+def test_plot_revision_validation_from_summary_script_missing_summary(
+    tmp_path: Path, monkeypatch
+) -> None:
     missing_path = tmp_path / "missing.csv"
 
     from comext_harmonisation.cli import (

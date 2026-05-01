@@ -71,7 +71,9 @@ def test_share_stability_panel_local_metrics(monkeypatch, tmp_path: Path) -> Non
     config = ShareStabilityConfig(
         years=ShareStabilityYearsConfig(start=2006, end=2008, target=2006),
         break_config=ShareStabilityBreakConfig(period="20062007", direction="b_to_a"),
-        measures=ShareStabilityMeasureConfig(weights_source="VALUE_EUR", analysis_measure="VALUE_EUR"),
+        measures=ShareStabilityMeasureConfig(
+            weights_source="VALUE_EUR", analysis_measure="VALUE_EUR"
+        ),
         metrics=["r2_45", "exposure_weighted", "diffuseness_weighted"],
         paths=ShareStabilityPathsConfig(
             concordance_path=Path("dummy.xlsx"),

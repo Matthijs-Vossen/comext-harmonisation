@@ -92,13 +92,20 @@ def test_run_pipeline_stage_gating_estimate_only(tmp_path: Path, monkeypatch) ->
     _write_pipeline_config(
         cfg_path,
         years=(2010, 2011, 2011),
-        stages={"estimate": True, "chain": False, "apply_annual": False, "apply_monthly": False},
+        stages={
+            "estimate": True,
+            "chain": False,
+            "apply_annual": False,
+            "apply_monthly": False,
+        },
         chaining={"strict_revised_link_validation": False},
         apply={"strict_revised_link_validation": False},
     )
 
     module = run_pipeline_cli
-    monkeypatch.setattr(module, "_parse_args", lambda: argparse.Namespace(config=str(cfg_path)))
+    monkeypatch.setattr(
+        module, "_parse_args", lambda: argparse.Namespace(config=str(cfg_path))
+    )
 
     estimation_calls: list[dict] = []
 
@@ -106,7 +113,9 @@ def test_run_pipeline_stage_gating_estimate_only(tmp_path: Path, monkeypatch) ->
         estimation_calls.append(kwargs)
         return []
 
-    monkeypatch.setattr(estimation_runner, "run_weight_estimation_for_period_multi", _stub_estimation)
+    monkeypatch.setattr(
+        estimation_runner, "run_weight_estimation_for_period_multi", _stub_estimation
+    )
     monkeypatch.setattr(
         chaining_engine,
         "build_chained_weights_for_range",
@@ -115,22 +124,30 @@ def test_run_pipeline_stage_gating_estimate_only(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr(
         apply_module,
         "apply_chained_weights_wide_for_range",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("annual apply should not run")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("annual apply should not run")
+        ),
     )
     monkeypatch.setattr(
         apply_module,
         "apply_chained_weights_wide_for_month_range",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("monthly apply should not run")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("monthly apply should not run")
+        ),
     )
     monkeypatch.setattr(
         concordance_io,
         "read_concordance_xls",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("concordance read should not run")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("concordance read should not run")
+        ),
     )
     monkeypatch.setattr(
         chaining_engine,
         "build_revised_code_index_from_concordance",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("revised index build should not run")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("revised index build should not run")
+        ),
     )
 
     module.main()
@@ -152,7 +169,12 @@ def test_run_pipeline_estimation_skip_existing(tmp_path: Path, monkeypatch) -> N
     _write_pipeline_config(
         cfg_path,
         years=(2010, 2012, 2012),
-        stages={"estimate": True, "chain": False, "apply_annual": False, "apply_monthly": False},
+        stages={
+            "estimate": True,
+            "chain": False,
+            "apply_annual": False,
+            "apply_monthly": False,
+        },
         estimation={"skip_existing": True},
     )
 
@@ -164,11 +186,15 @@ def test_run_pipeline_estimation_skip_existing(tmp_path: Path, monkeypatch) -> N
         (base / "weights_deterministic.csv").write_text("from_code,to_code,weight\n")
 
     module = run_pipeline_cli
-    monkeypatch.setattr(module, "_parse_args", lambda: argparse.Namespace(config=str(cfg_path)))
+    monkeypatch.setattr(
+        module, "_parse_args", lambda: argparse.Namespace(config=str(cfg_path))
+    )
 
     estimation_calls: list[dict] = []
     monkeypatch.setattr(
-        estimation_runner, "run_weight_estimation_for_period_multi", lambda **kwargs: estimation_calls.append(kwargs)
+        estimation_runner,
+        "run_weight_estimation_for_period_multi",
+        lambda **kwargs: estimation_calls.append(kwargs),
     )
     monkeypatch.setattr(
         chaining_engine,
@@ -178,12 +204,16 @@ def test_run_pipeline_estimation_skip_existing(tmp_path: Path, monkeypatch) -> N
     monkeypatch.setattr(
         apply_module,
         "apply_chained_weights_wide_for_range",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("annual apply should not run")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("annual apply should not run")
+        ),
     )
     monkeypatch.setattr(
         apply_module,
         "apply_chained_weights_wide_for_month_range",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("monthly apply should not run")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("monthly apply should not run")
+        ),
     )
 
     module.main()
@@ -195,18 +225,34 @@ def test_run_pipeline_estimation_skip_existing(tmp_path: Path, monkeypatch) -> N
 
 
 # LT_REF: Sec3 operational sequencing estimate->chain->apply
-def test_run_pipeline_strict_revised_validation_wiring(tmp_path: Path, monkeypatch) -> None:
+def test_run_pipeline_strict_revised_validation_wiring(
+    tmp_path: Path, monkeypatch
+) -> None:
     cfg_path = tmp_path / "cfg_strict_chain_apply.yaml"
     _write_pipeline_config(
         cfg_path,
         years=(2010, 2011, 2011),
-        stages={"estimate": False, "chain": True, "apply_annual": True, "apply_monthly": False},
-        chaining={"strict_revised_link_validation": True, "write_unresolved_details": True},
-        apply={"strict_revised_link_validation": True, "write_unresolved_details": True, "skip_existing": True},
+        stages={
+            "estimate": False,
+            "chain": True,
+            "apply_annual": True,
+            "apply_monthly": False,
+        },
+        chaining={
+            "strict_revised_link_validation": True,
+            "write_unresolved_details": True,
+        },
+        apply={
+            "strict_revised_link_validation": True,
+            "write_unresolved_details": True,
+            "skip_existing": True,
+        },
     )
 
     module = run_pipeline_cli
-    monkeypatch.setattr(module, "_parse_args", lambda: argparse.Namespace(config=str(cfg_path)))
+    monkeypatch.setattr(
+        module, "_parse_args", lambda: argparse.Namespace(config=str(cfg_path))
+    )
 
     calls: dict[str, list[dict]] = {
         "read_concordance": [],
@@ -245,19 +291,31 @@ def test_run_pipeline_strict_revised_validation_wiring(tmp_path: Path, monkeypat
         return pd.DataFrame()
 
     monkeypatch.setattr(concordance_io, "read_concordance_xls", _stub_read_concordance)
-    monkeypatch.setattr(chaining_engine, "build_revised_code_index_from_concordance", _stub_build_revised_index)
+    monkeypatch.setattr(
+        chaining_engine,
+        "build_revised_code_index_from_concordance",
+        _stub_build_revised_index,
+    )
     monkeypatch.setattr(
         estimation_runner,
         "run_weight_estimation_for_period_multi",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("estimate should not run")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("estimate should not run")
+        ),
     )
-    monkeypatch.setattr(chaining_engine, "build_code_universe_from_annual", lambda **_kwargs: {})
+    monkeypatch.setattr(
+        chaining_engine, "build_code_universe_from_annual", lambda **_kwargs: {}
+    )
     monkeypatch.setattr(chaining_engine, "build_chained_weights_for_range", _stub_chain)
-    monkeypatch.setattr(apply_module, "apply_chained_weights_wide_for_range", _stub_apply_annual)
+    monkeypatch.setattr(
+        apply_module, "apply_chained_weights_wide_for_range", _stub_apply_annual
+    )
     monkeypatch.setattr(
         apply_module,
         "apply_chained_weights_wide_for_month_range",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("monthly apply should not run")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("monthly apply should not run")
+        ),
     )
 
     module.main()

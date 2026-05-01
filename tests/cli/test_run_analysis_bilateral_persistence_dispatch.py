@@ -26,7 +26,9 @@ def test_run_analysis_dispatches_bilateral_persistence(
             "details_csv": tmp_path / "details.csv",
         }
 
-    monkeypatch.setattr(analysis_module, "load_bilateral_persistence_config", _stub_loader)
+    monkeypatch.setattr(
+        analysis_module, "load_bilateral_persistence_config", _stub_loader
+    )
     monkeypatch.setattr(
         analysis_module,
         "run_bilateral_persistence_analysis",

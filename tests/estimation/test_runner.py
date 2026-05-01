@@ -155,10 +155,18 @@ def test_run_weight_estimation_for_period_writes_outputs(tmp_path, monkeypatch):
     import comext_harmonisation.estimation.runner as runner
 
     monkeypatch.setattr(runner, "load_concordance_groups", lambda **kwargs: groups)
-    monkeypatch.setattr(runner, "prepare_estimation_shares_for_period", lambda **kwargs: estimation)
-    monkeypatch.setattr(runner, "build_group_matrices", lambda *args, **kwargs: matrices)
-    monkeypatch.setattr(runner, "estimate_weights", lambda **kwargs: (weights, diagnostics))
-    monkeypatch.setattr(runner, "build_deterministic_mappings", lambda *args, **kwargs: deterministic)
+    monkeypatch.setattr(
+        runner, "prepare_estimation_shares_for_period", lambda **kwargs: estimation
+    )
+    monkeypatch.setattr(
+        runner, "build_group_matrices", lambda *args, **kwargs: matrices
+    )
+    monkeypatch.setattr(
+        runner, "estimate_weights", lambda **kwargs: (weights, diagnostics)
+    )
+    monkeypatch.setattr(
+        runner, "build_deterministic_mappings", lambda *args, **kwargs: deterministic
+    )
 
     outputs = run_weight_estimation_for_period(
         period=period,
@@ -216,10 +224,22 @@ def test_run_weight_estimation_for_period_fail_fast(tmp_path, monkeypatch):
     import comext_harmonisation.estimation.runner as runner
 
     monkeypatch.setattr(runner, "load_concordance_groups", lambda **kwargs: groups)
-    monkeypatch.setattr(runner, "prepare_estimation_shares_for_period", lambda **kwargs: estimation)
-    monkeypatch.setattr(runner, "build_group_matrices", lambda *args, **kwargs: matrices)
-    monkeypatch.setattr(runner, "estimate_weights", lambda **kwargs: (pd.DataFrame(columns=WEIGHT_COLUMNS), diagnostics))
-    monkeypatch.setattr(runner, "build_deterministic_mappings", lambda *args, **kwargs: pd.DataFrame(columns=WEIGHT_COLUMNS))
+    monkeypatch.setattr(
+        runner, "prepare_estimation_shares_for_period", lambda **kwargs: estimation
+    )
+    monkeypatch.setattr(
+        runner, "build_group_matrices", lambda *args, **kwargs: matrices
+    )
+    monkeypatch.setattr(
+        runner,
+        "estimate_weights",
+        lambda **kwargs: (pd.DataFrame(columns=WEIGHT_COLUMNS), diagnostics),
+    )
+    monkeypatch.setattr(
+        runner,
+        "build_deterministic_mappings",
+        lambda *args, **kwargs: pd.DataFrame(columns=WEIGHT_COLUMNS),
+    )
 
     with pytest.raises(RuntimeError):
         run_weight_estimation_for_period(
@@ -231,7 +251,9 @@ def test_run_weight_estimation_for_period_fail_fast(tmp_path, monkeypatch):
 
 
 # LT_REF: Sec3 Eq1 (estimation stage orchestration)
-def test_run_weight_estimation_for_period_multi_writes_combined_summary(tmp_path, monkeypatch):
+def test_run_weight_estimation_for_period_multi_writes_combined_summary(
+    tmp_path, monkeypatch
+):
     period = "20092010"
     direction = "a_to_b"
 
@@ -275,8 +297,12 @@ def test_run_weight_estimation_for_period_multi_writes_combined_summary(tmp_path
 
     assert len(results) == 2
     assert all(result.summary_csv_path is None for result in results)
-    assert not (tmp_path / "summaries" / f"run_summary_{period}_{direction}_value_eur.csv").exists()
-    assert not (tmp_path / "summaries" / f"run_summary_{period}_{direction}_quantity_kg.csv").exists()
+    assert not (
+        tmp_path / "summaries" / f"run_summary_{period}_{direction}_value_eur.csv"
+    ).exists()
+    assert not (
+        tmp_path / "summaries" / f"run_summary_{period}_{direction}_quantity_kg.csv"
+    ).exists()
     summary_path = tmp_path / "summary.csv"
     assert summary_path.exists()
     combined = pd.read_csv(summary_path)

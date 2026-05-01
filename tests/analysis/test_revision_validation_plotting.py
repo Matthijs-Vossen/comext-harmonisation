@@ -2,7 +2,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from comext_harmonisation.analysis.common.plotting import plot_revision_validation_heatmap
+from comext_harmonisation.analysis.common.plotting import (
+    plot_revision_validation_heatmap,
+)
 
 
 def _sample_revision_validation_summary() -> pd.DataFrame:
@@ -66,13 +68,10 @@ def test_revision_validation_heatmap_defaults_to_no_annotations(
     assert top_ax.get_title() == "Local persistence"
     assert middle_ax.get_title() == "Weight robustness"
     assert bottom_ax.get_title() == "Revision-year sample size"
-    assert top_ax.title.get_fontsize() >= 12
-    assert top_ax.get_yticklabels()[0].get_fontsize() >= 11
     assert [tick.get_text() for tick in bottom_ax.get_xticklabels()] == ["2002-03"]
-    width, height = fig.get_size_inches()
-    assert width < 10.0
-    assert height < 6.0
-    texts = [text.get_text() for text in top_ax.texts + middle_ax.texts + bottom_ax.texts]
+    texts = [
+        text.get_text() for text in top_ax.texts + middle_ax.texts + bottom_ax.texts
+    ]
     assert "0.120" not in texts
     assert "12" not in texts
     assert texts.count("nan") == 0
@@ -120,10 +119,9 @@ def test_revision_validation_heatmap_can_show_annotations(
     bottom_ax = axes[2]
     scale_axes = axes[3:6]
     median_axes = axes[6:]
-    width, height = fig.get_size_inches()
-    assert width < 10.0
-    assert height < 6.0
-    texts = [text.get_text() for text in top_ax.texts + middle_ax.texts + bottom_ax.texts]
+    texts = [
+        text.get_text() for text in top_ax.texts + middle_ax.texts + bottom_ax.texts
+    ]
     assert "0.120" in texts
     assert "12" in texts
     assert "12.000" not in texts

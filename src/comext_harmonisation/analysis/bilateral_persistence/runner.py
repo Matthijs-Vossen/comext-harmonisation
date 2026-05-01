@@ -104,29 +104,33 @@ def _load_native_bilateral_year(
         data = data.loc[~data["PARTNER"].isin(exclude_partners)]
     data = data.rename(columns={measure: "value"})
     data["PRODUCT_NC"] = normalize_codes(data["PRODUCT_NC"])
-    grouped = (
-        data.groupby(["REPORTER", "PARTNER", "PRODUCT_NC"], as_index=False, sort=False)["value"]
-        .sum()
-    )
+    grouped = data.groupby(
+        ["REPORTER", "PARTNER", "PRODUCT_NC"], as_index=False, sort=False
+    )["value"].sum()
     grouped["value"] = grouped["value"].astype(float)
     return grouped
 
 
 def _strict_one_to_one_maps(groups) -> dict[tuple[str, str], pd.DataFrame]:
     maps: dict[tuple[str, str], pd.DataFrame] = {}
-    edges = groups.edges[
-        ["period", "vintage_a_code", "vintage_b_code"]
-    ].drop_duplicates().copy()
+    edges = (
+        groups.edges[["period", "vintage_a_code", "vintage_b_code"]]
+        .drop_duplicates()
+        .copy()
+    )
     edges["vintage_a_code"] = normalize_codes(edges["vintage_a_code"])
     edges["vintage_b_code"] = normalize_codes(edges["vintage_b_code"])
 
     for period, period_edges in edges.groupby("period", sort=False):
-        a_deg = period_edges.groupby("vintage_a_code", sort=False)["vintage_b_code"].nunique()
-        b_deg = period_edges.groupby("vintage_b_code", sort=False)["vintage_a_code"].nunique()
-        mask = (
-            period_edges["vintage_a_code"].map(a_deg).eq(1)
-            & period_edges["vintage_b_code"].map(b_deg).eq(1)
-        )
+        a_deg = period_edges.groupby("vintage_a_code", sort=False)[
+            "vintage_b_code"
+        ].nunique()
+        b_deg = period_edges.groupby("vintage_b_code", sort=False)[
+            "vintage_a_code"
+        ].nunique()
+        mask = period_edges["vintage_a_code"].map(a_deg).eq(1) & period_edges[
+            "vintage_b_code"
+        ].map(b_deg).eq(1)
         matched = period_edges.loc[mask].copy()
         maps[(str(period), "a_to_b")] = matched.rename(
             columns={"vintage_a_code": "from_code", "vintage_b_code": "to_code"}
@@ -137,17 +141,25 @@ def _strict_one_to_one_maps(groups) -> dict[tuple[str, str], pd.DataFrame]:
     return maps
 
 
-def _period_revised_code_sets(groups) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+def _period_revised_code_sets(
+    groups,
+) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     revised_a: dict[str, set[str]] = {}
     revised_b: dict[str, set[str]] = {}
-    edges = groups.edges[
-        ["period", "vintage_a_code", "vintage_b_code"]
-    ].drop_duplicates().copy()
+    edges = (
+        groups.edges[["period", "vintage_a_code", "vintage_b_code"]]
+        .drop_duplicates()
+        .copy()
+    )
     edges["vintage_a_code"] = normalize_codes(edges["vintage_a_code"])
     edges["vintage_b_code"] = normalize_codes(edges["vintage_b_code"])
     for period, period_edges in edges.groupby("period", sort=False):
-        revised_a[str(period)] = set(period_edges["vintage_a_code"].astype(str).tolist())
-        revised_b[str(period)] = set(period_edges["vintage_b_code"].astype(str).tolist())
+        revised_a[str(period)] = set(
+            period_edges["vintage_a_code"].astype(str).tolist()
+        )
+        revised_b[str(period)] = set(
+            period_edges["vintage_b_code"].astype(str).tolist()
+        )
     return revised_a, revised_b
 
 
@@ -168,7 +180,11 @@ def _carry_codes_to_target(
         period = str(step["period"])
         direction = str(step["direction"])
         step_map = one_to_one_maps.get((period, direction))
-        step_map = step_map if step_map is not None else pd.DataFrame(columns=["from_code", "to_code"])
+        step_map = (
+            step_map
+            if step_map is not None
+            else pd.DataFrame(columns=["from_code", "to_code"])
+        )
         matched = current.merge(
             step_map,
             left_on="concept_code",
@@ -179,7 +195,9 @@ def _carry_codes_to_target(
             revised_codes = revised_a_by_period.get(period, set())
         else:
             revised_codes = revised_b_by_period.get(period, set())
-        unchanged = current.loc[~current["concept_code"].isin(revised_codes), ["concept_code"]].copy()
+        unchanged = current.loc[
+            ~current["concept_code"].isin(revised_codes), ["concept_code"]
+        ].copy()
         matched = matched[["to_code"]].rename(columns={"to_code": "concept_code"})
         current = pd.concat([matched, unchanged], ignore_index=True).drop_duplicates()
         if current.empty:
@@ -207,7 +225,11 @@ def _carry_frame_to_target(
         period = str(step["period"])
         direction = str(step["direction"])
         step_map = one_to_one_maps.get((period, direction))
-        step_map = step_map if step_map is not None else pd.DataFrame(columns=["from_code", "to_code"])
+        step_map = (
+            step_map
+            if step_map is not None
+            else pd.DataFrame(columns=["from_code", "to_code"])
+        )
         matched = current.merge(
             step_map,
             left_on="concept_code",
@@ -226,10 +248,9 @@ def _carry_frame_to_target(
         if current.empty:
             return current
 
-    return (
-        current.groupby(["REPORTER", "PARTNER", "concept_code"], as_index=False, sort=False)["value"]
-        .sum()
-    )
+    return current.groupby(
+        ["REPORTER", "PARTNER", "concept_code"], as_index=False, sort=False
+    )["value"].sum()
 
 
 def _positive_scaled_flows(
@@ -240,10 +261,9 @@ def _positive_scaled_flows(
     df = frame.merge(group_map, on="concept_code", how="inner")
     if df.empty:
         return pd.DataFrame(columns=EMPTY_POSITIVE_COLUMNS)
-    df = (
-        df.groupby(["REPORTER", "PARTNER", "group_id", "concept_code"], as_index=False, sort=False)["value"]
-        .sum()
-    )
+    df = df.groupby(
+        ["REPORTER", "PARTNER", "group_id", "concept_code"], as_index=False, sort=False
+    )["value"].sum()
     totals = (
         df.groupby("group_id", as_index=False, sort=False)["value"]
         .sum()
@@ -266,7 +286,13 @@ def _positive_scaled_flows_by_aggregation(
 
     unit_cols = AGGREGATION_UNIT_COLUMNS[aggregation_level]
     denom_cols = AGGREGATION_DENOMINATOR_COLUMNS[aggregation_level]
-    output_cols = unit_cols + ["group_id", "concept_code", "value", "group_total", "scaled_flow"]
+    output_cols = unit_cols + [
+        "group_id",
+        "concept_code",
+        "value",
+        "group_total",
+        "scaled_flow",
+    ]
     df = frame.merge(group_map, on="concept_code", how="inner")
     if df.empty:
         return pd.DataFrame(columns=output_cols)
@@ -339,8 +365,12 @@ def _panel_from_positive_flows(
         on=["REPORTER", "PARTNER", "group_id", "concept_code"],
         how="left",
     )
-    panel["scaled_flow_lag"] = pd.to_numeric(panel["scaled_flow_lag"], errors="coerce").fillna(0.0)
-    panel["scaled_flow_cur"] = pd.to_numeric(panel["scaled_flow_cur"], errors="coerce").fillna(0.0)
+    panel["scaled_flow_lag"] = pd.to_numeric(
+        panel["scaled_flow_lag"], errors="coerce"
+    ).fillna(0.0)
+    panel["scaled_flow_cur"] = pd.to_numeric(
+        panel["scaled_flow_cur"], errors="coerce"
+    ).fillna(0.0)
 
     diagnostics = {
         "n_groups": int(code_universe["group_id"].nunique()),
@@ -375,10 +405,12 @@ def _panel_from_positive_flows_by_aggregation(
         )
         return panel, diagnostics
 
-    empty_columns = (
-        AGGREGATION_UNIT_COLUMNS[aggregation_level]
-        + ["group_id", "concept_code", "scaled_flow_lag", "scaled_flow_cur"]
-    )
+    empty_columns = AGGREGATION_UNIT_COLUMNS[aggregation_level] + [
+        "group_id",
+        "concept_code",
+        "scaled_flow_lag",
+        "scaled_flow_cur",
+    ]
     if code_universe.empty:
         return pd.DataFrame(columns=empty_columns), {
             "n_groups": 0,
@@ -425,8 +457,12 @@ def _panel_from_positive_flows_by_aggregation(
     )
     panel = panel.merge(lag_scaled, on=merge_cols, how="left")
     panel = panel.merge(year_scaled, on=merge_cols, how="left")
-    panel["scaled_flow_lag"] = pd.to_numeric(panel["scaled_flow_lag"], errors="coerce").fillna(0.0)
-    panel["scaled_flow_cur"] = pd.to_numeric(panel["scaled_flow_cur"], errors="coerce").fillna(0.0)
+    panel["scaled_flow_lag"] = pd.to_numeric(
+        panel["scaled_flow_lag"], errors="coerce"
+    ).fillna(0.0)
+    panel["scaled_flow_cur"] = pd.to_numeric(
+        panel["scaled_flow_cur"], errors="coerce"
+    ).fillna(0.0)
 
     if unit_cols:
         n_units = int(panel[unit_cols].drop_duplicates().shape[0])
@@ -503,10 +539,9 @@ def _non_bijective_codes_from_edges(edges: pd.DataFrame) -> tuple[set[str], set[
         return set(), set()
     a_deg = edges.groupby("vintage_a_code", sort=False)["vintage_b_code"].nunique()
     b_deg = edges.groupby("vintage_b_code", sort=False)["vintage_a_code"].nunique()
-    mask = (
-        edges["vintage_a_code"].map(a_deg).gt(1)
-        | edges["vintage_b_code"].map(b_deg).gt(1)
-    )
+    mask = edges["vintage_a_code"].map(a_deg).gt(1) | edges["vintage_b_code"].map(
+        b_deg
+    ).gt(1)
     contaminated = edges.loc[mask]
     return (
         set(contaminated["vintage_a_code"].astype(str).tolist()),
@@ -514,7 +549,9 @@ def _non_bijective_codes_from_edges(edges: pd.DataFrame) -> tuple[set[str], set[
     )
 
 
-def _select_adjusted_group_ids(groups, *, break_period: str, direction: str) -> set[str]:
+def _select_adjusted_group_ids(
+    groups, *, break_period: str, direction: str
+) -> set[str]:
     if direction == "union":
         summary = groups.group_summary.loc[
             (groups.group_summary["period"] == break_period)
@@ -600,11 +637,13 @@ def _collect_contaminated_group_ids(
         if carried.empty:
             continue
         group_ids = set(
-            group_map.loc[group_map["concept_code"].isin(set(carried.astype(str))), "group_id"]
+            group_map.loc[
+                group_map["concept_code"].isin(set(carried.astype(str))), "group_id"
+            ]
             .astype(str)
             .tolist()
         )
-        contaminated |= (group_ids & candidate_group_ids)
+        contaminated |= group_ids & candidate_group_ids
 
     return contaminated
 
@@ -630,7 +669,11 @@ def _prepare_break_pair(
     else:
         target_year = break_b_year
         group_map = break_group_map_b
-    group_map = group_map.loc[group_map["group_id"].isin(group_ids)].drop_duplicates().reset_index(drop=True)
+    group_map = (
+        group_map.loc[group_map["group_id"].isin(group_ids)]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
 
     return _prepare_target_basis_pair(
         year=year,
@@ -734,8 +777,10 @@ def _collect_contaminated_basis_codes(
             revised_a_by_period=revised_a_by_period,
             revised_b_by_period=revised_b_by_period,
         )
-        carried = set(pd.concat([carried_a, carried_b], ignore_index=True).astype(str).tolist())
-        contaminated |= (carried & candidate_codes)
+        carried = set(
+            pd.concat([carried_a, carried_b], ignore_index=True).astype(str).tolist()
+        )
+        contaminated |= carried & candidate_codes
     return contaminated
 
 
@@ -747,7 +792,11 @@ def _build_deterministic_basis_group_map(
     contaminated_codes: set[str],
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     basis_codes = pd.DataFrame(
-        {"concept_code": sorted(set(normalize_codes(annual_by_year[target_year]["PRODUCT_NC"])))}
+        {
+            "concept_code": sorted(
+                set(normalize_codes(annual_by_year[target_year]["PRODUCT_NC"]))
+            )
+        }
     )
     linked_map = break_group_map.drop_duplicates().copy()
     linked_map["concept_code"] = normalize_codes(linked_map["concept_code"])
@@ -768,7 +817,9 @@ def _build_deterministic_basis_group_map(
     filtered = basis_map.loc[~basis_map["concept_code"].isin(contaminated_codes)].copy()
     diagnostics = {
         **pre_filter,
-        "n_linked_groups": int(filtered.loc[filtered["is_linked_group"], "group_id"].nunique()),
+        "n_linked_groups": int(
+            filtered.loc[filtered["is_linked_group"], "group_id"].nunique()
+        ),
         "n_singleton_groups": int((~filtered["is_linked_group"]).sum()),
     }
     return filtered[["concept_code", "group_id"]].reset_index(drop=True), diagnostics
@@ -808,7 +859,9 @@ def _prepare_deterministic_all_pair(
     )
 
 
-def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> dict[str, object]:
+def run_bilateral_persistence_analysis(
+    config: BilateralPersistenceConfig,
+) -> dict[str, object]:
     groups = load_concordance_groups(
         concordance_path=config.paths.concordance_path,
         sheet_name=config.paths.concordance_sheet,
@@ -816,7 +869,10 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
     break_period = config.break_config.period
     break_a_year, break_b_year = _split_period(break_period)
 
-    annual_years = sorted({year for year in config.years.columns} | {year - 1 for year in config.years.columns})
+    annual_years = sorted(
+        {year for year in config.years.columns}
+        | {year - 1 for year in config.years.columns}
+    )
     annual_by_year: dict[int, pd.DataFrame] = {}
     for year in annual_years:
         annual_by_year[year] = _load_native_bilateral_year(
@@ -836,11 +892,15 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
         raise ValueError(f"Missing concordance edges for break period {break_period}")
     break_edges["vintage_a_code"] = normalize_codes(break_edges["vintage_a_code"])
     break_edges["vintage_b_code"] = normalize_codes(break_edges["vintage_b_code"])
-    break_group_map_a = break_edges[["vintage_a_code", "group_id"]].drop_duplicates().rename(
-        columns={"vintage_a_code": "concept_code"}
+    break_group_map_a = (
+        break_edges[["vintage_a_code", "group_id"]]
+        .drop_duplicates()
+        .rename(columns={"vintage_a_code": "concept_code"})
     )
-    break_group_map_b = break_edges[["vintage_b_code", "group_id"]].drop_duplicates().rename(
-        columns={"vintage_b_code": "concept_code"}
+    break_group_map_b = (
+        break_edges[["vintage_b_code", "group_id"]]
+        .drop_duplicates()
+        .rename(columns={"vintage_b_code": "concept_code"})
     )
 
     all_break_group_ids_pre = set(break_edges["group_id"].astype(str).tolist())
@@ -870,7 +930,9 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
         revised_a_by_period=revised_a_by_period,
         revised_b_by_period=revised_b_by_period,
         groups=groups,
-        candidate_codes=set(normalize_codes(annual_by_year[break_a_year]["PRODUCT_NC"])),
+        candidate_codes=set(
+            normalize_codes(annual_by_year[break_a_year]["PRODUCT_NC"])
+        ),
     )
     det_contaminated_b = _collect_contaminated_basis_codes(
         break_a_year=break_a_year,
@@ -881,19 +943,25 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
         revised_a_by_period=revised_a_by_period,
         revised_b_by_period=revised_b_by_period,
         groups=groups,
-        candidate_codes=set(normalize_codes(annual_by_year[break_b_year]["PRODUCT_NC"])),
+        candidate_codes=set(
+            normalize_codes(annual_by_year[break_b_year]["PRODUCT_NC"])
+        ),
     )
-    deterministic_group_map_a, deterministic_diag_a = _build_deterministic_basis_group_map(
-        target_year=break_a_year,
-        annual_by_year=annual_by_year,
-        break_group_map=break_group_map_a,
-        contaminated_codes=det_contaminated_a,
+    deterministic_group_map_a, deterministic_diag_a = (
+        _build_deterministic_basis_group_map(
+            target_year=break_a_year,
+            annual_by_year=annual_by_year,
+            break_group_map=break_group_map_a,
+            contaminated_codes=det_contaminated_a,
+        )
     )
-    deterministic_group_map_b, deterministic_diag_b = _build_deterministic_basis_group_map(
-        target_year=break_b_year,
-        annual_by_year=annual_by_year,
-        break_group_map=break_group_map_b,
-        contaminated_codes=det_contaminated_b,
+    deterministic_group_map_b, deterministic_diag_b = (
+        _build_deterministic_basis_group_map(
+            target_year=break_b_year,
+            annual_by_year=annual_by_year,
+            break_group_map=break_group_map_b,
+            contaminated_codes=det_contaminated_b,
+        )
     )
 
     regression_rows: list[dict[str, object]] = []
@@ -920,7 +988,11 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
             det_panel["scaled_flow_lag"].to_numpy(),
             det_panel["scaled_flow_cur"].to_numpy(),
         )
-        det_meta = deterministic_diag_a if int(det_diag["basis_year"]) == break_a_year else deterministic_diag_b
+        det_meta = (
+            deterministic_diag_a
+            if int(det_diag["basis_year"]) == break_a_year
+            else deterministic_diag_b
+        )
         regression_rows.append(
             {
                 "row_key": ROW_DETERMINISTIC_ALL,
@@ -943,7 +1015,8 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
                 "basis_year": int(det_diag["basis_year"]),
                 "sample_basis": "break_filtered_deterministic_all",
                 "n_groups_pre_filter": int(
-                    det_meta["n_linked_groups_pre_filter"] + det_meta["n_singleton_groups_pre_filter"]
+                    det_meta["n_linked_groups_pre_filter"]
+                    + det_meta["n_singleton_groups_pre_filter"]
                 ),
                 "n_groups_contaminated": int(
                     det_meta["n_linked_groups_pre_filter"]
@@ -952,9 +1025,13 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
                     - det_meta["n_singleton_groups"]
                 ),
                 "n_groups": det_diag["n_groups"],
-                "n_linked_groups_pre_filter": int(det_meta["n_linked_groups_pre_filter"]),
+                "n_linked_groups_pre_filter": int(
+                    det_meta["n_linked_groups_pre_filter"]
+                ),
                 "n_linked_groups": int(det_meta["n_linked_groups"]),
-                "n_singleton_groups_pre_filter": int(det_meta["n_singleton_groups_pre_filter"]),
+                "n_singleton_groups_pre_filter": int(
+                    det_meta["n_singleton_groups_pre_filter"]
+                ),
                 "n_singleton_groups": int(det_meta["n_singleton_groups"]),
                 "n_concepts": det_diag["n_concepts"],
                 "n_pairs": det_diag["n_pairs"],
@@ -1076,7 +1153,9 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
             }
         )
 
-    aggregation_order = {level: idx for idx, level in enumerate(config.aggregation_levels)}
+    aggregation_order = {
+        level: idx for idx, level in enumerate(config.aggregation_levels)
+    }
     for aggregation_level in config.aggregation_levels:
         for year in config.years.columns:
             lag_year = year - 1
@@ -1144,9 +1223,13 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
                         - det_meta["n_singleton_groups"]
                     ),
                     "n_groups": det_diag["n_groups"],
-                    "n_linked_groups_pre_filter": int(det_meta["n_linked_groups_pre_filter"]),
+                    "n_linked_groups_pre_filter": int(
+                        det_meta["n_linked_groups_pre_filter"]
+                    ),
                     "n_linked_groups": int(det_meta["n_linked_groups"]),
-                    "n_singleton_groups_pre_filter": int(det_meta["n_singleton_groups_pre_filter"]),
+                    "n_singleton_groups_pre_filter": int(
+                        det_meta["n_singleton_groups_pre_filter"]
+                    ),
                     "n_singleton_groups": int(det_meta["n_singleton_groups"]),
                     "n_concepts": det_diag["n_concepts"],
                     "n_pairs": det_diag["n_pairs"],
@@ -1230,11 +1313,17 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
     row_order = {row_key: idx for idx, row_key in enumerate(ROW_ORDER)}
     details = pd.DataFrame(regression_rows)
     details["_row_order"] = details["row_key"].map(row_order)
-    details = details.sort_values(["_row_order", "year"]).drop(columns="_row_order").reset_index(drop=True)
+    details = (
+        details.sort_values(["_row_order", "year"])
+        .drop(columns="_row_order")
+        .reset_index(drop=True)
+    )
     diagnostics = pd.DataFrame(sample_rows)
     diagnostics["_row_order"] = diagnostics["row_key"].map(row_order)
     diagnostics = (
-        diagnostics.sort_values(["_row_order", "year"]).drop(columns="_row_order").reset_index(drop=True)
+        diagnostics.sort_values(["_row_order", "year"])
+        .drop(columns="_row_order")
+        .reset_index(drop=True)
     )
 
     table_rows = []
@@ -1253,11 +1342,13 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
         table_rows.append(row)
     table = pd.DataFrame(table_rows)
 
-    aggregation_row_order = {row_key: idx for idx, row_key in enumerate(AGGREGATION_ROW_ORDER)}
+    aggregation_row_order = {
+        row_key: idx for idx, row_key in enumerate(AGGREGATION_ROW_ORDER)
+    }
     aggregation_details = pd.DataFrame(aggregation_regression_rows)
-    aggregation_details["_aggregation_order"] = aggregation_details["aggregation_level"].map(
-        aggregation_order
-    )
+    aggregation_details["_aggregation_order"] = aggregation_details[
+        "aggregation_level"
+    ].map(aggregation_order)
     aggregation_details["_row_order"] = aggregation_details["row_key"].map(
         aggregation_row_order
     )
@@ -1274,7 +1365,9 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
         aggregation_row_order
     )
     aggregation_diagnostics = (
-        aggregation_diagnostics.sort_values(["_aggregation_order", "_row_order", "year"])
+        aggregation_diagnostics.sort_values(
+            ["_aggregation_order", "_row_order", "year"]
+        )
         .drop(columns=["_aggregation_order", "_row_order"])
         .reset_index(drop=True)
     )

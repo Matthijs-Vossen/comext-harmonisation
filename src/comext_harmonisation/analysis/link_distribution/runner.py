@@ -64,7 +64,9 @@ def _scope_label(scope_mode: str) -> str:
     raise ValueError(f"Unsupported scope mode '{scope_mode}'")
 
 
-def _available_periods_for_observed_universe(groups, *, annual_base_dir: Path) -> set[str]:
+def _available_periods_for_observed_universe(
+    groups, *, annual_base_dir: Path
+) -> set[str]:
     period_meta = groups.edges[
         ["period", "vintage_a_year", "vintage_b_year"]
     ].drop_duplicates()
@@ -164,9 +166,9 @@ def _build_observed_identity_rows(
     period_meta = groups.edges[
         ["period", "vintage_a_year", "vintage_b_year"]
     ].drop_duplicates()
-    period_meta = period_meta.loc[period_meta["period"].astype(str).isin(available_periods)].reset_index(
-        drop=True
-    )
+    period_meta = period_meta.loc[
+        period_meta["period"].astype(str).isin(available_periods)
+    ].reset_index(drop=True)
     if period_meta.empty:
         return pd.DataFrame(
             columns=[
@@ -299,9 +301,9 @@ def _build_focal_code_rows(
         groups,
         annual_base_dir=annual_base_dir,
     )
-    focal_codes = focal_codes.loc[focal_codes["period"].astype(str).isin(available_periods)].reset_index(
-        drop=True
-    )
+    focal_codes = focal_codes.loc[
+        focal_codes["period"].astype(str).isin(available_periods)
+    ].reset_index(drop=True)
     identity_rows = _build_observed_identity_rows(
         groups,
         annual_base_dir=annual_base_dir,
@@ -315,42 +317,36 @@ def _build_focal_code_rows(
 
 
 def _build_summary(focal_codes: pd.DataFrame) -> pd.DataFrame:
-    counts = (
-        focal_codes.groupby(
-            [
-                "analysis_type",
-                "scope_mode",
-                "scope_label",
-                "period",
-                "focal_side",
-                "direction",
-                "focal_year",
-                "other_year",
-                "relationship",
-                "unknown_conversion_weight",
-            ],
-            as_index=False,
-            sort=False,
-        )
-        .agg(n_focal_codes=("focal_code", "count"))
-    )
-    totals = (
-        focal_codes.groupby(
-            [
-                "analysis_type",
-                "scope_mode",
-                "scope_label",
-                "period",
-                "focal_side",
-                "direction",
-                "focal_year",
-                "other_year",
-            ],
-            as_index=False,
-            sort=False,
-        )
-        .agg(total_focal_codes=("focal_code", "count"))
-    )
+    counts = focal_codes.groupby(
+        [
+            "analysis_type",
+            "scope_mode",
+            "scope_label",
+            "period",
+            "focal_side",
+            "direction",
+            "focal_year",
+            "other_year",
+            "relationship",
+            "unknown_conversion_weight",
+        ],
+        as_index=False,
+        sort=False,
+    ).agg(n_focal_codes=("focal_code", "count"))
+    totals = focal_codes.groupby(
+        [
+            "analysis_type",
+            "scope_mode",
+            "scope_label",
+            "period",
+            "focal_side",
+            "direction",
+            "focal_year",
+            "other_year",
+        ],
+        as_index=False,
+        sort=False,
+    ).agg(total_focal_codes=("focal_code", "count"))
     summary = counts.merge(
         totals,
         on=[
@@ -365,14 +361,18 @@ def _build_summary(focal_codes: pd.DataFrame) -> pd.DataFrame:
         ],
         how="left",
     )
-    summary["share_focal_codes"] = summary["n_focal_codes"] / summary["total_focal_codes"]
+    summary["share_focal_codes"] = (
+        summary["n_focal_codes"] / summary["total_focal_codes"]
+    )
     relationship_rank = {name: idx for idx, name in enumerate(RELATIONSHIP_ORDER)}
     focal_rank = {name: idx for idx, name in enumerate(FOCAL_SIDE_ORDER)}
-    summary["_relationship_rank"] = summary["relationship"].map(relationship_rank).fillna(999)
+    summary["_relationship_rank"] = (
+        summary["relationship"].map(relationship_rank).fillna(999)
+    )
     summary["_focal_rank"] = summary["focal_side"].map(focal_rank).fillna(999)
-    summary = summary.sort_values(
-        ["period", "_focal_rank", "_relationship_rank"]
-    ).drop(columns=["_relationship_rank", "_focal_rank"])
+    summary = summary.sort_values(["period", "_focal_rank", "_relationship_rank"]).drop(
+        columns=["_relationship_rank", "_focal_rank"]
+    )
     return summary.reset_index(drop=True)
 
 

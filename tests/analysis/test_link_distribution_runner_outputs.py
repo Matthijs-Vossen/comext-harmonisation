@@ -12,7 +12,9 @@ from comext_harmonisation.analysis.link_distribution import runner as ld_runner
 from comext_harmonisation.concordance.groups import build_concordance_groups
 
 
-def _make_config(tmp_path: Path, *, scope_mode: str = "revised_only") -> LinkDistributionConfig:
+def _make_config(
+    tmp_path: Path, *, scope_mode: str = "revised_only"
+) -> LinkDistributionConfig:
     output_dir = tmp_path / "outputs"
     return LinkDistributionConfig(
         paths=LinkDistributionPathsConfig(
@@ -29,7 +31,9 @@ def _make_config(tmp_path: Path, *, scope_mode: str = "revised_only") -> LinkDis
     )
 
 
-def test_link_distribution_runner_writes_expected_outputs(monkeypatch, tmp_path: Path) -> None:
+def test_link_distribution_runner_writes_expected_outputs(
+    monkeypatch, tmp_path: Path
+) -> None:
     config = _make_config(tmp_path)
     edges = pd.DataFrame(
         {
@@ -58,28 +62,26 @@ def test_link_distribution_runner_writes_expected_outputs(monkeypatch, tmp_path:
     assert set(summary["period"].astype(str)) == {"20062007", "20072008"}
 
     summary_2006 = summary.loc[
-        (summary["period"] == 20062007)
-        & (summary["focal_side"] == "vintage_a")
+        (summary["period"] == 20062007) & (summary["focal_side"] == "vintage_a")
     ].set_index("relationship")["n_focal_codes"]
     assert summary_2006.to_dict() == {"1:1": 1, "1:n": 1}
     unknown_2006 = summary.loc[
-        (summary["period"] == 20062007)
-        & (summary["focal_side"] == "vintage_a")
+        (summary["period"] == 20062007) & (summary["focal_side"] == "vintage_a")
     ].set_index("relationship")["unknown_conversion_weight"]
     assert unknown_2006.to_dict() == {"1:1": False, "1:n": True}
 
     summary_2007 = summary.loc[
-        (summary["period"] == 20062007)
-        & (summary["focal_side"] == "vintage_b")
+        (summary["period"] == 20062007) & (summary["focal_side"] == "vintage_b")
     ].set_index("relationship")["n_focal_codes"]
     assert summary_2007.to_dict() == {"1:1": 1, "m:1": 2}
     unknown_2007 = summary.loc[
-        (summary["period"] == 20062007)
-        & (summary["focal_side"] == "vintage_b")
+        (summary["period"] == 20062007) & (summary["focal_side"] == "vintage_b")
     ].set_index("relationship")["unknown_conversion_weight"]
     assert unknown_2007.to_dict() == {"1:1": False, "m:1": True}
 
-    totals = summary.groupby(["period", "focal_side"], as_index=False)["n_focal_codes"].sum()
+    totals = summary.groupby(["period", "focal_side"], as_index=False)[
+        "n_focal_codes"
+    ].sum()
     expected_totals = (
         focal_codes.groupby(["period", "focal_side"], as_index=False)["focal_code"]
         .count()
@@ -89,7 +91,9 @@ def test_link_distribution_runner_writes_expected_outputs(monkeypatch, tmp_path:
     assert merged["n_focal_codes"].tolist() == merged["expected"].tolist()
 
 
-def test_link_distribution_runner_rejects_non_adjacent_period(monkeypatch, tmp_path: Path) -> None:
+def test_link_distribution_runner_rejects_non_adjacent_period(
+    monkeypatch, tmp_path: Path
+) -> None:
     config = _make_config(tmp_path)
     edges = pd.DataFrame(
         {
@@ -111,7 +115,9 @@ def test_link_distribution_runner_rejects_non_adjacent_period(monkeypatch, tmp_p
         raise AssertionError("Expected non-adjacent periods to be rejected")
 
 
-def test_link_distribution_runner_adds_observed_identities(monkeypatch, tmp_path: Path) -> None:
+def test_link_distribution_runner_adds_observed_identities(
+    monkeypatch, tmp_path: Path
+) -> None:
     config = _make_config(tmp_path, scope_mode="observed_universe_implied_identities")
     edges = pd.DataFrame(
         {
@@ -143,16 +149,16 @@ def test_link_distribution_runner_adds_observed_identities(monkeypatch, tmp_path
     assert set(focal_codes["scope_label"]) == {"observed_universe_implied_identities"}
 
     summary_2006 = summary.loc[
-        (summary["period"] == 20062007)
-        & (summary["focal_side"] == "vintage_a")
+        (summary["period"] == 20062007) & (summary["focal_side"] == "vintage_a")
     ].set_index("relationship")["n_focal_codes"]
     assert summary_2006.to_dict() == {"1:1": 2, "1:n": 1}
 
     summary_2007 = summary.loc[
-        (summary["period"] == 20062007)
-        & (summary["focal_side"] == "vintage_b")
+        (summary["period"] == 20062007) & (summary["focal_side"] == "vintage_b")
     ].set_index("relationship")["n_focal_codes"]
     assert summary_2007.to_dict() == {"1:1": 2, "m:1": 2}
 
-    identity_rows = focal_codes.loc[focal_codes["group_id"].astype(str).str.contains("_identity_")]
+    identity_rows = focal_codes.loc[
+        focal_codes["group_id"].astype(str).str.contains("_identity_")
+    ]
     assert set(identity_rows["focal_code"]) == {"U1"}

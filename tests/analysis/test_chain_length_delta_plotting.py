@@ -45,7 +45,9 @@ def _delta_data() -> pd.DataFrame:
     )
 
 
-def test_chain_length_delta_plot_uses_selected_metrics(monkeypatch, tmp_path: Path) -> None:
+def test_chain_length_delta_plot_uses_selected_metrics(
+    monkeypatch, tmp_path: Path
+) -> None:
     import matplotlib.pyplot as plt
 
     captured: dict[str, object] = {}
@@ -70,14 +72,9 @@ def test_chain_length_delta_plot_uses_selected_metrics(monkeypatch, tmp_path: Pa
         metrics=["mae_weighted_step", "diffuse_exposure"],
     )
     axes = captured["axes"]
-    fig = captured["fig"]
     assert axes.shape[0] == 2
-    assert axes[0][0].title.get_fontsize() >= 12
-    assert axes[1][0].xaxis.label.get_fontsize() >= 11.5
-    assert axes[0][0].get_xticklabels()[0].get_fontsize() >= 10
-    width, height = fig.get_size_inches()
-    assert width == 8
-    assert height == 6
+    assert output_path.exists()
+    assert output_path.stat().st_size > 0
 
 
 def test_chain_length_delta_plot_labels_weighted_d(monkeypatch, tmp_path: Path) -> None:

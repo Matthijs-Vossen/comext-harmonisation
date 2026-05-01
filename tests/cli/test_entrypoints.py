@@ -43,10 +43,15 @@ def _load_project_scripts() -> dict[str, str]:
         ("comext_harmonisation.cli.run_pipeline", "run_pipeline.py"),
         ("comext_harmonisation.cli.run_estimation", "run_estimation.py"),
         ("comext_harmonisation.cli.run_analysis", "run_analysis.py"),
-        ("comext_harmonisation.cli.plot_chain_length_from_summary", "plot_chain_length_from_summary.py"),
+        (
+            "comext_harmonisation.cli.plot_chain_length_from_summary",
+            "plot_chain_length_from_summary.py",
+        ),
     ],
 )
-def test_cli_modules_expose_help(monkeypatch: pytest.MonkeyPatch, module_name: str, argv0: str) -> None:
+def test_cli_modules_expose_help(
+    monkeypatch: pytest.MonkeyPatch, module_name: str, argv0: str
+) -> None:
     module = importlib.import_module(module_name)
     monkeypatch.setattr(sys, "argv", [argv0, "--help"])
     with pytest.raises(SystemExit) as exc:

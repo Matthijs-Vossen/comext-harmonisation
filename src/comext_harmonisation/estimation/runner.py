@@ -11,14 +11,23 @@ import pandas as pd
 
 from ..concordance.io import read_concordance_xls
 from .matrices import GroupMatrices, build_group_matrices
-from .shares import ANNUAL_DATA_DIR, EstimationShares, prepare_estimation_shares_for_period
+from .shares import (
+    ANNUAL_DATA_DIR,
+    EstimationShares,
+    prepare_estimation_shares_for_period,
+)
 from .solver import estimate_weights
 from ..concordance.groups import ConcordanceGroups, build_concordance_groups
-from ..concordance.mappings import build_deterministic_mappings, get_ambiguous_group_summary
+from ..concordance.mappings import (
+    build_deterministic_mappings,
+    get_ambiguous_group_summary,
+)
 from ..weights.schema import DEFAULT_WEIGHTS_DIR, empty_weight_table
 
 
-DEFAULT_CONCORDANCE_PATH = Path("data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls")
+DEFAULT_CONCORDANCE_PATH = Path(
+    "data/concordances/CN_concordances_1988_2025_XLS_FORMAT.xls"
+)
 DEFAULT_DIAGNOSTICS_DIR = Path("outputs/weights/diagnostics")
 DEFAULT_SUMMARY_PATH = Path("outputs/weights/summary.csv")
 
@@ -64,7 +73,9 @@ def _append_csv(df: pd.DataFrame, path: Path) -> None:
 def _sort_weights(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
-    return df.sort_values(["period", "from_code", "to_code", "group_id"]).reset_index(drop=True)
+    return df.sort_values(["period", "from_code", "to_code", "group_id"]).reset_index(
+        drop=True
+    )
 
 
 def _build_group_diagnostics(
@@ -93,13 +104,16 @@ def _build_group_diagnostics(
     if diagnostics.empty:
         return pd.DataFrame(columns=desired)
 
-    group_summary = groups.group_summary.loc[groups.group_summary["period"] == period].copy()
+    group_summary = groups.group_summary.loc[
+        groups.group_summary["period"] == period
+    ].copy()
     group_summary = group_summary.rename(
         columns={"n_vintage_a": "n_codes_a", "n_vintage_b": "n_codes_b"}
     )
 
     pair_rows = [
-        {"group_id": group_id, "n_pairs": len(group.pairs)} for group_id, group in matrices.items()
+        {"group_id": group_id, "n_pairs": len(group.pairs)}
+        for group_id, group in matrices.items()
     ]
     pairs_df = pd.DataFrame(pair_rows)
 
@@ -109,7 +123,9 @@ def _build_group_diagnostics(
         how="left",
     ).merge(pairs_df, on="group_id", how="left")
 
-    diagnostics["n_pairs"] = diagnostics["n_pairs"].fillna(diagnostics["n_obs"]).astype(int)
+    diagnostics["n_pairs"] = (
+        diagnostics["n_pairs"].fillna(diagnostics["n_obs"]).astype(int)
+    )
 
     ordered = [col for col in desired if col in diagnostics.columns]
     return diagnostics[ordered]
@@ -131,7 +147,9 @@ def _build_run_summary(
     ambiguous = get_ambiguous_group_summary(groups, direction)
     ambiguous = ambiguous.loc[ambiguous["period"] == period]
     n_groups_total = len(ambiguous)
-    n_groups_with_data = len(estimation.group_totals.loc[estimation.group_totals["skip_reason"] == ""])
+    n_groups_with_data = len(
+        estimation.group_totals.loc[estimation.group_totals["skip_reason"] == ""]
+    )
 
     if diagnostics.empty:
         solved = 0
@@ -226,7 +244,9 @@ def run_weight_estimation_for_period(
         weights_ambiguous if not weights_ambiguous.empty else empty_weight_table()
     )
     weights_deterministic = _sort_weights(
-        build_deterministic_mappings(groups, direction).loc[lambda df: df["period"] == period]
+        build_deterministic_mappings(groups, direction).loc[
+            lambda df: df["period"] == period
+        ]
     )
     diagnostics = _build_group_diagnostics(
         diagnostics,
@@ -238,7 +258,9 @@ def run_weight_estimation_for_period(
         diagnostics.insert(0, "measure", estimation.measure)
 
     if fail_on_status and not diagnostics.empty:
-        unsolved = diagnostics.loc[~diagnostics["status"].str.lower().str.startswith("solved")]
+        unsolved = diagnostics.loc[
+            ~diagnostics["status"].str.lower().str.startswith("solved")
+        ]
         if not unsolved.empty:
             failures = unsolved[["group_id", "status"]].to_dict(orient="records")
             raise RuntimeError(f"Solver failed for period {period}: {failures}")

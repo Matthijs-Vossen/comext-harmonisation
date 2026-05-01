@@ -33,7 +33,9 @@ DEFAULT_WEIGHTS_DIR = Path("outputs/weights/adjacent")
 
 def empty_weight_table() -> pd.DataFrame:
     """Return an empty weight table with the canonical schema."""
-    return pd.DataFrame({col: pd.Series(dtype=WEIGHT_DTYPES[col]) for col in WEIGHT_COLUMNS})
+    return pd.DataFrame(
+        {col: pd.Series(dtype=WEIGHT_DTYPES[col]) for col in WEIGHT_COLUMNS}
+    )
 
 
 def validate_weight_table(
@@ -48,7 +50,9 @@ def validate_weight_table(
     if schema not in {"full", "minimal"}:
         raise ValueError("schema must be 'full' or 'minimal'")
 
-    required_cols = WEIGHT_COLUMNS if schema == "full" else ["from_code", "to_code", "weight"]
+    required_cols = (
+        WEIGHT_COLUMNS if schema == "full" else ["from_code", "to_code", "weight"]
+    )
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")

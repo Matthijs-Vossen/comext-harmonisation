@@ -26,7 +26,9 @@ def test_link_distribution_config_defaults(tmp_path: Path) -> None:
     assert cfg.output.focal_codes_csv.name == "focal_codes.csv"
 
 
-def test_link_distribution_config_accepts_observed_universe_scope(tmp_path: Path) -> None:
+def test_link_distribution_config_accepts_observed_universe_scope(
+    tmp_path: Path,
+) -> None:
     cfg_path = tmp_path / "link_distribution_observed.yaml"
     cfg_path.write_text(
         _base_yaml(
