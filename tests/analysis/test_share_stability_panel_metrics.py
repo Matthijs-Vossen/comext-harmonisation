@@ -9,6 +9,7 @@ from comext_harmonisation.analysis.config import (
     ShareStabilityBreakConfig,
     ShareStabilityChainingConfig,
     ShareStabilityConfig,
+    ShareStabilityComparisonConfig,
     ShareStabilityFilterConfig,
     ShareStabilityMeasureConfig,
     ShareStabilityPathsConfig,
@@ -96,6 +97,10 @@ def test_share_stability_panel_local_metrics(monkeypatch, tmp_path: Path) -> Non
             point_color="black",
             use_latex=False,
             latex_preamble="",
+        ),
+        comparison=ShareStabilityComparisonConfig(
+            mode="common_target",
+            common_target_summary_path=None,
         ),
     )
 

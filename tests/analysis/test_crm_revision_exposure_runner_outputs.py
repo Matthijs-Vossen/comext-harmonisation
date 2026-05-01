@@ -39,6 +39,7 @@ def _make_config(tmp_path: Path, crm_codes_path: Path) -> CrmRevisionExposureCon
         ),
         plot=CrmRevisionExposurePlotConfig(
             output_path=output_dir / "fig.png",
+            threshold_output_path=output_dir / "fig_thresholds.png",
             title="CRM exposure",
             use_latex=False,
             latex_preamble="",
@@ -58,6 +59,7 @@ def _toy_groups():
                 "20022003",
                 "20022003",
                 "20022003",
+                "20022003",
             ],
             "vintage_a_year": [
                 "2000",
@@ -65,6 +67,7 @@ def _toy_groups():
                 "2001",
                 "2001",
                 "2001",
+                "2002",
                 "2002",
                 "2002",
                 "2002",
@@ -78,9 +81,10 @@ def _toy_groups():
                 "2003",
                 "2003",
                 "2003",
+                "2003",
             ],
-            "vintage_a_code": ["A", "X", "B", "B", "Y", "C1", "C2", "Z"],
-            "vintage_b_code": ["B", "Y", "C1", "C2", "Z", "D1", "D2", "W"],
+            "vintage_a_code": ["A", "X", "B", "B", "Y", "C1", "C1", "C2", "Z"],
+            "vintage_b_code": ["B", "Y", "C1", "C2", "Z", "D1", "D2", "D3", "W"],
         }
     )
     return build_concordance_groups(edges)
@@ -109,7 +113,7 @@ def test_crm_revision_exposure_runner_outputs(monkeypatch, tmp_path: Path) -> No
             2000: {"A", "X", "U"},
             2001: {"B", "Y", "U"},
             2002: {"C1", "C2", "Z", "U"},
-            2003: {"D1", "D2", "W", "U"},
+            2003: {"D1", "D2", "D3", "W", "U"},
         },
     )
     plot_calls: list[dict[str, object]] = []
@@ -118,15 +122,22 @@ def test_crm_revision_exposure_runner_outputs(monkeypatch, tmp_path: Path) -> No
         "plot_crm_revision_exposure_panels",
         lambda **kwargs: plot_calls.append(kwargs),
     )
+    monkeypatch.setattr(
+        cre_runner,
+        "plot_crm_revision_exposure_threshold_panels",
+        lambda **kwargs: plot_calls.append(kwargs),
+    )
 
     outputs = cre_runner.run_crm_revision_exposure_analysis(config)
 
     assert outputs["output_plot"] == config.plot.output_path
+    assert outputs["threshold_output_plot"] == config.plot.threshold_output_path
     assert outputs["summary_csv"] == config.output.summary_csv
     assert outputs["code_exposure_csv"] == config.output.code_exposure_csv
     assert outputs["benchmark_summary_csv"] == config.output.benchmark_summary_csv
-    assert len(plot_calls) == 1
+    assert len(plot_calls) == 2
     assert plot_calls[0]["output_path"] == config.plot.output_path
+    assert plot_calls[1]["output_path"] == config.plot.threshold_output_path
 
     summary = pd.read_csv(config.output.summary_csv)
     code_exposure = pd.read_csv(config.output.code_exposure_csv)
@@ -138,6 +149,7 @@ def test_crm_revision_exposure_runner_outputs(monkeypatch, tmp_path: Path) -> No
         "remained_strict_1_to_1",
         "ever_non_1_to_1_step",
         "ever_unknown_weight_step",
+        "at_least_two_unknown_weight_steps",
     }
 
     forward_2002_all = summary.loc[
@@ -159,6 +171,16 @@ def test_crm_revision_exposure_runner_outputs(monkeypatch, tmp_path: Path) -> No
     assert int(forward_2003_crm_unknown["n_codes"]) == 1
     assert int(forward_2003_crm_unknown["total_codes"]) == 2
     assert float(forward_2003_crm_unknown["share_codes"]) == 0.5
+
+    forward_2003_crm_repeated_unknown = summary.loc[
+        (summary["panel_direction"] == "forward")
+        & (summary["compare_year"] == 2003)
+        & (summary["population"] == "crm_anchor_codes")
+        & (summary["metric"] == "at_least_two_unknown_weight_steps")
+    ].iloc[0]
+    assert int(forward_2003_crm_repeated_unknown["n_codes"]) == 1
+    assert int(forward_2003_crm_repeated_unknown["total_codes"]) == 2
+    assert float(forward_2003_crm_repeated_unknown["share_codes"]) == 0.5
 
     backward_2000_all = summary.loc[
         (summary["panel_direction"] == "backward")
@@ -185,8 +207,10 @@ def test_crm_revision_exposure_runner_outputs(monkeypatch, tmp_path: Path) -> No
         & (code_exposure["compare_year"] == 2003)
         & (code_exposure["anchor_code"] == "B")
     ].iloc[0]
-    assert bool(code_b_2003["touched_non_1_to_1_this_step"]) is False
+    assert bool(code_b_2003["touched_non_1_to_1_this_step"]) is True
     assert bool(code_b_2003["ever_non_1_to_1_step"]) is True
+    assert int(code_b_2003["unknown_weight_step_count"]) == 2
+    assert bool(code_b_2003["at_least_two_unknown_weight_steps"]) is True
     assert code_b_2003["final_relationship"] == "1:n"
 
     crm_count = int(

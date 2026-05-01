@@ -47,14 +47,18 @@ def test_revision_validation_heatmap_defaults_to_no_annotations(
     top_ax = axes[0]
     middle_ax = axes[1]
     bottom_ax = axes[2]
-    scale_axes = axes[3:]
+    scale_axes = axes[3:6]
+    median_axes = axes[6:]
     assert [tick.get_text() for tick in top_ax.get_yticklabels()] == [
         "Local baseline MAE",
         "Revision-year MAE",
     ]
+    assert len(top_ax.collections) == 1
+    assert len(middle_ax.collections) == 1
+    assert len(bottom_ax.collections) == 1
     assert [tick.get_text() for tick in middle_ax.get_yticklabels()] == [
         "Median instability",
-        "Importance-weighted instability",
+        "Importance-weighted mean instability",
     ]
     assert [tick.get_text() for tick in bottom_ax.get_yticklabels()] == [
         "Observations",
@@ -64,6 +68,7 @@ def test_revision_validation_heatmap_defaults_to_no_annotations(
     assert bottom_ax.get_title() == "Revision-year sample size"
     assert top_ax.title.get_fontsize() >= 12
     assert top_ax.get_yticklabels()[0].get_fontsize() >= 11
+    assert [tick.get_text() for tick in bottom_ax.get_xticklabels()] == ["2002-03"]
     width, height = fig.get_size_inches()
     assert width < 10.0
     assert height < 6.0
@@ -72,10 +77,16 @@ def test_revision_validation_heatmap_defaults_to_no_annotations(
     assert "12" not in texts
     assert texts.count("nan") == 0
     assert len(scale_axes) == 3
+    assert len(median_axes) == 3
     scale_texts = [text.get_text() for ax in scale_axes for text in ax.texts]
+    median_texts = [text.get_text() for ax in median_axes for text in ax.texts]
     assert "0.100" in scale_texts
     assert "0.200" in scale_texts
     assert "12" in scale_texts
+    assert [ax.get_title() for ax in median_axes] == ["Median", "", ""]
+    assert "(0.150)" in median_texts
+    assert "(0.075)" in median_texts
+    assert "(12)" in median_texts
 
 
 def test_revision_validation_heatmap_can_show_annotations(
@@ -107,7 +118,8 @@ def test_revision_validation_heatmap_can_show_annotations(
     top_ax = axes[0]
     middle_ax = axes[1]
     bottom_ax = axes[2]
-    scale_axes = axes[3:]
+    scale_axes = axes[3:6]
+    median_axes = axes[6:]
     width, height = fig.get_size_inches()
     assert width < 10.0
     assert height < 6.0
@@ -117,9 +129,12 @@ def test_revision_validation_heatmap_can_show_annotations(
     assert "12.000" not in texts
     assert texts.count("nan") == 0
     scale_texts = [text.get_text() for ax in scale_axes for text in ax.texts]
+    median_texts = [text.get_text() for ax in median_axes for text in ax.texts]
     assert "0.100" in scale_texts
     assert "0.200" in scale_texts
     assert "12" in scale_texts
+    assert "(0.150)" in median_texts
+    assert "(0.075)" in median_texts
 
 
 def test_revision_validation_heatmap_size_is_stable_across_annotation_modes(

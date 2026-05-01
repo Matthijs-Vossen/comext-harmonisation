@@ -37,7 +37,12 @@ def _make_config(tmp_path: Path) -> BilateralPersistenceConfig:
             table_tex=output_dir / "table.tex",
             details_csv=output_dir / "regression_details.csv",
             sample_diagnostics_csv=output_dir / "sample_diagnostics.csv",
+            aggregation_table_csv=output_dir / "aggregation_table.csv",
+            aggregation_table_tex=output_dir / "aggregation_table.tex",
+            aggregation_details_csv=output_dir / "aggregation_regression_details.csv",
+            aggregation_sample_diagnostics_csv=output_dir / "aggregation_sample_diagnostics.csv",
         ),
+        aggregation_levels=["bilateral", "importer", "aggregate"],
     )
 
 
@@ -170,7 +175,11 @@ def test_bilateral_persistence_runner_writes_expected_outputs(monkeypatch, tmp_p
     assert Path(outputs["table_csv"]).exists()
     assert Path(outputs["details_csv"]).exists()
     assert Path(outputs["sample_diagnostics_csv"]).exists()
+    assert Path(outputs["aggregation_table_csv"]).exists()
+    assert Path(outputs["aggregation_details_csv"]).exists()
+    assert Path(outputs["aggregation_sample_diagnostics_csv"]).exists()
     assert config.output.table_tex.exists()
+    assert config.output.aggregation_table_tex.exists()
 
     details = pd.read_csv(outputs["details_csv"])
     assert set(details["row_key"]) == {
@@ -268,5 +277,51 @@ def test_bilateral_persistence_runner_writes_expected_outputs(monkeypatch, tmp_p
     assert table["row_label"].tolist() == [
         bp_runner.ROW_LABELS[bp_runner.ROW_DETERMINISTIC_ALL],
         bp_runner.ROW_LABELS[bp_runner.ROW_ALL],
+        bp_runner.ROW_LABELS[bp_runner.ROW_ADJUSTED],
+    ]
+
+    aggregation_details = pd.read_csv(outputs["aggregation_details_csv"])
+    assert set(aggregation_details["aggregation_level"]) == {"bilateral", "importer", "aggregate"}
+    assert set(aggregation_details["row_key"]) == {
+        bp_runner.ROW_DETERMINISTIC_ALL,
+        bp_runner.ROW_ADJUSTED,
+    }
+    assert set(aggregation_details["year"]) == {2005, 2006, 2008, 2009}
+    assert aggregation_details["r2_45"].notna().any()
+
+    aggregation_diagnostics = pd.read_csv(outputs["aggregation_sample_diagnostics_csv"])
+    assert set(aggregation_diagnostics["aggregation_level"]) == {
+        "bilateral",
+        "importer",
+        "aggregate",
+    }
+    assert (
+        aggregation_diagnostics.loc[
+            aggregation_diagnostics["aggregation_level"] == "aggregate", "n_units"
+        ]
+        == 1
+    ).all()
+    assert (
+        aggregation_diagnostics.loc[
+            aggregation_diagnostics["aggregation_level"] == "importer", "n_units"
+        ]
+        >= 1
+    ).all()
+
+    aggregation_table = pd.read_csv(outputs["aggregation_table_csv"])
+    assert aggregation_table["aggregation_level"].tolist() == [
+        "bilateral",
+        "bilateral",
+        "importer",
+        "importer",
+        "aggregate",
+        "aggregate",
+    ]
+    assert aggregation_table["row_label"].tolist() == [
+        bp_runner.ROW_LABELS[bp_runner.ROW_DETERMINISTIC_ALL],
+        bp_runner.ROW_LABELS[bp_runner.ROW_ADJUSTED],
+        bp_runner.ROW_LABELS[bp_runner.ROW_DETERMINISTIC_ALL],
+        bp_runner.ROW_LABELS[bp_runner.ROW_ADJUSTED],
+        bp_runner.ROW_LABELS[bp_runner.ROW_DETERMINISTIC_ALL],
         bp_runner.ROW_LABELS[bp_runner.ROW_ADJUSTED],
     ]

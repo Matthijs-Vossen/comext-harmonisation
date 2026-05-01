@@ -11,7 +11,10 @@ from ...chaining.engine import build_code_universe_from_annual
 from ...concordance.groups import build_concordance_groups
 from ...core.codes import normalize_code_set
 from ...estimation.runner import load_concordance_groups
-from ..common.plotting import plot_crm_revision_exposure_panels
+from ..common.plotting import (
+    plot_crm_revision_exposure_panels,
+    plot_crm_revision_exposure_threshold_panels,
+)
 from ..common.steps import chain_steps
 from ..config import CrmRevisionExposureConfig
 
@@ -21,6 +24,7 @@ SUMMARY_METRICS = [
     "remained_strict_1_to_1",
     "ever_non_1_to_1_step",
     "ever_unknown_weight_step",
+    "at_least_two_unknown_weight_steps",
 ]
 
 
@@ -259,6 +263,7 @@ def _panel_code_exposure(
     status = pd.DataFrame({"anchor_code": sorted(anchor_codes)})
     status["ever_non_1_to_1_step"] = False
     status["ever_unknown_weight_step"] = False
+    status["unknown_weight_step_count"] = 0
     status["is_crm_code"] = status["anchor_code"].isin(crm_codes)
     rows: list[pd.DataFrame] = []
 
@@ -316,6 +321,10 @@ def _panel_code_exposure(
         status["ever_unknown_weight_step"] = (
             status["ever_unknown_weight_step"] | status["touched_unknown_weight_this_step"]
         )
+        status["unknown_weight_step_count"] = (
+            status["unknown_weight_step_count"]
+            + status["touched_unknown_weight_this_step"].astype(int)
+        )
 
         current, _ = compose_weights(current, step_relation)
         current = _binarize_relation(current)
@@ -332,6 +341,9 @@ def _panel_code_exposure(
         year_rows["compare_year"] = int(compare_year)
         year_rows["chain_length"] = abs(int(anchor_year) - int(compare_year))
         year_rows["remained_strict_1_to_1"] = ~year_rows["ever_non_1_to_1_step"]
+        year_rows["at_least_two_unknown_weight_steps"] = (
+            year_rows["unknown_weight_step_count"] >= 2
+        )
         rows.append(
             year_rows[
                 [
@@ -346,8 +358,10 @@ def _panel_code_exposure(
                     "final_relationship",
                     "touched_non_1_to_1_this_step",
                     "touched_unknown_weight_this_step",
+                    "unknown_weight_step_count",
                     "ever_non_1_to_1_step",
                     "ever_unknown_weight_step",
+                    "at_least_two_unknown_weight_steps",
                     "remained_strict_1_to_1",
                 ]
             ].copy()
@@ -358,6 +372,7 @@ def _panel_code_exposure(
                 "is_crm_code",
                 "ever_non_1_to_1_step",
                 "ever_unknown_weight_step",
+                "unknown_weight_step_count",
             ]
         ].copy()
 
@@ -375,8 +390,10 @@ def _panel_code_exposure(
                 "final_relationship",
                 "touched_non_1_to_1_this_step",
                 "touched_unknown_weight_this_step",
+                "unknown_weight_step_count",
                 "ever_non_1_to_1_step",
                 "ever_unknown_weight_step",
+                "at_least_two_unknown_weight_steps",
                 "remained_strict_1_to_1",
             ]
         )
@@ -502,9 +519,17 @@ def run_crm_revision_exposure_analysis(
         use_latex=config.plot.use_latex,
         latex_preamble=config.plot.latex_preamble,
     )
+    plot_crm_revision_exposure_threshold_panels(
+        data=summary,
+        output_path=config.plot.threshold_output_path,
+        title=config.plot.title,
+        use_latex=config.plot.use_latex,
+        latex_preamble=config.plot.latex_preamble,
+    )
 
     return {
         "output_plot": config.plot.output_path,
+        "threshold_output_plot": config.plot.threshold_output_path,
         "summary_csv": config.output.summary_csv,
         "code_exposure_csv": config.output.code_exposure_csv,
         "benchmark_summary_csv": config.output.benchmark_summary_csv,

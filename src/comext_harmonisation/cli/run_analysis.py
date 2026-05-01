@@ -88,6 +88,7 @@ def main() -> None:
         config = load_crm_revision_exposure_config(config_path)
         outputs = run_crm_revision_exposure_analysis(config)
         print("plot:", outputs["output_plot"])
+        print("threshold_plot:", outputs["threshold_output_plot"])
         print("summary:", outputs["summary_csv"])
         print("code_exposure:", outputs["code_exposure_csv"])
         print("benchmark_summary:", outputs["benchmark_summary_csv"])
@@ -97,6 +98,8 @@ def main() -> None:
         outputs = run_bilateral_persistence_analysis(config)
         print("table:", outputs["table_csv"])
         print("details:", outputs["details_csv"])
+        if "aggregation_table_csv" in outputs:
+            print("aggregation_table:", outputs["aggregation_table_csv"])
         return
     if analysis_type == "sampling_robustness":
         config = load_sampling_robustness_config(config_path)

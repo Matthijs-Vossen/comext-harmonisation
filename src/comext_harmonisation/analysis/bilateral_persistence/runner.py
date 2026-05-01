@@ -25,6 +25,31 @@ ROW_LABELS = {
 }
 
 ROW_ORDER = [ROW_DETERMINISTIC_ALL, ROW_ALL, ROW_ADJUSTED]
+AGGREGATION_ROW_ORDER = [ROW_DETERMINISTIC_ALL, ROW_ADJUSTED]
+
+AGG_BILATERAL = "bilateral"
+AGG_IMPORTER = "importer"
+AGG_AGGREGATE = "aggregate"
+
+AGGREGATION_LABELS = {
+    AGG_BILATERAL: "Reporter-partner-product",
+    AGG_IMPORTER: "Reporter-product",
+    AGG_AGGREGATE: "Aggregate product",
+}
+
+AGGREGATION_UNIT_COLUMNS = {
+    AGG_BILATERAL: ["REPORTER", "PARTNER"],
+    AGG_IMPORTER: ["REPORTER"],
+    AGG_AGGREGATE: [],
+}
+
+AGGREGATION_DENOMINATOR_COLUMNS = {
+    # Preserve LT Table 3 scaling for the existing bilateral diagnostic.
+    AGG_BILATERAL: ["group_id"],
+    # Companion diagnostics ask whether persistence survives after removing partner churn.
+    AGG_IMPORTER: ["REPORTER", "group_id"],
+    AGG_AGGREGATE: ["group_id"],
+}
 
 EMPTY_POSITIVE_COLUMNS = [
     "REPORTER",
@@ -44,6 +69,10 @@ EMPTY_PANEL_COLUMNS = [
     "scaled_flow_lag",
     "scaled_flow_cur",
 ]
+
+
+def _optional_path(path, fallback):
+    return path if path is not None else fallback
 
 
 def _split_period(period: str) -> tuple[int, int]:
@@ -226,6 +255,35 @@ def _positive_scaled_flows(
     return df
 
 
+def _positive_scaled_flows_by_aggregation(
+    *,
+    frame: pd.DataFrame,
+    group_map: pd.DataFrame,
+    aggregation_level: str,
+) -> pd.DataFrame:
+    if aggregation_level == AGG_BILATERAL:
+        return _positive_scaled_flows(frame=frame, group_map=group_map)
+
+    unit_cols = AGGREGATION_UNIT_COLUMNS[aggregation_level]
+    denom_cols = AGGREGATION_DENOMINATOR_COLUMNS[aggregation_level]
+    output_cols = unit_cols + ["group_id", "concept_code", "value", "group_total", "scaled_flow"]
+    df = frame.merge(group_map, on="concept_code", how="inner")
+    if df.empty:
+        return pd.DataFrame(columns=output_cols)
+
+    grouped_cols = unit_cols + ["group_id", "concept_code"]
+    df = df.groupby(grouped_cols, as_index=False, sort=False)["value"].sum()
+    totals = (
+        df.groupby(denom_cols, as_index=False, sort=False)["value"]
+        .sum()
+        .rename(columns={"value": "group_total"})
+    )
+    df = df.merge(totals, on=denom_cols, how="left")
+    df = df.loc[df["group_total"] > 0].copy()
+    df["scaled_flow"] = df["value"] / df["group_total"]
+    return df[output_cols]
+
+
 def _panel_from_positive_flows(
     *,
     lag_positive: pd.DataFrame,
@@ -298,6 +356,99 @@ def _panel_from_positive_flows(
     return panel, diagnostics
 
 
+def _panel_from_positive_flows_by_aggregation(
+    *,
+    lag_positive: pd.DataFrame,
+    year_positive: pd.DataFrame,
+    code_universe: pd.DataFrame,
+    aggregation_level: str,
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    if aggregation_level == AGG_BILATERAL:
+        panel, diagnostics = _panel_from_positive_flows(
+            lag_positive=lag_positive,
+            year_positive=year_positive,
+            code_universe=code_universe,
+        )
+        diagnostics["n_units"] = diagnostics["n_pairs"]
+        diagnostics["n_unit_groups"] = int(
+            panel[["REPORTER", "PARTNER", "group_id"]].drop_duplicates().shape[0]
+        )
+        return panel, diagnostics
+
+    empty_columns = (
+        AGGREGATION_UNIT_COLUMNS[aggregation_level]
+        + ["group_id", "concept_code", "scaled_flow_lag", "scaled_flow_cur"]
+    )
+    if code_universe.empty:
+        return pd.DataFrame(columns=empty_columns), {
+            "n_groups": 0,
+            "n_concepts": 0,
+            "n_pairs": 0,
+            "n_units": 0,
+            "n_unit_groups": 0,
+            "n_cells": 0,
+            "n_positive_lag": 0,
+            "n_positive_current": 0,
+            "n_both_positive": 0,
+        }
+
+    unit_cols = AGGREGATION_UNIT_COLUMNS[aggregation_level]
+    unit_group_cols = unit_cols + ["group_id"]
+    unit_universe = pd.concat(
+        [
+            lag_positive[unit_group_cols],
+            year_positive[unit_group_cols],
+        ],
+        ignore_index=True,
+    ).drop_duplicates()
+
+    if unit_universe.empty:
+        return pd.DataFrame(columns=empty_columns), {
+            "n_groups": int(code_universe["group_id"].nunique()),
+            "n_concepts": int(code_universe["concept_code"].nunique()),
+            "n_pairs": 0,
+            "n_units": 0,
+            "n_unit_groups": 0,
+            "n_cells": 0,
+            "n_positive_lag": int(len(lag_positive)),
+            "n_positive_current": int(len(year_positive)),
+            "n_both_positive": 0,
+        }
+
+    panel = unit_universe.merge(code_universe, on="group_id", how="inner")
+    merge_cols = unit_cols + ["group_id", "concept_code"]
+    lag_scaled = lag_positive[merge_cols + ["scaled_flow"]].rename(
+        columns={"scaled_flow": "scaled_flow_lag"}
+    )
+    year_scaled = year_positive[merge_cols + ["scaled_flow"]].rename(
+        columns={"scaled_flow": "scaled_flow_cur"}
+    )
+    panel = panel.merge(lag_scaled, on=merge_cols, how="left")
+    panel = panel.merge(year_scaled, on=merge_cols, how="left")
+    panel["scaled_flow_lag"] = pd.to_numeric(panel["scaled_flow_lag"], errors="coerce").fillna(0.0)
+    panel["scaled_flow_cur"] = pd.to_numeric(panel["scaled_flow_cur"], errors="coerce").fillna(0.0)
+
+    if unit_cols:
+        n_units = int(panel[unit_cols].drop_duplicates().shape[0])
+    else:
+        n_units = 1 if not panel.empty else 0
+
+    diagnostics = {
+        "n_groups": int(code_universe["group_id"].nunique()),
+        "n_concepts": int(code_universe["concept_code"].nunique()),
+        "n_pairs": 0,
+        "n_units": n_units,
+        "n_unit_groups": int(panel[unit_group_cols].drop_duplicates().shape[0]),
+        "n_cells": int(len(panel)),
+        "n_positive_lag": int(len(lag_positive)),
+        "n_positive_current": int(len(year_positive)),
+        "n_both_positive": int(
+            ((panel["scaled_flow_lag"] > 0.0) & (panel["scaled_flow_cur"] > 0.0)).sum()
+        ),
+    }
+    return panel, diagnostics
+
+
 def _lt_no_constant_hc1(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
@@ -318,6 +469,22 @@ def _lt_no_constant_hc1(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
     var_hc1 = (n / (n - 1)) * meat / (xx**2)
     se = float(np.sqrt(var_hc1))
     return beta, se
+
+
+def _r2_45(x: np.ndarray, y: np.ndarray) -> float:
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    mask = np.isfinite(x) & np.isfinite(y)
+    x = x[mask]
+    y = y[mask]
+    if len(x) == 0:
+        return float("nan")
+    y_bar = float(np.mean(y))
+    sse = float(np.sum((y - x) ** 2))
+    sst = float(np.sum((y - y_bar) ** 2))
+    if sst <= 0:
+        return float("nan")
+    return 1.0 - sse / sst
 
 
 def _format_cell(beta: float, se: float) -> str:
@@ -455,6 +622,7 @@ def _prepare_break_pair(
     break_group_map_a: pd.DataFrame,
     break_group_map_b: pd.DataFrame,
     group_ids: set[str],
+    aggregation_level: str = AGG_BILATERAL,
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     if year <= break_a_year:
         target_year = break_a_year
@@ -473,6 +641,7 @@ def _prepare_break_pair(
         one_to_one_maps=one_to_one_maps,
         revised_a_by_period=revised_a_by_period,
         revised_b_by_period=revised_b_by_period,
+        aggregation_level=aggregation_level,
     )
 
 
@@ -486,6 +655,7 @@ def _prepare_target_basis_pair(
     one_to_one_maps: dict[tuple[str, str], pd.DataFrame],
     revised_a_by_period: dict[str, set[str]],
     revised_b_by_period: dict[str, set[str]],
+    aggregation_level: str = AGG_BILATERAL,
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     lag_frame = _carry_frame_to_target(
         frame=annual_by_year[lag_year],
@@ -503,12 +673,21 @@ def _prepare_target_basis_pair(
         revised_a_by_period=revised_a_by_period,
         revised_b_by_period=revised_b_by_period,
     )
-    lag_positive = _positive_scaled_flows(frame=lag_frame, group_map=group_map)
-    year_positive = _positive_scaled_flows(frame=year_frame, group_map=group_map)
-    panel, diagnostics = _panel_from_positive_flows(
+    lag_positive = _positive_scaled_flows_by_aggregation(
+        frame=lag_frame,
+        group_map=group_map,
+        aggregation_level=aggregation_level,
+    )
+    year_positive = _positive_scaled_flows_by_aggregation(
+        frame=year_frame,
+        group_map=group_map,
+        aggregation_level=aggregation_level,
+    )
+    panel, diagnostics = _panel_from_positive_flows_by_aggregation(
         lag_positive=lag_positive,
         year_positive=year_positive,
         code_universe=group_map[["group_id", "concept_code"]].drop_duplicates(),
+        aggregation_level=aggregation_level,
     )
     diagnostics["basis_year"] = target_year
     return panel, diagnostics
@@ -607,6 +786,7 @@ def _prepare_deterministic_all_pair(
     revised_b_by_period: dict[str, set[str]],
     basis_group_map_a: pd.DataFrame,
     basis_group_map_b: pd.DataFrame,
+    aggregation_level: str = AGG_BILATERAL,
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     if year <= break_a_year:
         target_year = break_a_year
@@ -624,6 +804,7 @@ def _prepare_deterministic_all_pair(
         one_to_one_maps=one_to_one_maps,
         revised_a_by_period=revised_a_by_period,
         revised_b_by_period=revised_b_by_period,
+        aggregation_level=aggregation_level,
     )
 
 
@@ -717,6 +898,8 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
 
     regression_rows: list[dict[str, object]] = []
     sample_rows: list[dict[str, object]] = []
+    aggregation_regression_rows: list[dict[str, object]] = []
+    aggregation_sample_rows: list[dict[str, object]] = []
 
     for year in config.years.columns:
         lag_year = year - 1
@@ -893,6 +1076,157 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
             }
         )
 
+    aggregation_order = {level: idx for idx, level in enumerate(config.aggregation_levels)}
+    for aggregation_level in config.aggregation_levels:
+        for year in config.years.columns:
+            lag_year = year - 1
+
+            det_panel, det_diag = _prepare_deterministic_all_pair(
+                year=year,
+                lag_year=lag_year,
+                break_a_year=break_a_year,
+                break_b_year=break_b_year,
+                annual_by_year=annual_by_year,
+                one_to_one_maps=one_to_one_maps,
+                revised_a_by_period=revised_a_by_period,
+                revised_b_by_period=revised_b_by_period,
+                basis_group_map_a=deterministic_group_map_a,
+                basis_group_map_b=deterministic_group_map_b,
+                aggregation_level=aggregation_level,
+            )
+            beta, se = _lt_no_constant_hc1(
+                det_panel["scaled_flow_lag"].to_numpy(),
+                det_panel["scaled_flow_cur"].to_numpy(),
+            )
+            r2 = _r2_45(
+                det_panel["scaled_flow_lag"].to_numpy(),
+                det_panel["scaled_flow_cur"].to_numpy(),
+            )
+            det_meta = (
+                deterministic_diag_a
+                if int(det_diag["basis_year"]) == break_a_year
+                else deterministic_diag_b
+            )
+            aggregation_regression_rows.append(
+                {
+                    "aggregation_level": aggregation_level,
+                    "aggregation_label": AGGREGATION_LABELS[aggregation_level],
+                    "row_key": ROW_DETERMINISTIC_ALL,
+                    "row_label": ROW_LABELS[ROW_DETERMINISTIC_ALL],
+                    "year": year,
+                    "lag_year": lag_year,
+                    "basis_year": int(det_diag["basis_year"]),
+                    "sample_basis": "break_filtered_deterministic_all",
+                    "coef": beta,
+                    "se": se,
+                    "r2_45": r2,
+                    "n_obs": int(len(det_panel)),
+                }
+            )
+            aggregation_sample_rows.append(
+                {
+                    "aggregation_level": aggregation_level,
+                    "aggregation_label": AGGREGATION_LABELS[aggregation_level],
+                    "row_key": ROW_DETERMINISTIC_ALL,
+                    "row_label": ROW_LABELS[ROW_DETERMINISTIC_ALL],
+                    "year": year,
+                    "lag_year": lag_year,
+                    "basis_year": int(det_diag["basis_year"]),
+                    "sample_basis": "break_filtered_deterministic_all",
+                    "n_groups_pre_filter": int(
+                        det_meta["n_linked_groups_pre_filter"]
+                        + det_meta["n_singleton_groups_pre_filter"]
+                    ),
+                    "n_groups_contaminated": int(
+                        det_meta["n_linked_groups_pre_filter"]
+                        + det_meta["n_singleton_groups_pre_filter"]
+                        - det_meta["n_linked_groups"]
+                        - det_meta["n_singleton_groups"]
+                    ),
+                    "n_groups": det_diag["n_groups"],
+                    "n_linked_groups_pre_filter": int(det_meta["n_linked_groups_pre_filter"]),
+                    "n_linked_groups": int(det_meta["n_linked_groups"]),
+                    "n_singleton_groups_pre_filter": int(det_meta["n_singleton_groups_pre_filter"]),
+                    "n_singleton_groups": int(det_meta["n_singleton_groups"]),
+                    "n_concepts": det_diag["n_concepts"],
+                    "n_pairs": det_diag["n_pairs"],
+                    "n_units": det_diag["n_units"],
+                    "n_unit_groups": det_diag["n_unit_groups"],
+                    "n_cells": det_diag["n_cells"],
+                    "n_positive_lag": det_diag["n_positive_lag"],
+                    "n_positive_current": det_diag["n_positive_current"],
+                    "n_both_positive": det_diag["n_both_positive"],
+                    "n_obs": int(len(det_panel)),
+                }
+            )
+
+            adjusted_panel, adj_diag = _prepare_break_pair(
+                year=year,
+                lag_year=lag_year,
+                break_a_year=break_a_year,
+                break_b_year=break_b_year,
+                annual_by_year=annual_by_year,
+                one_to_one_maps=one_to_one_maps,
+                revised_a_by_period=revised_a_by_period,
+                revised_b_by_period=revised_b_by_period,
+                break_group_map_a=break_group_map_a,
+                break_group_map_b=break_group_map_b,
+                group_ids=adjusted_group_ids,
+                aggregation_level=aggregation_level,
+            )
+            beta, se = _lt_no_constant_hc1(
+                adjusted_panel["scaled_flow_lag"].to_numpy(),
+                adjusted_panel["scaled_flow_cur"].to_numpy(),
+            )
+            r2 = _r2_45(
+                adjusted_panel["scaled_flow_lag"].to_numpy(),
+                adjusted_panel["scaled_flow_cur"].to_numpy(),
+            )
+            aggregation_regression_rows.append(
+                {
+                    "aggregation_level": aggregation_level,
+                    "aggregation_label": AGGREGATION_LABELS[aggregation_level],
+                    "row_key": ROW_ADJUSTED,
+                    "row_label": ROW_LABELS[ROW_ADJUSTED],
+                    "year": year,
+                    "lag_year": lag_year,
+                    "basis_year": int(adj_diag["basis_year"]),
+                    "sample_basis": "break_filtered_adjusted",
+                    "coef": beta,
+                    "se": se,
+                    "r2_45": r2,
+                    "n_obs": int(len(adjusted_panel)),
+                }
+            )
+            aggregation_sample_rows.append(
+                {
+                    "aggregation_level": aggregation_level,
+                    "aggregation_label": AGGREGATION_LABELS[aggregation_level],
+                    "row_key": ROW_ADJUSTED,
+                    "row_label": ROW_LABELS[ROW_ADJUSTED],
+                    "year": year,
+                    "lag_year": lag_year,
+                    "basis_year": int(adj_diag["basis_year"]),
+                    "sample_basis": "break_filtered_adjusted",
+                    "n_groups_pre_filter": int(len(adjusted_group_ids_pre)),
+                    "n_groups_contaminated": int(len(adjusted_contaminated_groups)),
+                    "n_groups": adj_diag["n_groups"],
+                    "n_linked_groups_pre_filter": int(len(adjusted_group_ids_pre)),
+                    "n_linked_groups": adj_diag["n_groups"],
+                    "n_singleton_groups_pre_filter": 0,
+                    "n_singleton_groups": 0,
+                    "n_concepts": adj_diag["n_concepts"],
+                    "n_pairs": adj_diag["n_pairs"],
+                    "n_units": adj_diag["n_units"],
+                    "n_unit_groups": adj_diag["n_unit_groups"],
+                    "n_cells": adj_diag["n_cells"],
+                    "n_positive_lag": adj_diag["n_positive_lag"],
+                    "n_positive_current": adj_diag["n_positive_current"],
+                    "n_both_positive": adj_diag["n_both_positive"],
+                    "n_obs": int(len(adjusted_panel)),
+                }
+            )
+
     row_order = {row_key: idx for idx, row_key in enumerate(ROW_ORDER)}
     details = pd.DataFrame(regression_rows)
     details["_row_order"] = details["row_key"].map(row_order)
@@ -919,16 +1253,91 @@ def run_bilateral_persistence_analysis(config: BilateralPersistenceConfig) -> di
         table_rows.append(row)
     table = pd.DataFrame(table_rows)
 
+    aggregation_row_order = {row_key: idx for idx, row_key in enumerate(AGGREGATION_ROW_ORDER)}
+    aggregation_details = pd.DataFrame(aggregation_regression_rows)
+    aggregation_details["_aggregation_order"] = aggregation_details["aggregation_level"].map(
+        aggregation_order
+    )
+    aggregation_details["_row_order"] = aggregation_details["row_key"].map(
+        aggregation_row_order
+    )
+    aggregation_details = (
+        aggregation_details.sort_values(["_aggregation_order", "_row_order", "year"])
+        .drop(columns=["_aggregation_order", "_row_order"])
+        .reset_index(drop=True)
+    )
+    aggregation_diagnostics = pd.DataFrame(aggregation_sample_rows)
+    aggregation_diagnostics["_aggregation_order"] = aggregation_diagnostics[
+        "aggregation_level"
+    ].map(aggregation_order)
+    aggregation_diagnostics["_row_order"] = aggregation_diagnostics["row_key"].map(
+        aggregation_row_order
+    )
+    aggregation_diagnostics = (
+        aggregation_diagnostics.sort_values(["_aggregation_order", "_row_order", "year"])
+        .drop(columns=["_aggregation_order", "_row_order"])
+        .reset_index(drop=True)
+    )
+
+    aggregation_table_rows = []
+    for aggregation_level in config.aggregation_levels:
+        for row_key in AGGREGATION_ROW_ORDER:
+            subset = aggregation_details.loc[
+                (aggregation_details["aggregation_level"] == aggregation_level)
+                & (aggregation_details["row_key"] == row_key)
+            ].copy()
+            row = {
+                "aggregation_level": aggregation_level,
+                "aggregation_label": AGGREGATION_LABELS[aggregation_level],
+                "row_label": ROW_LABELS[row_key],
+            }
+            for year in config.years.columns:
+                match = subset.loc[subset["year"] == year]
+                if match.empty:
+                    row[str(year)] = ""
+                else:
+                    row[str(year)] = _format_cell(
+                        float(match.iloc[0]["coef"]),
+                        float(match.iloc[0]["se"]),
+                    )
+            aggregation_table_rows.append(row)
+    aggregation_table = pd.DataFrame(aggregation_table_rows)
+
     config.paths.output_dir.mkdir(parents=True, exist_ok=True)
+    aggregation_table_csv = _optional_path(
+        config.output.aggregation_table_csv,
+        config.paths.output_dir / "aggregation_table.csv",
+    )
+    aggregation_table_tex = _optional_path(
+        config.output.aggregation_table_tex,
+        config.paths.output_dir / "aggregation_table.tex",
+    )
+    aggregation_details_csv = _optional_path(
+        config.output.aggregation_details_csv,
+        config.paths.output_dir / "aggregation_regression_details.csv",
+    )
+    aggregation_sample_diagnostics_csv = _optional_path(
+        config.output.aggregation_sample_diagnostics_csv,
+        config.paths.output_dir / "aggregation_sample_diagnostics.csv",
+    )
     details.to_csv(config.output.details_csv, index=False)
     diagnostics.to_csv(config.output.sample_diagnostics_csv, index=False)
     table.to_csv(config.output.table_csv, index=False)
     tex = table.to_latex(index=False, escape=False)
     config.output.table_tex.write_text(tex)
+    aggregation_details.to_csv(aggregation_details_csv, index=False)
+    aggregation_diagnostics.to_csv(aggregation_sample_diagnostics_csv, index=False)
+    aggregation_table.to_csv(aggregation_table_csv, index=False)
+    aggregation_tex = aggregation_table.to_latex(index=False, escape=False)
+    aggregation_table_tex.write_text(aggregation_tex)
 
     return {
         "table_csv": str(config.output.table_csv),
         "details_csv": str(config.output.details_csv),
         "sample_diagnostics_csv": str(config.output.sample_diagnostics_csv),
+        "aggregation_table_csv": str(aggregation_table_csv),
+        "aggregation_table_tex": str(aggregation_table_tex),
+        "aggregation_details_csv": str(aggregation_details_csv),
+        "aggregation_sample_diagnostics_csv": str(aggregation_sample_diagnostics_csv),
         "config": asdict(config),
     }

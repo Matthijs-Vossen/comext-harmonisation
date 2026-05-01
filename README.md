@@ -161,6 +161,12 @@ Raw-data bilateral persistence analysis around the CN2007 break:
 python -m comext_harmonisation.cli.run_analysis --config configs/analysis/bilateral_persistence_cn2007_raw.yaml
 ```
 
+Native deterministic-lineage placebo companion to the filtered share-stability analysis:
+
+```bash
+python -m comext_harmonisation.cli.run_analysis --config configs/analysis/share_stability_deterministic_placebo.yaml
+```
+
 Console-script equivalent:
 
 ```bash
@@ -195,14 +201,15 @@ Strict-link diagnostics:
 - Apply unresolved details can be written to `.../apply/CN<target>/diagnostics/unresolved_details.csv`
 
 Analysis artifacts:
-- Bilateral-persistence outputs: `outputs/analysis/bilateral_persistence_cn2007_raw/{table.csv,table.tex,regression_details.csv,sample_diagnostics.csv}`
+- Bilateral-persistence outputs: `outputs/analysis/bilateral_persistence_cn2007_raw/{table.csv,table.tex,regression_details.csv,sample_diagnostics.csv,aggregation_table.csv,aggregation_table.tex,aggregation_regression_details.csv,aggregation_sample_diagnostics.csv}`
 - Chained link-distribution outputs: `outputs/analysis/chained_link_distribution/{chained_link_distribution.png,summary.csv}`
-- CRM revision-exposure outputs: `outputs/analysis/crm_revision_exposure_2023/{crm_revision_exposure.png,summary.csv,code_exposure.csv,benchmark_summary.csv}`
+- CRM revision-exposure outputs: `outputs/analysis/crm_revision_exposure_2023/{crm_revision_exposure.png,crm_revision_exposure_thresholds.png,summary.csv,code_exposure.csv,benchmark_summary.csv}`
 - Link-distribution outputs: `outputs/analysis/link_distribution_adjacent/{summary.csv,focal_codes.csv}`
 - Link-distribution observed-universe outputs: `outputs/analysis/link_distribution_adjacent_observed_universe/{summary.csv,focal_codes.csv}`
 - Synthetic-persistence outputs: `outputs/analysis/synthetic_persistence_qualitative/{code_catalog.csv,candidate_series.csv,code_evidence.csv,qualitative_summary.png}`
+- Deterministic-placebo share-stability outputs: `outputs/analysis/share_stability_deterministic_placebo/{summary.csv,panel_diagnostics.csv,comparison_to_common_target.csv,share_stability.png}`
 
-The bilateral-persistence analysis is a CN-adapted LT Table 3 diagnostic built on raw reported data. It now reports three rows: a break-centered deterministic-all broad row (`All deterministically break-comparable CN codes`), a filtered `2006->2007` break-group broad row (`All break-group CN codes`), and an adjusted row defined as the ambiguous subset of that retained break universe (`Adjusted CN codes`). The new broad row uses the `2006` or `2007` break basis and includes both linked break-group concepts and deterministically comparable singleton concepts outside the break groups; the linked-group broad and adjusted rows remain restricted to the retained `2006->2007` break universe after nearby non-bijective revision filtering.
+The bilateral-persistence analysis is a CN-adapted LT Table 3 diagnostic built on raw reported data. It reports three main-table rows: a break-centered deterministic-all broad row (`All deterministically break-comparable CN codes`), a filtered `2006->2007` break-group broad row (`All break-group CN codes`), and an adjusted row defined as the ambiguous subset of that retained break universe (`Adjusted CN codes`). The broad row uses the `2006` or `2007` break basis and includes both linked break-group concepts and deterministically comparable singleton concepts outside the break groups; the linked-group broad and adjusted rows remain restricted to the retained `2006->2007` break universe after nearby non-bijective revision filtering. Companion aggregation-level outputs report the deterministic-all and adjusted rows at bilateral, importer, and aggregate product levels.
 
 ## Pragmatic Implementation Choices vs LT Baseline
 1. Estimation sample is fixed to imports flow (`FLOW="1"`).

@@ -85,6 +85,12 @@ class ShareStabilityFilterConfig:
 
 
 @dataclass(frozen=True)
+class ShareStabilityComparisonConfig:
+    mode: str
+    common_target_summary_path: Path | None
+
+
+@dataclass(frozen=True)
 class ShareStabilityConfig:
     years: ShareStabilityYearsConfig
     break_config: ShareStabilityBreakConfig
@@ -95,6 +101,7 @@ class ShareStabilityConfig:
     sample: ShareStabilitySampleConfig
     stability_filter: ShareStabilityFilterConfig
     plot: AnalysisPlotConfig
+    comparison: ShareStabilityComparisonConfig
 
 
 @dataclass(frozen=True)
@@ -376,6 +383,7 @@ class CrmRevisionExposureOutputConfig:
 @dataclass(frozen=True)
 class CrmRevisionExposurePlotConfig:
     output_path: Path
+    threshold_output_path: Path
     title: str | None
     use_latex: bool
     latex_preamble: str
@@ -436,6 +444,10 @@ class BilateralPersistenceOutputConfig:
     table_tex: Path
     details_csv: Path
     sample_diagnostics_csv: Path
+    aggregation_table_csv: Path | None = None
+    aggregation_table_tex: Path | None = None
+    aggregation_details_csv: Path | None = None
+    aggregation_sample_diagnostics_csv: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -448,6 +460,7 @@ class BilateralPersistenceConfig:
     sample: BilateralPersistenceSampleConfig
     adjusted_filter: BilateralPersistenceFilterConfig
     output: BilateralPersistenceOutputConfig
+    aggregation_levels: Sequence[str] = ("bilateral",)
 
 
 @dataclass(frozen=True)
@@ -676,6 +689,20 @@ def load_share_stability_config(path: Path) -> ShareStabilityConfig:
         },
         data.get("stability_filter"),
     )
+    comparison = _merge(
+        {
+            "mode": "common_target",
+            "common_target_summary_path": None,
+        },
+        data.get("comparison"),
+    )
+    comparison_mode = str(comparison["mode"]).strip().lower()
+    if comparison_mode not in {"common_target", "deterministic_lineage_placebo"}:
+        raise ValueError(
+            "share_stability: comparison.mode must be 'common_target' or "
+            "'deterministic_lineage_placebo'"
+        )
+    common_target_summary_path = comparison.get("common_target_summary_path")
 
     return ShareStabilityConfig(
         years=ShareStabilityYearsConfig(
@@ -722,6 +749,12 @@ def load_share_stability_config(path: Path) -> ShareStabilityConfig:
             point_color=str(plot["point_color"]),
             use_latex=bool(plot["use_latex"]),
             latex_preamble=str(plot["latex_preamble"]),
+        ),
+        comparison=ShareStabilityComparisonConfig(
+            mode=comparison_mode,
+            common_target_summary_path=(
+                Path(common_target_summary_path) if common_target_summary_path else None
+            ),
         ),
     )
 
@@ -1377,6 +1410,9 @@ def load_crm_revision_exposure_config(path: Path) -> CrmRevisionExposureConfig:
     plot = _merge(
         {
             "output_path": str(output_dir / "crm_revision_exposure.png"),
+            "threshold_output_path": str(
+                output_dir / "crm_revision_exposure_thresholds.png"
+            ),
             "title": None,
             "use_latex": True,
             "latex_preamble": r"\\usepackage{newtxtext,newtxmath}",
@@ -1407,6 +1443,7 @@ def load_crm_revision_exposure_config(path: Path) -> CrmRevisionExposureConfig:
         ),
         plot=CrmRevisionExposurePlotConfig(
             output_path=Path(plot["output_path"]),
+            threshold_output_path=Path(plot["threshold_output_path"]),
             title=plot.get("title"),
             use_latex=bool(plot["use_latex"]),
             latex_preamble=str(plot["latex_preamble"]),
@@ -1472,12 +1509,34 @@ def load_bilateral_persistence_config(path: Path) -> BilateralPersistenceConfig:
     adjusted_filter = _merge({"years": [2004, 2005, 2007, 2008]}, data.get("adjusted_filter"))
     filter_years = [int(year) for year in _normalize_list(adjusted_filter.get("years"))]
 
+    aggregation = _merge({"levels": ["bilateral"]}, data.get("aggregation"))
+    aggregation_levels = [
+        str(level).strip().lower() for level in _normalize_list(aggregation.get("levels"))
+    ]
+    if not aggregation_levels:
+        raise ValueError("bilateral_persistence: aggregation.levels must not be empty")
+    valid_aggregation_levels = {"bilateral", "importer", "aggregate"}
+    invalid_aggregation_levels = sorted(set(aggregation_levels) - valid_aggregation_levels)
+    if invalid_aggregation_levels:
+        raise ValueError(
+            "bilateral_persistence: aggregation.levels must be drawn from "
+            "['bilateral', 'importer', 'aggregate']"
+        )
+    if len(set(aggregation_levels)) != len(aggregation_levels):
+        raise ValueError("bilateral_persistence: aggregation.levels must be unique")
+
     outputs = _merge(
         {
             "table_csv": str(output_dir / "table.csv"),
             "table_tex": str(output_dir / "table.tex"),
             "details_csv": str(output_dir / "regression_details.csv"),
             "sample_diagnostics_csv": str(output_dir / "sample_diagnostics.csv"),
+            "aggregation_table_csv": str(output_dir / "aggregation_table.csv"),
+            "aggregation_table_tex": str(output_dir / "aggregation_table.tex"),
+            "aggregation_details_csv": str(output_dir / "aggregation_regression_details.csv"),
+            "aggregation_sample_diagnostics_csv": str(
+                output_dir / "aggregation_sample_diagnostics.csv"
+            ),
         },
         data.get("output"),
     )
@@ -1503,7 +1562,14 @@ def load_bilateral_persistence_config(path: Path) -> BilateralPersistenceConfig:
             table_tex=Path(outputs["table_tex"]),
             details_csv=Path(outputs["details_csv"]),
             sample_diagnostics_csv=Path(outputs["sample_diagnostics_csv"]),
+            aggregation_table_csv=Path(outputs["aggregation_table_csv"]),
+            aggregation_table_tex=Path(outputs["aggregation_table_tex"]),
+            aggregation_details_csv=Path(outputs["aggregation_details_csv"]),
+            aggregation_sample_diagnostics_csv=Path(
+                outputs["aggregation_sample_diagnostics_csv"]
+            ),
         ),
+        aggregation_levels=aggregation_levels,
     )
 
 

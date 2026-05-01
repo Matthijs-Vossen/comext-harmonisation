@@ -24,6 +24,7 @@ output:
 
 plot:
   output_path: outputs/analysis/crm_revision_exposure_2023/crm_revision_exposure.png
+  threshold_output_path: outputs/analysis/crm_revision_exposure_2023/crm_revision_exposure_thresholds.png
   title: null
   use_latex: true
   latex_preamble: "\\usepackage{newtxtext,newtxmath}"

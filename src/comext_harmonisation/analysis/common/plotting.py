@@ -447,7 +447,7 @@ def plot_revision_validation_heatmap(
                 ("instability_p50", "Median instability"),
                 (
                     "instability_importance_weighted_mean",
-                    "Importance-weighted instability",
+                    "Importance-weighted mean instability",
                 ),
             ],
         ),
@@ -468,18 +468,21 @@ def plot_revision_validation_heatmap(
 
     def _build_block_arrays(
         metric_rows: list[tuple[str, str]],
-    ) -> tuple[np.ndarray, np.ndarray, list[tuple[float, float] | None]]:
+    ) -> tuple[np.ndarray, np.ndarray, list[tuple[float, float] | None], list[float | None]]:
         plot_data = np.full((len(metric_rows), len(data)), np.nan, dtype=float)
         value_data = np.full((len(metric_rows), len(data)), np.nan, dtype=float)
         row_ranges: list[tuple[float, float] | None] = []
+        row_medians: list[float | None] = []
         for row_idx, (column, _label) in enumerate(metric_rows):
             values = pd.to_numeric(data[column], errors="coerce").to_numpy(dtype=float)
             value_data[row_idx, :] = values
             finite = np.isfinite(values)
             if not finite.any():
                 row_ranges.append(None)
+                row_medians.append(None)
                 continue
             raw_vals = values[finite]
+            row_medians.append(float(np.median(raw_vals)))
             if column == "n_points_break":
                 row_vals = np.log1p(raw_vals)
             else:
@@ -496,7 +499,7 @@ def plot_revision_validation_heatmap(
             else:
                 scaled = np.full_like(values, 0.5, dtype=float)
             plot_data[row_idx, finite] = scaled[finite]
-        return plot_data, value_data, row_ranges
+        return plot_data, value_data, row_ranges, row_medians
 
     fig_width = 8.4
     fig_height = 3.8 if title else 3.5
@@ -508,13 +511,14 @@ def plot_revision_validation_heatmap(
     fig = plt.figure(figsize=(fig_width, fig_height), constrained_layout=True)
     grid = GridSpec(
         nrows=3,
-        ncols=2,
+        ncols=3,
         figure=fig,
-        width_ratios=[22, 3.8],
+        width_ratios=[22, 3.8, 2.2],
         height_ratios=[2, 2, 1],
     )
     axes_flat = [fig.add_subplot(grid[row_idx, 0]) for row_idx in range(3)]
     scale_axes = [fig.add_subplot(grid[row_idx, 1]) for row_idx in range(3)]
+    median_axes = [fig.add_subplot(grid[row_idx, 2]) for row_idx in range(3)]
     for ax in axes_flat[1:]:
         ax.sharex(axes_flat[0])
     cmap = LinearSegmentedColormap.from_list(
@@ -525,13 +529,30 @@ def plot_revision_validation_heatmap(
     for block_idx, (block_title, metric_rows) in enumerate(metric_blocks):
         ax = axes_flat[block_idx]
         scale_ax = scale_axes[block_idx]
-        plot_data, value_data, row_ranges = _build_block_arrays(metric_rows)
-        ax.imshow(plot_data, aspect="auto", cmap=cmap, vmin=0.0, vmax=1.0)
+        median_ax = median_axes[block_idx]
+        plot_data, value_data, row_ranges, row_medians = _build_block_arrays(metric_rows)
+        masked_plot_data = np.ma.masked_invalid(plot_data)
+        x_edges = np.arange(len(labels) + 1, dtype=float) - 0.5
+        y_edges = np.arange(len(metric_rows) + 1, dtype=float) - 0.5
+        ax.pcolormesh(
+            x_edges,
+            y_edges,
+            masked_plot_data,
+            cmap=cmap,
+            vmin=0.0,
+            vmax=1.0,
+            shading="flat",
+            edgecolors="white",
+            linewidth=0.8,
+            antialiased=False,
+        )
         ax.set_title(block_title, fontsize=block_title_fontsize, fontweight="bold", pad=8)
+        ax.set_xlim(-0.5, len(labels) - 0.5)
+        ax.set_ylim(len(metric_rows) - 0.5, -0.5)
         ax.set_yticks(np.arange(len(metric_rows)))
         ax.set_yticklabels([label for _, label in metric_rows], fontsize=tick_label_fontsize)
         if block_idx == len(metric_blocks) - 1:
-            tick_idx = np.arange(1, len(labels), 2)
+            tick_idx = list(np.arange(1, len(labels), 2))
             ax.set_xticks(tick_idx)
             ax.set_xticklabels(
                 [labels[idx] for idx in tick_idx],
@@ -569,10 +590,6 @@ def plot_revision_validation_heatmap(
                     )
         for spine in ax.spines.values():
             spine.set_visible(False)
-        ax.set_xticks(np.arange(-0.5, len(labels), 1), minor=True)
-        ax.set_yticks(np.arange(-0.5, len(metric_rows), 1), minor=True)
-        ax.grid(which="minor", color="white", linewidth=0.8)
-        ax.tick_params(which="minor", bottom=False, left=False)
         ax.tick_params(axis="y", length=0)
         ax.tick_params(axis="x", length=0)
 
@@ -607,6 +624,25 @@ def plot_revision_validation_heatmap(
                 row_idx,
                 _format_scale_value(column, row_range[1]),
                 ha="left",
+                va="center",
+                fontsize=scale_label_fontsize,
+                color="black",
+            )
+
+        median_ax.set_xlim(0.0, 1.0)
+        median_ax.set_ylim(len(metric_rows) - 0.5, -0.5)
+        median_ax.axis("off")
+        if block_idx == 0:
+            median_ax.set_title("Median", fontsize=block_title_fontsize, fontweight="bold", pad=8)
+        for row_idx, (column, _label) in enumerate(metric_rows):
+            median_value = row_medians[row_idx]
+            if median_value is None:
+                continue
+            median_ax.text(
+                0.5,
+                row_idx,
+                f"({_format_scale_value(column, median_value)})",
+                ha="center",
                 va="center",
                 fontsize=scale_label_fontsize,
                 color="black",
@@ -1046,6 +1082,195 @@ def plot_crm_revision_exposure_panels(
             frameon=False,
             handletextpad=0.5,
             columnspacing=1.0,
+            prop={"size": legend_fontsize},
+        )
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.tight_layout(rect=[0, 0, 1, top_margin])
+        fig.savefig(output_path, dpi=300, bbox_inches="tight", pad_inches=0.02)
+        plt.close(fig)
+
+    try:
+        _render(render_with_latex=use_latex)
+    except RuntimeError:
+        if not use_latex:
+            raise
+        _render(render_with_latex=False)
+
+
+def plot_crm_revision_exposure_threshold_panels(
+    *,
+    data: pd.DataFrame,
+    output_path: Path,
+    title: str | None,
+    use_latex: bool,
+    latex_preamble: str,
+) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib import rcParams
+    from matplotlib.lines import Line2D
+    from matplotlib.ticker import PercentFormatter
+
+    anchor_year = int(data["anchor_year"].iloc[0]) if not data.empty else 2023
+    population_styles = {
+        "crm_anchor_codes": {
+            "label": "CRM-relevant subset",
+            "color": "#334155",
+        },
+        "all_anchor_codes": {
+            "label": f"All CN{anchor_year} codes",
+            "color": "#94a3b8",
+        },
+    }
+    threshold_styles = {
+        "ever_unknown_weight_step": {
+            "label": r"$\geq 1$ allocation step",
+            "linestyle": "-",
+            "linewidth": 1.9,
+        },
+        "at_least_two_unknown_weight_steps": {
+            "label": r"$\geq 2$ allocation steps",
+            "linestyle": (0, (2.2, 1.6)),
+            "linewidth": 2.0,
+        },
+    }
+
+    def _year_ticks(years: np.ndarray) -> tuple[list[int], list[int]]:
+        years_int = sorted(int(year) for year in years.tolist())
+        if not years_int:
+            return [], []
+        start = years_int[0]
+        end = years_int[-1]
+        minor = list(range(start, end + 1))
+        revision_years = [2022, 2017, 2012, 2007, 2002, 1996, 1992, 1988]
+        major = [year for year in revision_years if start <= year <= end]
+        if start not in major:
+            major.append(start)
+        return sorted(set(major)), minor
+
+    def _render(*, render_with_latex: bool) -> None:
+        rcParams["text.usetex"] = bool(render_with_latex)
+        if render_with_latex:
+            rcParams["font.family"] = "serif"
+            rcParams["text.latex.preamble"] = latex_preamble
+
+        axis_label_fontsize = 12
+        tick_label_fontsize = 10.5
+        legend_fontsize = 10.2
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(7.4, 3.95), squeeze=True)
+        backward = data.loc[data["panel_direction"] == "backward"].copy()
+        backward_metric = backward.loc[
+            backward["metric"].isin(threshold_styles.keys())
+        ].copy()
+        all_years = sorted(set(backward_metric["compare_year"].astype(int).tolist()))
+        if anchor_year not in all_years:
+            all_years.append(anchor_year)
+            all_years = sorted(all_years)
+
+        for population, style in population_styles.items():
+            for metric, threshold_style in threshold_styles.items():
+                back_series = (
+                    backward_metric.loc[
+                        (backward_metric["population"] == population)
+                        & (backward_metric["metric"] == metric)
+                    ]
+                    .sort_values("compare_year")
+                    .copy()
+                )
+                if back_series.empty:
+                    continue
+                anchor_row = back_series.iloc[[-1]].copy()
+                anchor_row["compare_year"] = anchor_year
+                anchor_row["n_codes"] = 0
+                anchor_row["share_codes"] = 0.0
+                back_series = pd.concat([back_series, anchor_row], ignore_index=True)
+                back_series = back_series.sort_values("compare_year")
+                ax.plot(
+                    back_series["compare_year"],
+                    back_series["share_codes"],
+                    color=style["color"],
+                    linestyle=threshold_style["linestyle"],
+                    linewidth=float(threshold_style["linewidth"]),
+                    zorder=3,
+                )
+
+        ax.set_ylabel(f"Share of CN{anchor_year} codes", fontsize=axis_label_fontsize)
+        ax.set_ylim(0.0, 1.0)
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
+        ax.set_yticks(np.linspace(0.0, 1.0, 6))
+        ax.set_axisbelow(False)
+        ax.grid(axis="y", which="major", color="#3a3a3a", linewidth=0.7, alpha=0.30, zorder=5)
+        ax.grid(axis="x", which="major", color="#3a3a3a", linewidth=0.55, alpha=0.18, zorder=5)
+        ax.grid(axis="x", which="minor", color="#3a3a3a", linewidth=0.35, alpha=0.08, zorder=5)
+        for spine in ax.spines.values():
+            spine.set_linewidth(0.7)
+            spine.set_color("#666666")
+
+        if all_years:
+            major_ticks, minor_ticks = _year_ticks(np.array(all_years, dtype=int))
+            ax.set_xticks(major_ticks)
+            ax.set_xticks(minor_ticks, minor=True)
+            ax.set_xlim(float(min(all_years)), float(max(all_years)))
+            ax.set_xticklabels(
+                [f"HS {year}" for year in major_ticks],
+                rotation=0,
+                ha="center",
+                fontsize=tick_label_fontsize,
+            )
+            for x_tick in major_ticks:
+                ax.axvline(x_tick, color="#b8b8b8", linewidth=0.6, alpha=0.25, zorder=4)
+        ax.tick_params(
+            axis="x",
+            which="major",
+            labelsize=tick_label_fontsize,
+            length=4.0,
+            width=0.6,
+            color="#4d4d4d",
+        )
+        ax.tick_params(axis="x", which="minor", length=2.0, width=0.45, color="#777777")
+        ax.tick_params(
+            axis="y",
+            labelsize=tick_label_fontsize,
+            length=3.5,
+            width=0.6,
+            color="#4d4d4d",
+        )
+        ax.set_xlabel("Comparison vintage (HS/CN revision)", fontsize=axis_label_fontsize)
+
+        legend_handles = []
+        for population in ["crm_anchor_codes", "all_anchor_codes"]:
+            for metric, threshold_style in threshold_styles.items():
+                legend_handles.append(
+                    Line2D(
+                        [],
+                        [],
+                        color=population_styles[population]["color"],
+                        linestyle=threshold_style["linestyle"],
+                        linewidth=float(threshold_style["linewidth"]),
+                        label=(
+                            f"{population_styles[population]['label']}, "
+                            f"{threshold_style['label']}"
+                        ),
+                    )
+                )
+
+        legend_y = 0.965
+        top_margin = 0.89
+        if title:
+            fig.suptitle(title, y=0.975)
+            legend_y = 0.955
+            top_margin = 0.88
+        fig.legend(
+            legend_handles,
+            [handle.get_label() for handle in legend_handles],
+            loc="upper center",
+            bbox_to_anchor=(0.5, legend_y),
+            ncol=2,
+            frameon=False,
+            handletextpad=0.5,
+            columnspacing=0.9,
             prop={"size": legend_fontsize},
         )
 

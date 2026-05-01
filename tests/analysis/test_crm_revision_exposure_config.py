@@ -27,6 +27,7 @@ def test_crm_revision_exposure_config_defaults(tmp_path: Path) -> None:
     assert list(cfg.years.benchmark_backward_years) == [2022, 2017, 2007, 1988]
     assert list(cfg.years.benchmark_forward_years) == [2024]
     assert cfg.plot.output_path.name == "crm_revision_exposure.png"
+    assert cfg.plot.threshold_output_path.name == "crm_revision_exposure_thresholds.png"
     assert cfg.output.summary_csv.name == "summary.csv"
     assert cfg.output.code_exposure_csv.name == "code_exposure.csv"
     assert cfg.output.benchmark_summary_csv.name == "benchmark_summary.csv"

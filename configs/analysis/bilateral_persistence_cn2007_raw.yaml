@@ -26,8 +26,15 @@ sample:
 adjusted_filter:
   years: [2004, 2005, 2007, 2008]
 
+aggregation:
+  levels: [bilateral, importer, aggregate]
+
 output:
   table_csv: outputs/analysis/bilateral_persistence_cn2007_raw/table.csv
   table_tex: outputs/analysis/bilateral_persistence_cn2007_raw/table.tex
   details_csv: outputs/analysis/bilateral_persistence_cn2007_raw/regression_details.csv
   sample_diagnostics_csv: outputs/analysis/bilateral_persistence_cn2007_raw/sample_diagnostics.csv
+  aggregation_table_csv: outputs/analysis/bilateral_persistence_cn2007_raw/aggregation_table.csv
+  aggregation_table_tex: outputs/analysis/bilateral_persistence_cn2007_raw/aggregation_table.tex
+  aggregation_details_csv: outputs/analysis/bilateral_persistence_cn2007_raw/aggregation_regression_details.csv
+  aggregation_sample_diagnostics_csv: outputs/analysis/bilateral_persistence_cn2007_raw/aggregation_sample_diagnostics.csv

@@ -21,6 +21,7 @@ def test_run_analysis_dispatches_crm_revision_exposure(
         captured["config"] = config
         return {
             "output_plot": Path("fig.png"),
+            "threshold_output_plot": Path("fig_thresholds.png"),
             "summary_csv": Path("summary.csv"),
             "code_exposure_csv": Path("code_exposure.csv"),
             "benchmark_summary_csv": Path("benchmark_summary.csv"),
@@ -42,6 +43,7 @@ def test_run_analysis_dispatches_crm_revision_exposure(
 
     out = capsys.readouterr().out
     assert "plot: fig.png" in out
+    assert "threshold_plot: fig_thresholds.png" in out
     assert "summary: summary.csv" in out
     assert "code_exposure: code_exposure.csv" in out
     assert "benchmark_summary: benchmark_summary.csv" in out
